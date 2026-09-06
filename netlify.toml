@@ -1,0 +1,14 @@
+# Cat Health Tracker — configuración de Netlify
+#
+# Solo se publica lo que forma la app; el README y las migraciones de
+# Supabase se quedan fuera. Las cabeceras y las rutas viven en _headers y
+# _redirects, que genera build.mjs, para que el comportamiento sea el mismo
+# tanto en un despliegue desde git como arrastrando la carpeta a mano.
+#
+# build.mjs es Node puro (no bash) para que también funcione igual en
+# Windows si alguna vez se ejecuta el build fuera de Netlify. build.sh
+# se mantiene como alternativa equivalente para quien prefiera bash.
+
+[build]
+  publish = "dist"
+  command = "node build.mjs"
