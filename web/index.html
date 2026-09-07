@@ -3090,6 +3090,9 @@ function saveMatchToHistory(){
         setsHistory: S.setsHistory,
         gamesA: gA, gamesB: gB,
         duration: S.gameTime,
+        // Salud del partido: la manda el reloj mientras se juega. Se guarda
+        // con el partido para que no se pierda al cambiar de movil.
+        kcal: S.calories|0, km: +(S.distanceKm||0), hr: S.heartRate|0,
         totalPoints: totalPts, pointsWonA: ptsA,
         faults: JSON.parse(JSON.stringify(S.faults)),
         momentum: S.momentum.slice(),
@@ -3274,6 +3277,8 @@ const Auth = {
     signOut(silent){
         this.session=null; this.user=null; this.status='anon'; this.lastError=null;
         this.persist();
+        // Que el siguiente que entre en este movil reciba SUS ajustes
+        try{ localStorage.removeItem('pp_settings_synced'); }catch(e){}
         // El reloj tiene que enterarse: si no, seguiria mostrando el nombre
         // de alguien que ya no esta.
         try{ PPSync.sendAccountToWatch(); }catch(e){}
@@ -3304,6 +3309,7 @@ const Auth = {
             games_a: m.gamesA|0, games_b: m.gamesB|0,
             winner: m.winner||null,
             duration_s: m.duration|0,
+            kcal: m.kcal|0, distance_km: +(m.km||0), heart_rate: m.hr|0,
             sets_detail: m.setsHistory||[],
             source: 'phone'
         };
@@ -3321,6 +3327,7 @@ const Auth = {
             gamesA: r.games_a, gamesB: r.games_b,
             winner: r.winner,
             duration: r.duration_s,
+            kcal: r.kcal|0, km: +(r.distance_km||0), hr: r.heart_rate|0,
             setsHistory: r.sets_detail||[],
             totalPoints:0, pointsWonA:0,
             faults:{A:{doubleFault:0},B:{doubleFault:0}},
@@ -3359,12 +3366,56 @@ const Auth = {
         return nuevos.length;
     },
 
+    /**
+     * Los ajustes tambien viajan con la cuenta: idioma, tema y reglas.
+     * Manda el ultimo movil que sincroniza.
+     */
+    async pushSettings(){
+        if(!this.isIn) return;
+        await this.api('/rest/v1/settings?on_conflict=user_id', {
+            method:'POST',
+            headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
+            body:[{
+                user_id: this.user.id,
+                lang: S.lang||'es',
+                theme: S.theme||'neon',
+                golden_point: !!S.goldenPoint,
+                super_tb: !!S.superTiebreak,
+                best_of: S.bestOf||3,
+                updated_at: new Date().toISOString()
+            }]
+        });
+    },
+
+    /**
+     * Solo se aplican la primera vez que este movil sincroniza. Despues manda
+     * lo local: si alguien cambia el tema aqui, no queremos que la nube se lo
+     * deshaga en el siguiente sync.
+     */
+    async pullSettings(){
+        if(!this.isIn) return false;
+        if(localStorage.getItem('pp_settings_synced')) return false;
+        const rows = await this.api('/rest/v1/settings?select=*&limit=1');
+        localStorage.setItem('pp_settings_synced','1');
+        if(!Array.isArray(rows) || !rows.length) return false;
+        const r = rows[0];
+        S.lang = r.lang || S.lang;
+        S.theme = r.theme || S.theme;
+        S.goldenPoint = !!r.golden_point;
+        S.superTiebreak = !!r.super_tb;
+        S.bestOf = r.best_of || S.bestOf;
+        saveStateOnly();
+        return true;
+    },
+
     /** Sube y baja. Es lo que se llama al entrar y desde el boton. */
     async syncNow(quiet){
         if(!this.isIn || this.syncing) return;
         this.syncing = true; render();
         try{
             if(!(await this.refreshIfNeeded())) throw new Error('sin sesion');
+            const ajustesBajados = await this.pullSettings();
+            if(!ajustesBajados) await this.pushSettings();
             await this.pushAll();
             const bajados = await this.pullAll();
             this.lastSync = Date.now();

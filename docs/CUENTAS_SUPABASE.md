@@ -6,6 +6,15 @@ telefono.
 
 ## Proyecto
 
+**Ojo: en esta cuenta de Supabase hay tres proyectos.** PadelPulse solo
+usa el suyo, y nada de esto toca los otros dos:
+
+| Proyecto | Referencia | Es de |
+|----------|------------|-------|
+| **PadelPulse Live** | `fdlcdzlvvxqhzougcjwd` | **esta app** |
+| Cat Health Tracker | `vwdnipvfjqeeezuhjstk` | otro proyecto, no tocar |
+| Edubermejo92's Project | `vjsowjjdeufpeiwmtnmr` | parado, sin usar |
+
 - **Nombre:** PadelPulse Live
 - **Referencia:** `fdlcdzlvvxqhzougcjwd`
 - **Region:** eu-central-1
@@ -26,17 +35,32 @@ publicable a mano.
 | Tabla      | Para que sirve                            | Clave unica            |
 |------------|-------------------------------------------|------------------------|
 | `profiles` | Nombre visible del usuario                | `id` (= `auth.uid()`)  |
-| `matches`  | Partidos terminados                       | `(user_id, local_id)`  |
-| `players`  | Jugadores y parejas                       | `(user_id, name)`      |
+| `matches`  | Partidos terminados, con salud incluida   | `(user_id, local_id)`  |
+| `players`  | Reservada (ahora los nombres salen de `matches`) | `(user_id, name)` |
 | `settings` | Ajustes (idioma, tema, punto de oro...)   | `user_id`              |
 
 `matches` lleva ademas un indice por `(user_id, played_at desc)`, que es
 justo como lo pide la app al bajar el historial.
 
+Las cuatro cuelgan de `auth.users` con `ON DELETE CASCADE`: si se borra una
+cuenta, se van con ella sus partidos, sus ajustes y su perfil.
+
 El `(user_id, local_id)` unico es el que hace que subir dos veces el mismo
 partido no lo duplique: la app manda
 `POST /rest/v1/matches?on_conflict=user_id,local_id` con
 `Prefer: resolution=merge-duplicates`.
+
+`players` esta creada pero la app no la usa: los nombres de jugadores salen
+del propio historial de partidos, asi que no hace falta una segunda lista
+que mantener en sincronia. Se queda por si algun dia hacen falta jugadores
+que no hayan jugado todavia.
+
+### Ajustes
+
+El idioma, el tema y las reglas viajan con la cuenta. Se bajan **la primera
+vez** que un movil sincroniza esa cuenta; a partir de ahi manda lo local y
+se sube en cada sincronizacion. Es a proposito: si alguien cambia el tema en
+el movil, no queremos que la nube se lo deshaga al siguiente sync.
 
 ## Que hace cada app
 
@@ -84,3 +108,20 @@ Si en el panel de Supabase esta activada la confirmacion de correo, al
 crear la cuenta no viene sesion todavia y la app avisa de que hay que
 mirar el buzon. Con la confirmacion desactivada se entra directamente.
 Se cambia en **Authentication › Providers › Email**.
+
+## Comprobaciones hechas contra el proyecto real
+
+Con usuarios de prueba creados y borrados en el momento (la base quedo
+vacia, comprobado despues):
+
+| Prueba | Resultado |
+|--------|-----------|
+| Un usuario ve sus partidos | ✅ solo los suyos |
+| Un usuario ve los de otro | ✅ no ve ninguno |
+| Un usuario escribe un partido a nombre de otro | ✅ bloqueado |
+| Un usuario modifica los partidos de otro | ✅ 0 filas |
+| Sin sesion (clave publicable a pelo) lee partidos | ✅ no ve nada |
+| Sin sesion escribe | ✅ bloqueado |
+| Sesion sin usuario (token caducado) lee | ✅ no ve nada |
+
+El analizador de seguridad de Supabase no da ningun aviso.
