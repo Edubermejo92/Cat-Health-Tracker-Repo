@@ -140,3 +140,82 @@ vacia, comprobado despues):
 | El perfil se crea solo al registrarse | ✅ lo hace el disparador |
 
 El analizador de seguridad de Supabase no da ningun aviso.
+
+---
+
+# Entrar con Google
+
+El boton "Continuar con Google" ya esta en las dos apps y en la web, pero
+**no funcionara hasta que actives el proveedor**. Eso hay que hacerlo a
+mano en dos paneles, porque las credenciales de Google son tuyas y solo
+las puedes crear tu.
+
+## 1. Google Cloud Console
+
+<https://console.cloud.google.com/apis/credentials>
+
+- Crea un **ID de cliente de OAuth 2.0**, tipo **Aplicacion web**.
+- En **URI de redireccionamiento autorizados** pon exactamente esto:
+
+  ```
+  https://fdlcdzlvvxqhzougcjwd.supabase.co/auth/v1/callback
+  ```
+
+- Guarda el **ID de cliente** y el **secreto**.
+
+Es tipo "Aplicacion web" aunque sea para una app de movil: el intercambio
+lo hace Supabase en su servidor, la app solo abre el navegador.
+
+La primera vez te pedira configurar la **pantalla de consentimiento**
+(nombre de la app, correo de contacto y logo). Mientras este en modo
+"Prueba" solo entraran los correos que apuntes ahi, que para los testers
+va bien; para abrirlo a todo el mundo hay que publicarla.
+
+## 2. Supabase
+
+**Authentication › Providers › Google**: activalo y pega el ID de cliente
+y el secreto.
+
+**Authentication › URL Configuration › Additional Redirect URLs**: añade
+las dos direcciones de vuelta, una por linea:
+
+```
+padelpulse://auth
+https://padelpulselive.netlify.app
+```
+
+La primera es la de las apps; la segunda, la de la web. Sin ellas Supabase
+rechaza la vuelta y el usuario se queda mirando el navegador.
+
+## Como funciona
+
+Google **no permite** iniciar sesion dentro de un WebView: devuelve
+`disallowed_useragent` y no hay manera. Por eso la app abre la pantalla de
+Google en el navegador del sistema y espera a que vuelva por su propio
+enlace, `padelpulse://auth`, declarado en el manifiesto.
+
+La vuelta usa **PKCE**: la app genera un secreto, manda solo su huella, y
+al volver canjea el codigo presentando el secreto. Aunque otra app
+interceptara el enlace de vuelta, sin ese secreto el codigo no le sirve.
+La huella se calcula en Kotlin con `MessageDigest` y no con
+`crypto.subtle`, porque en un WebView servido desde `file://` esa API del
+navegador no siempre esta disponible.
+
+El reloj no cambia: sigue recibiendo la sesion ya hecha desde el movil,
+venga de Google o del correo.
+
+En la web es mas simple: se redirige, se vuelve con la sesion detras de la
+almohadilla, y la app la recoge y limpia la barra de direcciones -que ahi
+va el token-.
+
+## Comprobado
+
+| Prueba | Resultado |
+|--------|-----------|
+| El boton sale en la pantalla de entrada | ✅ y el correo sigue debajo |
+| En la app usa el puente nativo, no redirige el WebView | ✅ |
+| La sesion de Google entra y se guarda | ✅ nombre y correo de Google |
+| Llega al reloj al vincular | ✅ como cualquier otra sesion |
+| Si el usuario cancela | ✅ mensaje, y no entra |
+| En la web redirige a Google y vuelve | ✅ con `redirect_to` correcto |
+| La web recoge la sesion y limpia la url | ✅ |

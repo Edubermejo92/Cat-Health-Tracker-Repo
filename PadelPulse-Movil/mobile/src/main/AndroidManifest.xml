@@ -25,13 +25,27 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="34">
 
+        <!-- singleTask para que la vuelta de Google reentre en la misma
+             pantalla en vez de abrir una segunda copia de la app. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Vuelta del inicio de sesion con Google. Supabase redirige aqui
+                 con el codigo, y esta misma pantalla lo canjea. El esquema hay
+                 que darlo de alta en Supabase (Authentication > URL
+                 Configuration > Additional Redirect URLs). -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="padelpulse" android:host="auth" />
             </intent-filter>
         </activity>
 
