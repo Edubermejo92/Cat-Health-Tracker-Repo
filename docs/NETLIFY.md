@@ -1,25 +1,14 @@
 # Publicar las webs en Netlify
 
-Hay dos sitios y una sola cuenta: **EBLDigital** (equipo `edubermejo92`).
+La web es **la app del movil**: `web/index.html` es una copia de `code.html`,
+el mismo archivo que va dentro del APK. No hay web del reloj, porque el reloj
+es una app Compose nativa.
 
-| Sitio | Carpeta del repositorio | Que es |
-|-------|-------------------------|--------|
-| `padelpulselive-wearos` | `web-wearos/` | Pagina de presentacion del reloj |
-| *(pendiente de nombre)* | `web/` | La app del movil, en version web |
+## Donde esta el sitio
 
-## El nombre `padelpulselive` esta cogido
-
-Netlify exige que los nombres sean unicos en **toda** la plataforma, no solo
-dentro de tu cuenta, y `padelpulselive` ya lo tiene alguien. En el equipo
-EBLDigital no esta, asi que o lo tiene otra cuenta tuya antigua, o lo tiene
-un tercero.
-
-Dos salidas:
-
-- **Entrar con la cuenta que lo tiene** y desplegar `web/` ahi. La direccion
-  que ya conocen tus testers no cambia.
-- **Elegir otro nombre** en EBLDigital (`padel-pulse-live`, `padelpulse-app`,
-  lo que prefieras) y avisar del cambio de direccion.
+El sitio `padelpulselive` **no esta en el equipo EBLDigital**: el nombre esta
+cogido en Netlify -que los exige unicos en toda la plataforma-, asi que lo
+tiene otra cuenta. Para desplegar hay que entrar con esa cuenta.
 
 ## Como desplegar
 
@@ -29,22 +18,21 @@ Se despliega solo cada vez que se sube algo a la rama.
 
 En **Site configuration › Build & deploy › Continuous deployment**:
 
-| Ajuste | `padelpulselive-wearos` | el sitio del movil |
-|--------|-------------------------|--------------------|
-| Repository | `Edubermejo92/Nuevo_repo` | igual |
-| Branch | `padelpulse-live-wearos` | `padelpulse-live-mobile` |
-| **Base directory** | `web-wearos` | `web` |
-| Build command | *(vacio)* | *(vacio)* |
-| Publish directory | `.` | `.` |
+| Ajuste | Valor |
+|--------|-------|
+| Repository | `Edubermejo92/Nuevo_repo` |
+| Branch | `padelpulse-live-mobile` |
+| **Base directory** | `web` |
+| Build command | *(vacio)* |
+| Publish directory | `.` |
 
-Lo importante es la **base directory**: con ella cada sitio lee su propio
-`netlify.toml` y no se pisan. Por eso no hay ningun `netlify.toml` en la raiz
-del repositorio; si lo hubiera, mandaria sobre los dos sitios a la vez.
+La **base directory** es lo importante: con ella el sitio lee `web/netlify.toml`
+y no hace falta ningun `netlify.toml` en la raiz del repositorio.
 
 ### Opcion B — arrastrar la carpeta
 
-En **Deploys › Deploy manually**, arrastra la carpeta (`web-wearos` o `web`).
-Rapido para salir del paso, pero hay que repetirlo a mano en cada cambio.
+En **Deploys › Deploy manually**, arrastra la carpeta `web`. Rapido para salir
+del paso, pero hay que repetirlo a mano en cada cambio.
 
 ## Acuerdate de sincronizar la web antes de desplegar
 
@@ -62,4 +50,5 @@ Entrar con Google necesita que la direccion del sitio este en la lista de
 **Authentication › URL Configuration › Additional Redirect URLs**. Si cambias
 el nombre del sitio, cambia tambien ahi. Ver `CUENTAS_SUPABASE.md`.
 
-La pagina del reloj no necesita nada de esto: no tiene inicio de sesion.
+Si cambias de sitio o de nombre, acuerdate tambien de esto o el login con
+Google dejara de volver a la app.
