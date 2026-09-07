@@ -27,7 +27,7 @@ android {
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
         // serie (1xxx) y siempre por encima del movil.
-        versionCode = 5010
+        versionCode = 5020
         versionName = "5.0.0"
     }
 
@@ -79,4 +79,6 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    // Actividad en curso: obligatoria para pasar la revision de Wear OS
+    implementation("androidx.wear:wear-ongoing:1.0.0")
 }

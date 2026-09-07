@@ -36,7 +36,31 @@ import padelpulseapp2.netlify.app.ui.PPStatusPill
 @Composable
 fun PadelApp(engine: GameEngine, activity: MainActivity) {
     val accent = ThemeUtils.getColor(engine.theme)
-    val listState = rememberScalingLazyListState()
+
+    // Un estado de scroll POR PANTALLA. Compartir uno solo hacia que el
+    // indicador de desplazamiento no siguiera a la lista que se estaba viendo
+    // (Play rechazo la app por "falta la barra de desplazamiento"), y ademas
+    // durante el Crossfade se componen dos pantallas a la vez y se peleaban
+    // por el mismo estado.
+    val langState = rememberScalingLazyListState()
+    val modeState = rememberScalingLazyListState()
+    val pairState = rememberScalingLazyListState()
+    val scoreState = rememberScalingLazyListState()
+    val settingsState = rememberScalingLazyListState()
+    val historyState = rememberScalingLazyListState()
+    val nameState = rememberScalingLazyListState()
+
+    // El indicador sigue a la lista de la pantalla visible. En las pantallas
+    // que no tienen scroll (splash, resume, fin) no se muestra ninguno.
+    val activeState = when (engine.currentScreen) {
+        "lang" -> langState
+        "mode" -> modeState
+        "bt" -> pairState
+        "score" -> scoreState
+        "settings" -> settingsState
+        "history" -> historyState
+        else -> null
+    }
 
     MaterialTheme(
         colors = MaterialTheme.colors.copy(
@@ -49,24 +73,26 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
         Scaffold(
             timeText = { if (engine.currentScreen != "splash") TimeText() },
             vignette = { Vignette(vignettePosition = VignettePosition.TopAndBottom) },
-            positionIndicator = { PositionIndicator(scalingLazyListState = listState) }
+            positionIndicator = {
+                activeState?.let { PositionIndicator(scalingLazyListState = it) }
+            }
         ) {
             Box(modifier = Modifier.fillMaxSize().background(PP.Bg)) {
                 Crossfade(targetState = engine.currentScreen, label = "nav") { current ->
                     when (current) {
                         "splash" -> SplashScreen(engine, activity)
                         "resume" -> ResumeScreen(engine, activity)
-                        "lang" -> LangScreen(engine, activity, listState)
-                        "mode" -> ModeScreen(engine, activity, listState)
-                        "bt" -> PairScreen(engine, activity)
+                        "lang" -> LangScreen(engine, activity, langState)
+                        "mode" -> ModeScreen(engine, activity, modeState)
+                        "bt" -> PairScreen(engine, activity, pairState)
                         "score" -> ScoreScreen(
-                            engine, activity,
+                            engine, activity, scoreState, nameState,
                             { engine.currentScreen = "settings" },
                             { engine.currentScreen = "mode" },
                             { engine.currentScreen = "end" }
                         )
-                        "settings" -> SettingsScreen(engine, activity, listState) { engine.currentScreen = "score" }
-                        "history" -> HistoryScreen(engine, activity, listState) { engine.currentScreen = "settings" }
+                        "settings" -> SettingsScreen(engine, activity, settingsState) { engine.currentScreen = "score" }
+                        "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = "settings" }
                         "end" -> EndScreen(engine, activity)
                         else -> SplashScreen(engine, activity)
                     }
@@ -347,7 +373,11 @@ fun ModeScreen(
 // ─────────────────────────────────────────────────────────────────────
 
 @Composable
-fun PairScreen(engine: GameEngine, activity: MainActivity) {
+fun PairScreen(
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
+) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
     val es = engine.lang == "es"
@@ -402,6 +432,7 @@ fun PairScreen(engine: GameEngine, activity: MainActivity) {
     }
 
     ScalingLazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 24.dp)

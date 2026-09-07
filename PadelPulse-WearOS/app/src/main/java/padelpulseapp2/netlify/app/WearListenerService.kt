@@ -75,6 +75,7 @@ class WearListenerService : WearableListenerService() {
             else obj
             val clock = engine.applyState(state)
             if (clock >= 0) MainActivity.instance?.setMatchClock(clock)
+            MainActivity.instance?.refreshOngoingActivity()
             if (engine.over && engine.currentScreen == "score") engine.currentScreen = "end"
         } catch (e: Exception) {
             Log.e(TAG, "Error aplicando estado", e)

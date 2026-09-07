@@ -9,6 +9,12 @@
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
+    <!-- Actividad en curso del partido (obligatoria en Wear OS): notificacion
+         persistente + servicio en primer plano mientras se juega -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+
     <uses-feature android:name="android.hardware.type.watch" android:required="true" />
 
     <application
@@ -43,6 +49,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Mantiene viva la actividad en curso del partido: es lo que hace que
+             el marcador salga en la esfera, en recientes y en el carrusel. -->
+        <service
+            android:name=".MatchOngoingService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
 
         <!-- Recibe los mensajes del movil tambien con la app cerrada.
              El pathPrefix tiene que coincidir con el del movil: /padel -->

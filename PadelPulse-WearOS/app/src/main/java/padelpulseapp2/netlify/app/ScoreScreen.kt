@@ -32,6 +32,8 @@ import padelpulseapp2.netlify.app.ui.PPLabel
 fun ScoreScreen(
     engine: GameEngine,
     activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
+    nameState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
     onSettings: () -> Unit,
     onMode: () -> Unit,
     onEnd: () -> Unit
@@ -39,7 +41,6 @@ fun ScoreScreen(
     val accent = ThemeUtils.getColor(engine.theme)
     var showPicker by remember { mutableStateOf<String?>(null) }
     var editingTeam by remember { mutableStateOf<String?>(null) }
-    val listState = rememberScalingLazyListState()
 
     LaunchedEffect(engine.over) { if (engine.over) onEnd() }
 
@@ -50,7 +51,7 @@ fun ScoreScreen(
     val editing = editingTeam
     val picker = showPicker
     if (editing != null) {
-        NameEditorScreen(editing, engine, activity) { editingTeam = null }
+        NameEditorScreen(editing, engine, activity, nameState) { editingTeam = null }
         return
     }
     if (picker != null) {
@@ -389,7 +390,11 @@ private fun HealthStat(icon: String, value: String, label: String, color: Color)
 
 @Composable
 fun NameEditorScreen(
-    team: String, engine: GameEngine, activity: MainActivity, onClose: () -> Unit
+    team: String,
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
+    onClose: () -> Unit
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val es = engine.lang == "es"
@@ -414,6 +419,7 @@ fun NameEditorScreen(
     }
 
     ScalingLazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 26.dp)

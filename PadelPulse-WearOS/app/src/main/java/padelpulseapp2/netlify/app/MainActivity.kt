@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
             SyncProtocol.MODE_WATCH -> pushStateToPhone()
             SyncProtocol.MODE_PHONE -> sendCommandToPhone(action, team)
         }
+        refreshOngoingActivity()
     }
 
     fun setMatchClock(seconds: Int) {
@@ -198,6 +199,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     fun startTimer() {
         timerRunning = true
+        // Publica la actividad en curso: partido en marcha visible desde la
+        // esfera del reloj y recientes, con un toque para volver al marcador.
+        MatchOngoingService.start(this)
         if (timerJob?.isActive == true) return
         timerJob = lifecycleScope.launch {
             while (true) {
@@ -217,6 +221,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     fun resetTimer() {
         matchTimeSeconds = 0
         timerRunning = false
+        MatchOngoingService.stop(this)
+    }
+
+    /**
+     * Refresca el marcador que se ve en la actividad en curso. El cronometro
+     * corre solo, asi que esto solo hace falta cuando cambia el tanteo.
+     */
+    fun refreshOngoingActivity() {
+        val engine = gameEngine
+        if (engine != null && engine.over) {
+            // Partido acabado: ya no hay nada "en curso" que mostrar
+            MatchOngoingService.stop(this)
+            return
+        }
+        if (timerRunning) MatchOngoingService.start(this)
     }
 
     fun getTimerDisplay(): String {
@@ -319,6 +338,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
             checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
             neededPerms.add(android.Manifest.permission.ACTIVITY_RECOGNITION)
+        }
+        // Sin este permiso (Android 13+) no se puede publicar la actividad en
+        // curso, que es requisito de Play para las apps de Wear OS.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            neededPerms.add(android.Manifest.permission.POST_NOTIFICATIONS)
         }
         if (neededPerms.isNotEmpty()) requestPermissions(neededPerms.toTypedArray(), 101)
 
