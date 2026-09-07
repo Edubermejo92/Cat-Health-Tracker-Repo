@@ -3426,8 +3426,12 @@ const Auth = {
             if(!ajustesBajados) await this.pushSettings();
             await this.pushAll();
             const bajados = await this.pullAll();
-            await Contacts.pull();
-            await Contacts.push();
+            // La agenda va aparte: si falla, el historial ya esta a salvo y no
+            // tiene sentido decirle al usuario que no se ha guardado nada.
+            try{
+                await Contacts.pull();
+                await Contacts.push();
+            }catch(e){ console.warn('agenda', e); }
             this.lastSync = Date.now();
             this.lastError = null;
             if(!quiet) showToast(bajados
@@ -3654,12 +3658,14 @@ function getLastMatch(){
 function repeatMatch(id){
     const m = id ? getMatchHistory().find(x => x.id === id) : getLastMatch();
     if(!m) return;
+    startNewMatch();
     S.teamA.name = m.teamA || 'LOCAL';
     S.teamB.name = m.teamB || 'VISITA';
     S.teamA.playerA = m.playerA1 || ''; S.teamA.playerB = m.playerA2 || '';
     S.teamB.playerA = m.playerB1 || ''; S.teamB.playerB = m.playerB2 || '';
     saveState();
-    startNewMatch();
+    render();
+    PPSync.sendSettings();
     showToast(i2('Mismos jugadores que la ultima vez','Same players as last time'), 2200);
 }
 
@@ -4632,8 +4638,14 @@ const BottomNav=(active)=>`
 function startNewMatch(){
     sessionStorage.setItem('pp_setup_done','1');
     const lang=S.lang||'es', theme=S.theme||'neon', bo=(S.bestOf===1||S.bestOf===3||S.bestOf===5)?S.bestOf:3;
+    // Los jugadores sobreviven al partido nuevo: casi siempre se juega otra
+    // vez con los mismos, y volver a teclear cuatro nombres cada vez sobra.
+    const eqA={name:S.teamA.name, playerA:S.teamA.playerA, playerB:S.teamA.playerB};
+    const eqB={name:S.teamB.name, playerA:S.teamB.playerA, playerB:S.teamB.playerB};
     S=defaultState();
     S.lang=lang; S.theme=theme; S.bestOf=bo;
+    Object.assign(S.teamA, eqA);
+    Object.assign(S.teamB, eqB);
     S.currentView='home';
     initTeamNames();
     applyTheme();
