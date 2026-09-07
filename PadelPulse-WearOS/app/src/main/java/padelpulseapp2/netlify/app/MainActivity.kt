@@ -23,13 +23,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
+import padelpulseapp2.netlify.app.sync.WatchAccount
 import java.util.Locale
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEventListener {
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "5.0.5"
+        const val APP_VERSION = "5.0.6"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
     }
@@ -90,6 +91,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     fun onPairingRejected() {
         PhoneLink.paired = false
         PhoneLink.lastError = "codigo"
+    }
+
+    /**
+     * El movil nos ha mandado -o retirado- la sesion. Los estados de
+     * [WatchAccount] son observables, asi que la pantalla se repinta sola;
+     * aqui solo hace falta mover al usuario si se quedo sin cuenta estando
+     * ya dentro, o sacarlo de la pantalla de cuenta cuando entra.
+     */
+    fun onAccountChanged() {
+        val engine = gameEngine ?: return
+        if (!WatchAccount.signedIn && !WatchAccount.skipped &&
+            engine.currentScreen == "splash" && !engine.hasSavedMatch()) {
+            engine.currentScreen = "account"
+        }
     }
 
     fun sendPairRequest(code: String) {
@@ -327,6 +342,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         val engine = GameEngine(this)
         gameEngine = engine
         engine.onSpeak = { text -> speak(text, engine.lang) }
+
+        // La app arranca por la cuenta: o llega la sesion del movil, o el
+        // usuario elige jugar sin ella. Solo se pregunta una vez.
+        WatchAccount.load(this)
+        if (!WatchAccount.signedIn && !WatchAccount.skipped) {
+            engine.currentScreen = "account"
+        }
 
         updateBrightness(engine.brightness)
         PhoneLink.announce(this)

@@ -8,6 +8,7 @@ import com.google.android.gms.wearable.WearableListenerService
 import org.json.JSONObject
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
+import padelpulseapp2.netlify.app.sync.WatchAccount
 import java.nio.charset.StandardCharsets
 
 /**
@@ -25,7 +26,6 @@ class WearListenerService : WearableListenerService() {
     }
 
     private fun dispatch(path: String, payload: String) {
-        val engine = MainActivity.gameEngine ?: return
         val obj = runCatching { JSONObject(payload) }.getOrElse {
             Log.w(TAG, "Payload no es JSON en $path")
             return
@@ -35,6 +35,17 @@ class WearListenerService : WearableListenerService() {
         PhoneLink.setConnected(true)
 
         if (!PhoneLink.acceptSeq(obj.optLong("seq", 0L))) return
+
+        // La cuenta se guarda aunque la app no este abierta: el servicio
+        // arranca solo y la sesion tiene que estar lista para cuando el
+        // usuario levante la muñeca.
+        if (path == SyncProtocol.PATH_ACCOUNT) {
+            WatchAccount.applyFromPhone(applicationContext, obj)
+            MainActivity.instance?.onAccountChanged()
+            return
+        }
+
+        val engine = MainActivity.gameEngine ?: return
 
         when (path) {
             SyncProtocol.PATH_HELLO -> onHello(obj)

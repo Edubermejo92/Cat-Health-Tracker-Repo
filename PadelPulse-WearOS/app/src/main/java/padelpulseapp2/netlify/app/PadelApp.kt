@@ -27,6 +27,7 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import kotlinx.coroutines.delay
 import padelpulseapp2.netlify.app.sync.PhoneLink
+import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
@@ -80,6 +81,7 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
             Box(modifier = Modifier.fillMaxSize().background(PP.Bg)) {
                 Crossfade(targetState = engine.currentScreen, label = "nav") { current ->
                     when (current) {
+                        "account" -> AccountScreen(engine, activity)
                         "splash" -> SplashScreen(engine, activity)
                         "resume" -> ResumeScreen(engine, activity)
                         "lang" -> LangScreen(engine, activity, langState)
@@ -148,6 +150,81 @@ fun BackRow(engine: GameEngine, onBack: () -> Unit) {
             if (engine.lang == "es") "‹ VOLVER" else "‹ BACK",
             color = PP.TextDim, size = PP.Micro
         )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Cuenta
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Pantalla de cuenta del reloj.
+ *
+ * No se piden aqui correo y contraseña a proposito: teclearlos en una
+ * pantalla de reloj es una tortura y Wear OS recomienda que la sesion la
+ * inicie el movil. Cuando el movil entra, manda la sesion por el Data
+ * Layer y esta pantalla pasa sola al marcador. Y quien no quiera cuenta,
+ * entra sin ella: la cuenta solo sirve para respaldar el historial.
+ */
+@Composable
+fun AccountScreen(engine: GameEngine, activity: MainActivity) {
+    val accent = ThemeUtils.getColor(engine.theme)
+    val es = engine.lang == "es"
+
+    // En cuanto llega la sesion del movil, seguimos solos
+    LaunchedEffect(WatchAccount.signedIn) {
+        if (WatchAccount.signedIn) {
+            delay(1200)
+            engine.currentScreen = "splash"
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.splash_logo),
+            contentDescription = "PadelPulse",
+            modifier = Modifier.width(44.dp).padding(bottom = 6.dp)
+        )
+
+        if (WatchAccount.signedIn) {
+            PPLabel(if (es) "SESION INICIADA" else "SIGNED IN", color = accent, size = PP.Label)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                WatchAccount.name.ifEmpty { WatchAccount.email },
+                color = Color.White, fontSize = PP.Body,
+                fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center
+            )
+        } else {
+            PPLabel(if (es) "TU CUENTA" else "YOUR ACCOUNT", color = accent, size = PP.Label)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (es) "Inicia sesion en PadelPulse del movil y el reloj entra solo."
+                else "Sign in on the phone app and the watch follows automatically.",
+                color = PP.TextDim, fontSize = PP.Micro,
+                textAlign = TextAlign.Center, maxLines = 4
+            )
+            Spacer(Modifier.height(10.dp))
+            LinkPill(engine)
+            Spacer(Modifier.height(10.dp))
+
+            Button(
+                onClick = {
+                    WatchAccount.skip(activity)
+                    engine.currentScreen = "splash"
+                },
+                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
+                modifier = Modifier.height(36.dp).fillMaxWidth(0.9f).clip(RoundedCornerShape(18.dp))
+            ) {
+                Text(
+                    if (es) "JUGAR SIN CUENTA" else "PLAY WITHOUT ACCOUNT",
+                    color = accent, fontSize = PP.Micro, fontWeight = FontWeight.Black
+                )
+            }
+        }
     }
 }
 

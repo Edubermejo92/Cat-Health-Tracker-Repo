@@ -23,6 +23,7 @@ prefijo los mensajes no llegan cuando la app está en segundo plano.
 | `/padel/cmd` | esclavo → maestro | Acción del usuario (punto, deshacer…) |
 | `/padel/settings` | ambos | Ajustes (idioma, tema, reglas, nombres) |
 | `/padel/health` | reloj → móvil | Pulso, calorías, distancia |
+| `/padel/account` | móvil → reloj | Sesión de la cuenta (no se teclea en el reloj) |
 
 Rutas heredadas que se siguen aceptando (v2) para que un reloj o un móvil sin
 actualizar no rompan del todo: `/padel/sync`, `/padel/point`, `/padel/bt`. Se traducen
@@ -152,3 +153,33 @@ cuenta. Si un valor es 0 se muestra `-`, no se inventa.
 Se manda al conectar, al volver a primer plano y cada 30 s mientras hay partido. Sirve
 para pintar el indicador de conexión y para detectar versiones de protocolo distintas
 (si `proto` no coincide, cada app avisa al usuario de que actualice la otra).
+
+## `/padel/account` — sesión de la cuenta
+
+El reloj no pide contraseña: la sesión la inicia el móvil y se la pasa por
+aquí. Viaja por el canal cifrado del sistema entre dos dispositivos ya
+emparejados, no sale a internet.
+
+El móvil lo manda al aceptar un emparejamiento, al entrar y al salir.
+
+```json
+{
+  "v": 3, "src": "phone", "seq": 42,
+  "action": "session",
+  "email": "edu@ejemplo.com",
+  "name": "Edu",
+  "token": "<access_token>",
+  "refresh": "<refresh_token>",
+  "expires": 1757260800000
+}
+```
+
+Al cerrar sesión en el móvil:
+
+```json
+{ "v": 3, "src": "phone", "seq": 43, "action": "signout" }
+```
+
+Es la única ruta que el reloj procesa **aunque su app esté cerrada**: el
+servicio guarda la sesión igual, para que ya esté puesta cuando el usuario
+levante la muñeca. Todas las demás necesitan el partido en marcha.

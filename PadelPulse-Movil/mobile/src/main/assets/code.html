@@ -261,6 +261,7 @@ const PP_PROTO = 3;
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
+    account:'/padel/account',
     // v2
     legacySync:'/padel/sync', legacyPoint:'/padel/point', legacyBt:'/padel/bt'
 };
@@ -531,7 +532,29 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.0.5', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.0.6', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+    },
+
+    /**
+     * Manda la sesion al reloj para que no haya que teclear contraseñas en la
+     * muñeca. Viaja por el canal cifrado del sistema entre dos dispositivos ya
+     * emparejados, no sale a internet.
+     */
+    sendAccountToWatch(){
+        if(typeof Auth==='undefined') return;
+        if(!this.paired) return;
+        if(Auth.isIn){
+            this.send(PP_PATH.account, {
+                action:'session',
+                email: (Auth.user&&Auth.user.email)||'',
+                name:  (Auth.user&&Auth.user.display_name)||'',
+                token: Auth.session.access_token,
+                refresh: Auth.session.refresh_token,
+                expires: Auth.session.expires_at
+            });
+        } else {
+            this.send(PP_PATH.account, {action:'signout'});
+        }
     },
 
     requestHealth(){ this.send(PP_PATH.health, {request:true}); },
@@ -622,6 +645,7 @@ const PPSync = {
             const b=this.bridge; if(b&&b.vibrate) b.vibrate(60);
             showToast('⌚ Reloj vinculado'+(obj.device?' — '+obj.device:''), 2600);
             this.sendSettings();
+            this.sendAccountToWatch();
             this.pushNow();
         }else{
             this.send(PP_PATH.pair, {action:'reject', code:this.code});
@@ -889,10 +913,6 @@ if(typeof S.playingExtraSet === 'undefined') S.playingExtraSet = false;
         S.matchOver=false; S.matchWinner=null; return;
     }
 })();
-
-if (!SPECTATOR && !sessionStorage.getItem('pp_setup_done')) {
-    S.currentView = 'setup';
-}
 
 // Set default team names from current language (called after LANGS is defined)
 function initTeamNames(){
@@ -2148,6 +2168,7 @@ function endMatch(){
         const sB=S.setsHistory.filter(s=>s.winner==='B').length;
         S.matchWinner=sA>=sB?'A':'B';
         logActivity('match',S.matchWinner); soundMatch(); saveMatchToHistory(); saveState(); render();
+        if(typeof Auth!=='undefined') Auth.backupMatch();
         setTimeout(()=>showMatchOver(S.matchWinner),300);
     });
 }
@@ -3112,6 +3133,355 @@ function deleteMatchFromHistory(id){
         localStorage.setItem('pp_match_history',JSON.stringify(hist));
     }catch(e){}
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// CUENTA (Supabase)
+// Se habla con la API REST a pelo, sin supabase-js: la app tiene que
+// arrancar sin conexion y no puede depender de un CDN. Son cuatro
+// llamadas, no compensa meter una libreria de 100 KB.
+//
+// Regla de oro: la app SIEMPRE funciona sin conexion. La cuenta sirve
+// para respaldar y llevarse el historial a otro movil, no para poder
+// jugar. Si no hay red, se juega igual y ya se subira luego.
+// ═══════════════════════════════════════════════════════════════════
+const SUPA_URL = 'https://fdlcdzlvvxqhzougcjwd.supabase.co';
+const SUPA_KEY = 'sb_publishable_Q7D-EMj-MW4df-VzAbSNmg_eumYPvtM';
+
+const Auth = {
+    user: null,            // { id, email, display_name }
+    session: null,         // { access_token, refresh_token, expires_at }
+    status: 'anon',        // 'anon' | 'in' | 'busy'
+    lastError: null,
+    lastSync: 0,
+    syncing: false,
+
+    // ── Persistencia local de la sesion ──
+    load(){
+        try{
+            const raw = localStorage.getItem('pp_session');
+            if(!raw) return;
+            const s = JSON.parse(raw);
+            if(s && s.access_token){
+                this.session = s;
+                this.user = s.user || null;
+                this.status = 'in';
+            }
+        }catch(e){}
+    },
+    persist(){
+        try{
+            if(this.session) localStorage.setItem('pp_session', JSON.stringify({...this.session, user:this.user}));
+            else localStorage.removeItem('pp_session');
+        }catch(e){}
+    },
+
+    get isIn(){ return this.status==='in' && !!this.session; },
+
+    async api(path, {method='GET', body=null, auth=true, headers={}}={}){
+        const h = Object.assign({
+            'apikey': SUPA_KEY,
+            'Content-Type': 'application/json'
+        }, headers);
+        if(auth && this.session) h['Authorization'] = 'Bearer ' + this.session.access_token;
+        const res = await fetch(SUPA_URL + path, {
+            method, headers: h, body: body ? JSON.stringify(body) : undefined
+        });
+        const txt = await res.text();
+        let data = null;
+        try{ data = txt ? JSON.parse(txt) : null; }catch(e){ data = txt; }
+        if(!res.ok){
+            const msg = (data && (data.error_description || data.msg || data.message || data.error)) || ('HTTP '+res.status);
+            throw new Error(msg);
+        }
+        return data;
+    },
+
+    // ── Registro / entrada / salida ──
+    async signUp(email, password, displayName){
+        this.status='busy'; this.lastError=null; render();
+        try{
+            const data = await this.api('/auth/v1/signup', {
+                method:'POST', auth:false,
+                body:{ email, password, data:{ display_name: displayName || email.split('@')[0] } }
+            });
+            // Con confirmacion de correo activada no viene sesion todavia
+            if(data.access_token){
+                this.applySession(data);
+                showToast(i2('Cuenta creada','Account created'), 2500);
+                await this.pushAll();
+            } else {
+                this.status='anon';
+                showToast(i2('Revisa tu correo para confirmar la cuenta','Check your email to confirm'), 4000);
+            }
+        }catch(e){
+            this.status='anon'; this.lastError = this.human(e.message);
+        }
+        render();
+    },
+
+    async signIn(email, password){
+        this.status='busy'; this.lastError=null; render();
+        try{
+            const data = await this.api('/auth/v1/token?grant_type=password', {
+                method:'POST', auth:false, body:{ email, password }
+            });
+            this.applySession(data);
+            showToast(i2('Sesion iniciada','Signed in'), 2000);
+            await this.syncNow();
+        }catch(e){
+            this.status='anon'; this.lastError = this.human(e.message);
+        }
+        render();
+    },
+
+    applySession(data){
+        this.session = {
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            expires_at: Date.now() + ((data.expires_in||3600)*1000)
+        };
+        this.user = data.user ? {
+            id: data.user.id,
+            email: data.user.email,
+            display_name: (data.user.user_metadata && data.user.user_metadata.display_name) || data.user.email
+        } : null;
+        this.status = 'in';
+        this.persist();
+        PPSync.sendAccountToWatch();
+        // Ya esta dentro: la pantalla de cuenta no tiene que quedarse ahi.
+        if(S.currentView === 'auth'){
+            S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
+        }
+    },
+
+    async refreshIfNeeded(){
+        if(!this.session) return false;
+        if(Date.now() < (this.session.expires_at - 60000)) return true;
+        try{
+            const data = await this.api('/auth/v1/token?grant_type=refresh_token', {
+                method:'POST', auth:false, body:{ refresh_token: this.session.refresh_token }
+            });
+            this.applySession(data);
+            return true;
+        }catch(e){
+            // El refresco puede fallar por estar sin red: no se cierra sesion
+            // por eso, solo si el servidor dice explicitamente que no vale.
+            if(/invalid|expired|revoked/i.test(e.message||'')) this.signOut(true);
+            return false;
+        }
+    },
+
+    signOut(silent){
+        this.session=null; this.user=null; this.status='anon'; this.lastError=null;
+        this.persist();
+        // El reloj tiene que enterarse: si no, seguiria mostrando el nombre
+        // de alguien que ya no esta.
+        try{ PPSync.sendAccountToWatch(); }catch(e){}
+        if(!silent) showToast(i2('Sesion cerrada','Signed out'), 2000);
+        render();
+    },
+
+    human(msg){
+        const m = (msg||'').toLowerCase();
+        if(m.includes('invalid login')) return i2('Correo o contraseña incorrectos','Wrong email or password');
+        if(m.includes('already registered')) return i2('Ese correo ya tiene cuenta','That email already has an account');
+        if(m.includes('password')) return i2('La contraseña debe tener al menos 6 caracteres','Password must be at least 6 characters');
+        if(m.includes('failed to fetch') || m.includes('networkerror')) return i2('Sin conexion. Puedes jugar igual.','No connection. You can still play.');
+        return msg;
+    },
+
+    // ── Sincronizacion del historial ──
+
+    /** Convierte un partido local al formato de la tabla. */
+    toRow(m){
+        return {
+            local_id: String(m.id),
+            played_at: m.date,
+            team_a: m.teamA||'', team_b: m.teamB||'',
+            player_a1: m.playerA1||'', player_a2: m.playerA2||'',
+            player_b1: m.playerB1||'', player_b2: m.playerB2||'',
+            sets_a: m.setsA|0, sets_b: m.setsB|0,
+            games_a: m.gamesA|0, games_b: m.gamesB|0,
+            winner: m.winner||null,
+            duration_s: m.duration|0,
+            sets_detail: m.setsHistory||[],
+            source: 'phone'
+        };
+    },
+
+    /** Y al revés, para poder pintarlo con el mismo código de siempre. */
+    fromRow(r){
+        return {
+            id: Number(r.local_id) || Date.parse(r.played_at),
+            date: r.played_at,
+            teamA: r.team_a, teamB: r.team_b,
+            playerA1: r.player_a1, playerA2: r.player_a2,
+            playerB1: r.player_b1, playerB2: r.player_b2,
+            setsA: r.sets_a, setsB: r.sets_b,
+            gamesA: r.games_a, gamesB: r.games_b,
+            winner: r.winner,
+            duration: r.duration_s,
+            setsHistory: r.sets_detail||[],
+            totalPoints:0, pointsWonA:0,
+            faults:{A:{doubleFault:0},B:{doubleFault:0}},
+            momentum:[], theme:S.theme||'neon', lang:S.lang||'es',
+            _remote: true
+        };
+    },
+
+    /** Sube los partidos locales que aun no esten en la nube. */
+    async pushAll(){
+        if(!this.isIn) return;
+        const local = getMatchHistory();
+        if(!local.length) return;
+        const rows = local.map(m=>this.toRow(m));
+        // on_conflict por (user_id, local_id): reenviar no duplica
+        await this.api('/rest/v1/matches?on_conflict=user_id,local_id', {
+            method:'POST',
+            headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
+            body: rows
+        });
+    },
+
+    /** Baja lo que haya en la nube y lo mezcla con lo local. */
+    async pullAll(){
+        if(!this.isIn) return 0;
+        const rows = await this.api('/rest/v1/matches?select=*&order=played_at.desc&limit=200');
+        if(!Array.isArray(rows)) return 0;
+        const local = getMatchHistory();
+        const seen = new Set(local.map(m=>String(m.id)));
+        const nuevos = rows.filter(r=>!seen.has(String(r.local_id))).map(r=>this.fromRow(r));
+        if(!nuevos.length) return 0;
+        const merged = local.concat(nuevos)
+            .sort((a,b)=> new Date(b.date) - new Date(a.date))
+            .slice(0,200);
+        try{ localStorage.setItem('pp_match_history', JSON.stringify(merged)); }catch(e){}
+        return nuevos.length;
+    },
+
+    /** Sube y baja. Es lo que se llama al entrar y desde el boton. */
+    async syncNow(quiet){
+        if(!this.isIn || this.syncing) return;
+        this.syncing = true; render();
+        try{
+            if(!(await this.refreshIfNeeded())) throw new Error('sin sesion');
+            await this.pushAll();
+            const bajados = await this.pullAll();
+            this.lastSync = Date.now();
+            this.lastError = null;
+            if(!quiet) showToast(bajados
+                ? i2(`Sincronizado · ${bajados} partidos nuevos`,`Synced · ${bajados} new matches`)
+                : i2('Todo sincronizado','All synced'), 2200);
+        }catch(e){
+            this.lastError = this.human(e.message);
+            if(!quiet) showToast('⚠️ ' + this.lastError, 3000, true);
+        }
+        this.syncing = false;
+        render();
+    },
+
+    /** Guarda un partido recien terminado, sin bloquear el final de partido. */
+    backupMatch(){
+        if(!this.isIn) return;
+        setTimeout(()=>{ this.syncNow(true).catch(()=>{}); }, 1200);
+    }
+};
+
+/** Pantalla de entrada: usuario/contraseña o cuenta nueva. */
+let _authMode = 'in';   // 'in' | 'up'
+function setAuthMode(m){ _authMode=m; Auth.lastError=null; render(); }
+
+function submitAuth(){
+    const email = (document.getElementById('auth-email')||{}).value || '';
+    const pass  = (document.getElementById('auth-pass')||{}).value || '';
+    const name  = (document.getElementById('auth-name')||{}).value || '';
+    if(!email.includes('@')){ Auth.lastError = i2('Pon un correo valido','Enter a valid email'); render(); return; }
+    if(pass.length < 6){ Auth.lastError = i2('La contraseña debe tener al menos 6 caracteres','Password must be at least 6 characters'); render(); return; }
+    if(_authMode==='up') Auth.signUp(email, pass, name);
+    else Auth.signIn(email, pass);
+}
+
+/** Entrar sin cuenta: se juega igual, solo que sin respaldo en la nube. */
+function skipAuth(){
+    try{ localStorage.setItem('pp_auth_skipped','1'); }catch(e){}
+    S.currentView = 'home';
+    render();
+}
+
+function authWasSkipped(){
+    try{ return localStorage.getItem('pp_auth_skipped')==='1'; }catch(e){ return false; }
+}
+
+/** Desde ajustes: volver a la pantalla de cuenta para entrar o registrarse. */
+function goToAuth(){
+    try{ localStorage.removeItem('pp_auth_skipped'); }catch(e){}
+    Auth.lastError = null;
+    S.currentView = 'auth';
+    render();
+}
+
+/** Cuando se sincronizo por ultima vez, en cristiano. */
+function lastSyncLabel(){
+    if(!Auth.lastSync) return i2('Sin sincronizar todavia','Not synced yet');
+    const min = Math.floor((Date.now() - Auth.lastSync) / 60000);
+    if(min < 1) return i2('Sincronizado hace un momento','Synced just now');
+    if(min < 60) return i2(`Sincronizado hace ${min} min`,`Synced ${min} min ago`);
+    const h = Math.floor(min/60);
+    return i2(`Sincronizado hace ${h} h`,`Synced ${h} h ago`);
+}
+
+const AuthView = () => {
+    const p = tc.primary(), mu = tc.muted(), su = tc.surf2(), te = tc.text();
+    const busy = Auth.status==='busy';
+    const up = _authMode==='up';
+    return `
+<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+    <img src="${LOGO_BASE64}" alt="PadelPulse" class="h-24 mb-2" style="object-fit:contain;mix-blend-mode:screen">
+    <div class="text-[10px] uppercase font-bold tracking-widest mb-6" style="color:${mu}">
+        ${up ? i2('Crear cuenta','Create account') : i2('Entra en tu cuenta','Sign in')}
+    </div>
+
+    <div class="w-full rounded-3xl p-5" style="background:${su}">
+        ${up?`
+        <input id="auth-name" type="text" placeholder="${i2('Tu nombre','Your name')}" maxlength="24"
+            class="w-full mb-2 rounded-2xl px-4 py-3 text-sm font-bold"
+            style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">`:''}
+
+        <input id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${i2('Correo','Email')}"
+            class="w-full mb-2 rounded-2xl px-4 py-3 text-sm font-bold"
+            style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
+
+        <input id="auth-pass" type="password" autocomplete="${up?'new-password':'current-password'}" placeholder="${i2('Contraseña','Password')}"
+            class="w-full rounded-2xl px-4 py-3 text-sm font-bold"
+            style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
+
+        ${Auth.lastError?`
+        <div class="mt-3 rounded-2xl p-3 text-[11px] leading-relaxed"
+             style="background:rgba(255,113,108,.1);border:1px solid rgba(255,113,108,.25);color:#ff716c">
+            ${Auth.lastError}
+        </div>`:''}
+
+        <button onclick="submitAuth()" ${busy?'disabled':''}
+            class="w-full mt-3 py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="background:${p};color:#000;opacity:${busy?.6:1}">
+            ${busy ? i2('Un momento…','One moment…') : (up ? i2('Crear cuenta','Create account') : i2('Entrar','Sign in'))}
+        </button>
+
+        <button onclick="setAuthMode('${up?'in':'up'}')"
+            class="w-full mt-2 py-2 text-[11px] font-bold" style="color:${mu}">
+            ${up ? i2('Ya tengo cuenta','I already have an account') : i2('Crear una cuenta nueva','Create a new account')}
+        </button>
+    </div>
+
+    <button onclick="skipAuth()" class="mt-5 text-[11px] font-bold underline" style="color:${mu}">
+        ${i2('Entrar sin cuenta','Continue without an account')}
+    </button>
+    <div class="text-[9px] text-center mt-2 px-6 leading-relaxed" style="color:${mu};opacity:.7">
+        ${i2('Sin cuenta se juega igual: la cuenta solo sirve para guardar el historial y verlo en otro movil.',
+              'You can play without an account: it only backs up your history and syncs it to another phone.')}
+    </div>
+</div>`;
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // JUGADORES Y PAREJAS
@@ -4292,6 +4662,52 @@ const SettingsView=()=>`
 </header>
 <div class="flex-1 scrollable px-4 pb-4 md:pb-8 flex flex-col gap-3 md:gap-6 w-full max-w-3xl mx-auto">
 
+    <!-- CUENTA: quien esta dentro, respaldo en la nube y cierre de sesion -->
+    <div class="bg-surface-container rounded-3xl p-4">
+        <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-primary">account_circle</span>
+            <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">${i2('Cuenta','Account')}</div>
+        </div>
+        ${Auth.isIn ? `
+        <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center text-[15px] font-black flex-shrink-0"
+                 style="background:${tc.primary()}22;color:${tc.primary()}">
+                ${((Auth.user&&(Auth.user.display_name||Auth.user.email))||'?').trim().charAt(0).toUpperCase()}
+            </div>
+            <div class="min-w-0">
+                <div class="text-on-surface text-sm font-bold truncate">${(Auth.user&&Auth.user.display_name)||''}</div>
+                <div class="text-[10px] truncate" style="color:${tc.muted()}">${(Auth.user&&Auth.user.email)||''}</div>
+            </div>
+        </div>
+        <div class="text-[10px] mb-3" style="color:${tc.muted()}">
+            <span class="material-symbols-outlined text-[12px] align-middle">cloud_done</span>
+            ${Auth.syncing ? i2('Sincronizando...','Syncing...') : lastSyncLabel()}
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+            <button onclick="Auth.syncNow()" ${Auth.syncing?'disabled':''}
+                class="py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest scale-press"
+                style="background:${tc.primary()}18;color:${tc.primary()};border:1px solid ${tc.primary()}30">
+                <span class="material-symbols-outlined text-[13px] align-middle">sync</span>
+                ${i2('Sincronizar','Sync now')}
+            </button>
+            <button onclick="Auth.signOut()"
+                class="py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest scale-press"
+                style="background:rgba(255,255,255,0.05);color:${tc.muted()};border:1px solid rgba(255,255,255,0.08)">
+                <span class="material-symbols-outlined text-[13px] align-middle">logout</span>
+                ${i2('Salir','Sign out')}
+            </button>
+        </div>` : `
+        <div class="text-[11px] mb-3 leading-relaxed" style="color:${tc.muted()}">
+            ${i2('Estas jugando sin cuenta. Con una cuenta el historial se guarda en la nube y lo recuperas en cualquier movil.',
+                 'You are playing without an account. With one, your history is saved in the cloud and follows you to any phone.')}
+        </div>
+        <button onclick="goToAuth()"
+            class="w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest scale-press"
+            style="background:${tc.primary()};color:#04120B">
+            ${i2('Entrar o crear cuenta','Sign in or sign up')}
+        </button>`}
+    </div>
+
     <!-- IDIOMA -->
     <div class="bg-surface-container rounded-3xl p-4">
         <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mb-3">${i('language')}</div>
@@ -4504,6 +4920,7 @@ function render(){
     if(bb) bb.style.background = S.serving==='B' ? tc.sa() : tc.si();
     try {
         switch(S.currentView){
+            case 'auth':     app.innerHTML=AuthView(); break;
             case 'setup':    app.innerHTML=SetupView(); break;
             case 'home':     app.innerHTML=HomeView(); break;
             case 'faults':   app.innerHTML=FaultsView(); break;
@@ -4622,6 +5039,23 @@ function showSplash(){
     }, 3100);
 }
 
+/**
+ * Pantalla de arranque.
+ *
+ * La cuenta va antes que nada: o entras, o creas una, o sigues sin ella.
+ * Se decide aqui -y no arriba, junto al estado- porque `Auth` se define mas
+ * abajo en el archivo y leerlo antes revienta la carga entera.
+ * El modo espectador (enlace compartido) nunca pide cuenta.
+ */
+Auth.load();
+if (!SPECTATOR) {
+    if (!Auth.isIn && !authWasSkipped()) {
+        S.currentView = 'auth';
+    } else if (!sessionStorage.getItem('pp_setup_done')) {
+        S.currentView = 'setup';
+    }
+}
+
 // Iniciar app al cargar DOM (Tailwind no es bloqueante)
 if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', showSplash);
@@ -4632,6 +5066,8 @@ if(document.readyState==='loading'){
 // Arranque de la sincronizacion con el reloj
 window.addEventListener('load', () => {
     PPSync.init();
+    // Si hay sesion, ponerse al dia en segundo plano sin molestar
+    if (Auth.isIn) setTimeout(()=>Auth.syncNow(true).catch(()=>{}), 2500);
     setTimeout(()=>{
         PPSync.hello();
         if(PPSync.paired){ PPSync.sendSettings(); PPSync.push(); }
