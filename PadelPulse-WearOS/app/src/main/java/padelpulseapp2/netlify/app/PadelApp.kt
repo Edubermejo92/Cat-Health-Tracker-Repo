@@ -965,11 +965,13 @@ fun HistoryScreen(
         val json = prefs.getString("match_history", "[]") ?: "[]"
         try {
             val array = org.json.JSONArray(json)
-            (array.length() - 1 downTo 0).map { array.getJSONObject(it) }
+            // Ya se guardan con el mas reciente primero
+            (0 until array.length()).map { array.getJSONObject(it) }
         } catch (e: Exception) {
             emptyList()
         }
     }
+    val summary = remember { engine.historySummary() }
 
     ScalingLazyColumn(
         state = listState,
@@ -990,17 +992,71 @@ fun HistoryScreen(
                 )
             }
         } else {
-            items(matches) { m ->
+            // Balance general: jugados, ganados y porcentaje
+            item {
                 PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
-                    Text(
-                        "${m.optString("teamA", "").uppercase()} · ${m.optString("teamB", "").uppercase()}",
-                        color = PP.TextDim, fontSize = PP.Micro,
-                        fontWeight = FontWeight.Bold, maxLines = 1
-                    )
-                    Text(
-                        "${m.optInt("scoreA", 0)} – ${m.optInt("scoreB", 0)}",
-                        color = accent, fontSize = PP.Title, fontWeight = FontWeight.Black
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HistoryStat(summary.first.toString(), if (es) "JUGADOS" else "PLAYED", Color.White)
+                        Box(Modifier.width(1.dp).height(18.dp).background(PP.Line))
+                        HistoryStat(summary.second.toString(), if (es) "GANADOS" else "WON", accent)
+                        Box(Modifier.width(1.dp).height(18.dp).background(PP.Line))
+                        HistoryStat("${summary.third}%", if (es) "RATIO" else "WIN %", accent)
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+            }
+
+            items(matches) { m ->
+                val won = m.optString("winner", "") == "A"
+                val dur = m.optInt("duration", 0)
+                val date = java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
+                    .format(java.util.Date(m.optLong("date", 0L)))
+                PPCard(
+                    modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                    accent = if (won) accent else null
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "${m.optString("teamA", "").uppercase()} · ${m.optString("teamB", "").uppercase()}",
+                                color = PP.TextDim, fontSize = PP.Micro,
+                                fontWeight = FontWeight.Bold, maxLines = 1
+                            )
+                            Text(
+                                "$date · ${formatWatchDuration(dur)}",
+                                color = PP.TextMuted, fontSize = PP.Micro, maxLines = 1
+                            )
+                        }
+                        Text(
+                            "${m.optInt("scoreA", 0)}–${m.optInt("scoreB", 0)}",
+                            color = if (won) accent else PP.TextDim,
+                            fontSize = PP.Title, fontWeight = FontWeight.Black
+                        )
+                    }
+                    // Juegos y desgaste, si se guardaron
+                    val games = "${m.optInt("gamesA", 0)}-${m.optInt("gamesB", 0)}"
+                    val kcal = m.optInt("kcal", 0)
+                    if (kcal > 0 || games != "0-0") {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            buildString {
+                                if (games != "0-0") append(if (es) "Juegos $games" else "Games $games")
+                                if (kcal > 0) {
+                                    if (isNotEmpty()) append(" · ")
+                                    append("$kcal kcal")
+                                }
+                            },
+                            color = PP.TextMuted, fontSize = PP.Micro, maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -1019,4 +1075,20 @@ fun HistoryScreen(
             }
         }
     }
+}
+
+@Composable
+private fun HistoryStat(value: String, label: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = color, fontSize = PP.Label, fontWeight = FontWeight.Black)
+        PPLabel(label, size = PP.Micro)
+    }
+}
+
+/** mm:ss o h:mm si el partido paso de la hora. */
+fun formatWatchDuration(seconds: Int): String {
+    if (seconds <= 0) return "--"
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    return if (h > 0) "${h}h ${m}m" else "${m}m"
 }

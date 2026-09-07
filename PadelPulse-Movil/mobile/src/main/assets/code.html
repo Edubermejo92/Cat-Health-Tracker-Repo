@@ -531,7 +531,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'1.2.0', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.0.5', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     requestHealth(){ this.send(PP_PATH.health, {request:true}); },
@@ -2330,36 +2330,64 @@ function getShareText(){
     return `🎾 PadelPulse Live\n\n${nA}${pA?' ('+pA+')':''}\nvs\n${nB}${pB?' ('+pB+')':''}\n\n${setsInfo||i('match')}${winnerText}\n⏱️ ${formatTime(S.gameTime)}\n\n👁️ Live:\n${liveUrl}`;
 }
 
-function shareSocial(platform) {
-    const text = getShareText();
+// Dentro del WebView no existen window.open ni navigator.share: los botones
+// de compartir no hacian nada. Todo va por el puente nativo, y solo se usa el
+// camino web cuando la pagina corre en un navegador de verdad (version Netlify).
+function shareSocial(platform, textOverride) {
+    const text = textOverride || getShareText();
     const url = getLiveUrl();
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+
     if (platform === 'whatsapp') {
+        if (b && b.shareToWhatsApp) { b.shareToWhatsApp(text); return; }
         window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(text), '_blank');
-    } else if (platform === 'facebook') {
-        window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url) + '&quote=' + encodeURIComponent(text), '_blank');
-    } else if (platform === 'instagram') {
-        // Instagram requires native share sheet or clipboard.
-        if (navigator.share) {
-            navigator.share({title:'PadelPulse Live', text}).catch(()=> {
-                copyToClipboard(text);
-                showToast('Texto copiado. Pégalo en tu Story o mensaje.', 3000);
-            });
-        } else {
-            copyToClipboard(text);
-            showToast('Texto copiado. Abre Instagram para pegar.', 3000);
-        }
+        return;
     }
+    if (platform === 'facebook') {
+        const fb = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url) + '&quote=' + encodeURIComponent(text);
+        if (b && b.openExternal) { b.openExternal(fb); return; }
+        window.open(fb, '_blank');
+        return;
+    }
+    if (platform === 'instagram') {
+        // Instagram no acepta texto por intent: se copia y se abre la app.
+        copyToClipboard(text);
+        showToast(i2('Texto copiado. Pegalo en tu historia.','Text copied. Paste it in your story.'), 3000);
+        if (b && b.openExternal) b.openExternal('https://www.instagram.com/');
+        return;
+    }
+    // Cualquier otra cosa: hoja de compartir del sistema
+    shareResult(text);
 }
 
-function shareResult(){
-    const text = getShareText();
-    const nA=S.teamA.name, nB=S.teamB.name;
-    if(navigator.share){ navigator.share({title:'PadelPulse Live — '+nA+' vs '+nB, text}).catch(()=>copyToClipboard(text)); }
-    else copyToClipboard(text);
+function shareResult(textOverride){
+    const text = textOverride || getShareText();
+    const title = 'PadelPulse Live — ' + S.teamA.name + ' vs ' + S.teamB.name;
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if (b && b.shareText) { b.shareText(text, title); return; }
+    if (navigator.share){ navigator.share({title, text}).catch(()=>copyToClipboard(text)); return; }
+    copyToClipboard(text);
 }
 
 function copyToClipboard(text){
-    navigator.clipboard.writeText(text).then(()=>showToast('📋 '+i('share'))).catch(()=>showToast('—'));
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if (b && b.copyText) { b.copyText(text); return; }
+    // navigator.clipboard necesita contexto seguro; file:// no siempre lo es
+    try {
+        navigator.clipboard.writeText(text)
+            .then(()=>showToast('📋 '+i('share')))
+            .catch(()=>fallbackCopy(text));
+    } catch(e) { fallbackCopy(text); }
+}
+
+function fallbackCopy(text){
+    try {
+        const ta=document.createElement('textarea');
+        ta.value=text; ta.style.cssText='position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+        showToast('📋 '+i('share'));
+    } catch(e) { showToast('—'); }
 }
 
 function shareQR(){
@@ -3054,6 +3082,26 @@ function saveMatchToHistory(){
     }catch(e){}
 }
 
+/** Texto para compartir un partido guardado del historial. */
+function getMatchShareText(match){
+    const dt = new Date(match.date);
+    const fecha = dt.toLocaleDateString(currentLang().locale||'es-ES', {day:'2-digit', month:'long', year:'numeric'});
+    const pA = [match.playerA1, match.playerA2].filter(Boolean).join(' / ');
+    const pB = [match.playerB1, match.playerB2].filter(Boolean).join(' / ');
+    const sets = (match.setsHistory||[]).map((x,idx)=>`Set ${idx+1}: ${x.a}-${x.b}${x.tiebreak?' (TB)':''}`).join('\n');
+    const gano = match.winner ? (match.winner==='A'?match.teamA:match.teamB) : null;
+    const dur = match.duration ? `\n⏱️ ${formatTime(match.duration)}` : '';
+    return `🎾 PadelPulse Live\n${fecha}\n\n${match.teamA}${pA?' ('+pA+')':''}\nvs\n${match.teamB}${pB?' ('+pB+')':''}\n\n📊 ${match.setsA}-${match.setsB}\n${sets}${gano?`\n\n🏆 ${gano}`:''}${dur}`;
+}
+
+function shareMatch(id, platform){
+    const m = getMatchHistory().find(x=>x.id===id);
+    if(!m) return;
+    const text = getMatchShareText(m);
+    if(platform==='whatsapp') shareSocial('whatsapp', text);
+    else shareResult(text);
+}
+
 function getMatchHistory(){
     try{ return JSON.parse(localStorage.getItem('pp_match_history')||'[]'); }catch(e){ return []; }
 }
@@ -3063,6 +3111,228 @@ function deleteMatchFromHistory(id){
         const hist=getMatchHistory().filter(m=>m.id!==id);
         localStorage.setItem('pp_match_history',JSON.stringify(hist));
     }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// JUGADORES Y PAREJAS
+// Todo se deriva del historial de partidos: no hay una segunda base de
+// datos que pueda quedar descuadrada respecto a los partidos guardados.
+// ═══════════════════════════════════════════════════════════════════
+
+/** Jugadores de un partido, por equipo, sin huecos ni duplicados. */
+function matchPlayers(match, team){
+    const raw = team==='A' ? [match.playerA1, match.playerA2] : [match.playerB1, match.playerB2];
+    const named = raw.map(x=>(x||'').trim()).filter(Boolean);
+    // Si no hay jugadores sueltos, la pareja cuenta como una entidad
+    return named.length ? named : [ (team==='A'?match.teamA:match.teamB) || '—' ];
+}
+
+/**
+ * Agrega el historial por jugador (o por pareja si no hay nombres sueltos).
+ * Devuelve la lista ordenada por partidos jugados.
+ */
+function getPlayerStats(){
+    const hist = getMatchHistory();
+    const map = {};
+
+    const touch = (name) => {
+        const k = name.trim();
+        if(!map[k]) map[k] = {
+            name:k, played:0, won:0, lost:0,
+            setsWon:0, setsLost:0, gamesWon:0, gamesLost:0,
+            seconds:0, last:null, results:[], partners:{}, rivals:{}
+        };
+        return map[k];
+    };
+
+    // El historial viene de mas reciente a mas antiguo
+    hist.forEach(m=>{
+        ['A','B'].forEach(team=>{
+            const players = matchPlayers(m, team);
+            const mates   = matchPlayers(m, team==='A'?'B':'A');
+            const win     = m.winner === team;
+            const sw      = team==='A' ? (m.setsA||0) : (m.setsB||0);
+            const sl      = team==='A' ? (m.setsB||0) : (m.setsA||0);
+            const gw      = team==='A' ? (m.gamesA||0) : (m.gamesB||0);
+            const gl      = team==='A' ? (m.gamesB||0) : (m.gamesA||0);
+
+            players.forEach(nm=>{
+                const e = touch(nm);
+                e.played++;
+                if(win) e.won++; else e.lost++;
+                e.setsWon+=sw; e.setsLost+=sl;
+                e.gamesWon+=gw; e.gamesLost+=gl;
+                e.seconds += (m.duration||0);
+                if(!e.last || new Date(m.date) > new Date(e.last)) e.last = m.date;
+                e.results.push(win?'W':'L');
+                players.filter(o=>o!==nm).forEach(o=>{ e.partners[o]=(e.partners[o]||0)+1; });
+                mates.forEach(o=>{ e.rivals[o]=(e.rivals[o]||0)+1; });
+            });
+        });
+    });
+
+    return Object.values(map).map(e=>{
+        e.winPct = e.played ? Math.round(e.won/e.played*100) : 0;
+        // Racha actual: los resultados van de mas reciente a mas antiguo
+        let streak = 0, type = e.results[0] || null;
+        for(const r of e.results){ if(r===type) streak++; else break; }
+        e.streak = streak; e.streakType = type;
+        e.topPartner = Object.entries(e.partners).sort((a,b)=>b[1]-a[1])[0]?.[0] || null;
+        e.topRival   = Object.entries(e.rivals).sort((a,b)=>b[1]-a[1])[0]?.[0] || null;
+        return e;
+    }).sort((a,b)=> b.played-a.played || b.winPct-a.winPct);
+}
+
+/** Parejas fijas (dos nombres juntos) con su balance. */
+function getPairStats(){
+    const hist = getMatchHistory();
+    const map = {};
+    hist.forEach(m=>{
+        ['A','B'].forEach(team=>{
+            const ps = matchPlayers(m, team);
+            if(ps.length < 2) return;               // solo parejas con dos nombres
+            const key = ps.slice(0,2).sort().join(' & ');
+            if(!map[key]) map[key] = {name:key, played:0, won:0, last:null};
+            const e = map[key];
+            e.played++;
+            if(m.winner===team) e.won++;
+            if(!e.last || new Date(m.date) > new Date(e.last)) e.last = m.date;
+        });
+    });
+    return Object.values(map).map(e=>{
+        e.lost = e.played - e.won;
+        e.winPct = e.played ? Math.round(e.won/e.played*100) : 0;
+        return e;
+    }).sort((a,b)=> b.played-a.played || b.winPct-a.winPct);
+}
+
+/** Nombres ya usados, para autocompletar al montar un partido. */
+function getKnownNames(){
+    return getPlayerStats().map(p=>p.name);
+}
+
+function fmtSince(iso){
+    if(!iso) return '—';
+    const days = Math.floor((Date.now()-new Date(iso))/86400000);
+    if(days<=0) return i2('hoy','today');
+    if(days===1) return i2('ayer','yesterday');
+    if(days<30) return i2(`hace ${days} d`,`${days} d ago`);
+    const months=Math.floor(days/30);
+    return i2(`hace ${months} mes${months>1?'es':''}`,`${months} mo ago`);
+}
+
+/** Ficha de un jugador, con su balance y sus compañeros/rivales habituales. */
+function showPlayerDetail(name){
+    const st = getPlayerStats().find(p=>p.name===name);
+    if(!st) return;
+    const p=tc.primary(), mu=tc.muted(), su=tc.surf(), te=tc.text();
+    const hist = getMatchHistory().filter(m=>
+        matchPlayers(m,'A').includes(name) || matchPlayers(m,'B').includes(name)
+    );
+
+    const el=document.createElement('div');
+    el.id='player-detail-modal';
+    el.style.cssText='position:fixed;inset:0;z-index:300;overflow-y:auto;background:#0a0a0a;';
+    el.innerHTML=`
+    <div class="min-h-full pb-8">
+        <header class="px-4 pt-4 pb-3 flex items-center gap-3 sticky top-0" style="background:#0a0a0a;z-index:5">
+            <button onclick="document.getElementById('player-detail-modal').remove()" class="p-2 rounded-xl" style="background:rgba(255,255,255,0.06)">
+                <span class="material-symbols-outlined text-[18px]" style="color:${mu}">arrow_back</span>
+            </button>
+            <div class="min-w-0">
+                <div class="font-black text-base truncate" style="color:${te}">${name}</div>
+                <div class="text-[10px]" style="color:${mu}">${st.played} ${i2('partidos','matches')} · ${i2('último','last')} ${fmtSince(st.last)}</div>
+            </div>
+        </header>
+
+        <div class="px-4">
+            <div class="grid grid-cols-3 gap-2 mb-3">
+                ${[
+                    [st.won, i2('Ganados','Won'), p],
+                    [st.lost, i2('Perdidos','Lost'), '#ff716c'],
+                    [st.winPct+'%', i2('Victorias','Win rate'), te]
+                ].map(([v,l,c])=>`<div class="rounded-2xl p-3 text-center" style="background:${su}">
+                    <div class="text-xl font-black" style="color:${c}">${v}</div>
+                    <div class="text-[8px] uppercase font-bold tracking-wider" style="color:${mu}">${l}</div>
+                </div>`).join('')}
+            </div>
+
+            <div class="rounded-2xl p-3 mb-3" style="background:${su}">
+                <div class="text-[9px] uppercase font-bold tracking-widest mb-2" style="color:${mu}">${i2('Racha actual','Current streak')}</div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl font-black" style="color:${st.streakType==='W'?p:'#ff716c'}">${st.streak}</span>
+                    <span class="text-[11px] font-bold uppercase" style="color:${mu}">
+                        ${st.streakType==='W'?i2('victorias seguidas','wins in a row'):i2('derrotas seguidas','losses in a row')}
+                    </span>
+                </div>
+                <div class="flex gap-1 mt-2">
+                    ${st.results.slice(0,12).reverse().map(r=>`<div class="flex-1 h-1.5 rounded-full" style="background:${r==='W'?p:'#ff716c'};opacity:.85"></div>`).join('')}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <div class="rounded-2xl p-3" style="background:${su}">
+                    <div class="text-[9px] uppercase font-bold tracking-widest mb-1" style="color:${mu}">${i2('Sets','Sets')}</div>
+                    <div class="text-sm font-black" style="color:${te}">${st.setsWon} - ${st.setsLost}</div>
+                </div>
+                <div class="rounded-2xl p-3" style="background:${su}">
+                    <div class="text-[9px] uppercase font-bold tracking-widest mb-1" style="color:${mu}">${i2('Juegos','Games')}</div>
+                    <div class="text-sm font-black" style="color:${te}">${st.gamesWon} - ${st.gamesLost}</div>
+                </div>
+            </div>
+
+            ${(st.topPartner||st.topRival)?`
+            <div class="rounded-2xl p-3 mb-3" style="background:${su}">
+                ${st.topPartner?`<div class="flex justify-between items-center py-1">
+                    <span class="text-[10px] uppercase font-bold tracking-wider" style="color:${mu}">${i2('Compañero habitual','Usual partner')}</span>
+                    <span class="text-[11px] font-black" style="color:${te}">${st.topPartner}</span>
+                </div>`:''}
+                ${st.topRival?`<div class="flex justify-between items-center py-1">
+                    <span class="text-[10px] uppercase font-bold tracking-wider" style="color:${mu}">${i2('Rival habitual','Usual rival')}</span>
+                    <span class="text-[11px] font-black" style="color:${te}">${st.topRival}</span>
+                </div>`:''}
+            </div>`:''}
+
+            <div class="text-[9px] uppercase font-bold tracking-widest mb-2 px-1" style="color:${mu}">${i2('Sus partidos','Their matches')}</div>
+            ${hist.slice(0,20).map(m=>{
+                const inA = matchPlayers(m,'A').includes(name);
+                const won = (m.winner==='A') === inA;
+                const d = new Date(m.date);
+                return `<div class="rounded-2xl p-3 mb-2 flex items-center justify-between" style="background:${su}"
+                            onclick="document.getElementById('player-detail-modal').remove();showMatchDetail(${m.id})">
+                    <div class="min-w-0">
+                        <div class="text-[11px] font-black truncate" style="color:${te}">${m.teamA} vs ${m.teamB}</div>
+                        <div class="text-[9px]" style="color:${mu}">${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}</div>
+                    </div>
+                    <span class="text-[10px] font-black px-2 py-1 rounded-full"
+                          style="background:${won?p+'18':'rgba(255,113,108,0.12)'};color:${won?p:'#ff716c'}">
+                        ${m.setsA}-${m.setsB}
+                    </span>
+                </div>`;
+            }).join('')}
+
+            <button onclick="sharePlayerCard('${name.replace(/'/g,"\\'")}')"
+                class="w-full py-3 rounded-2xl text-[11px] font-black uppercase scale-press flex items-center justify-center gap-2 mt-2"
+                style="background:#25D366;color:#fff">
+                <span class="material-symbols-outlined text-[15px]">share</span>${i2('Compartir ficha','Share card')}
+            </button>
+        </div>
+    </div>`;
+    document.body.appendChild(el);
+    paintIcons(el);
+}
+
+function sharePlayerCard(name){
+    const st = getPlayerStats().find(p=>p.name===name);
+    if(!st) return;
+    const txt = `🎾 PadelPulse Live\n\n👤 ${st.name}\n\n`+
+        `📊 ${st.played} ${i2('partidos','matches')}\n`+
+        `✅ ${st.won} ${i2('ganados','won')} · ❌ ${st.lost} ${i2('perdidos','lost')}\n`+
+        `📈 ${st.winPct}% ${i2('de victorias','win rate')}\n`+
+        `🎯 Sets ${st.setsWon}-${st.setsLost} · ${i2('Juegos','Games')} ${st.gamesWon}-${st.gamesLost}\n`+
+        (st.streak>1?`🔥 ${st.streak} ${st.streakType==='W'?i2('victorias seguidas','wins in a row'):i2('derrotas seguidas','losses in a row')}\n`:'')+
+        (st.topPartner?`🤝 ${i2('Compañero','Partner')}: ${st.topPartner}\n`:'');
+    shareSocial('whatsapp', txt);
 }
 
 // ── Calcular métricas avanzadas de un partido ──
@@ -3139,9 +3409,13 @@ Respond ONLY with this JSON (no markdown):
 // ═══════════════════════════════════════════
 // HISTORIAL VIEW
 // ═══════════════════════════════════════════
+let _histTab = 'matches';   // 'matches' | 'players' | 'pairs'
+function setHistTab(t){ _histTab = t; render(); }
+
 const HistoryView=()=>{
     const hist=getMatchHistory();
     const p=tc.primary(), mu=tc.muted(), su=tc.surf2(), te=tc.text(), bo=tc.border();
+    const players=getPlayerStats(), pairs=getPairStats();
 
     // Group by month
     const groups={};
@@ -3187,6 +3461,63 @@ const HistoryView=()=>{
         </div>`;
     }).join('');
 
+    // ── Ranking de jugadores ──
+    const medal=(k)=>['🥇','🥈','🥉'][k]||`<span class="text-[10px] font-black" style="color:${mu}">${k+1}</span>`;
+    const esc=(x)=>String(x).replace(/'/g,"\\'");
+    const playerCards = players.length===0 ? `
+    <div class="flex flex-col items-center justify-center py-16 gap-3">
+        <span class="material-symbols-outlined text-[48px]" style="color:${mu}">group</span>
+        <div class="text-sm font-bold" style="color:${mu}">${i2('Sin jugadores todavia','No players yet')}</div>
+        <div class="text-xs text-center px-8" style="color:${mu}">${i2('Pon los nombres de los jugadores al montar el partido y apareceran aqui','Add player names when setting up a match and they will show up here')}</div>
+    </div>` : players.map((pl,k)=>`
+        <div class="rounded-2xl p-3 mb-2 flex items-center gap-3 scale-press" style="background:${su}" onclick="showPlayerDetail('${esc(pl.name)}')">
+            <div class="w-7 text-center text-lg">${medal(k)}</div>
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-black truncate" style="color:${te}">${pl.name}</div>
+                <div class="text-[9px]" style="color:${mu}">${pl.played} ${i2('partidos','matches')} · ${pl.won}${i2('V','W')}-${pl.lost}${i2('D','L')} · ${fmtSince(pl.last)}</div>
+            </div>
+            ${pl.streak>1?`<span class="text-[9px] font-black px-1.5 py-0.5 rounded-full" style="background:${pl.streakType==='W'?p+'18':'rgba(255,113,108,0.12)'};color:${pl.streakType==='W'?p:'#ff716c'}">${pl.streakType==='W'?'🔥':'❄'}${pl.streak}</span>`:''}
+            <div class="text-right">
+                <div class="text-sm font-black" style="color:${pl.winPct>=50?p:mu}">${pl.winPct}%</div>
+                <div class="w-12 h-1 rounded-full mt-1" style="background:rgba(255,255,255,0.08)">
+                    <div class="h-1 rounded-full" style="width:${pl.winPct}%;background:${pl.winPct>=50?p:'#ff716c'}"></div>
+                </div>
+            </div>
+        </div>`).join('');
+
+    // ── Ranking de parejas ──
+    const pairCards = pairs.length===0 ? `
+    <div class="flex flex-col items-center justify-center py-16 gap-3">
+        <span class="material-symbols-outlined text-[48px]" style="color:${mu}">groups</span>
+        <div class="text-sm font-bold" style="color:${mu}">${i2('Sin parejas todavia','No pairs yet')}</div>
+        <div class="text-xs text-center px-8" style="color:${mu}">${i2('Se forman solas cuando pones los dos jugadores de un equipo','They build up when you name both players on a team')}</div>
+    </div>` : pairs.map((pr,k)=>`
+        <div class="rounded-2xl p-3 mb-2 flex items-center gap-3" style="background:${su}">
+            <div class="w-7 text-center text-lg">${medal(k)}</div>
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-black truncate" style="color:${te}">${pr.name}</div>
+                <div class="text-[9px]" style="color:${mu}">${pr.played} ${i2('partidos','matches')} · ${pr.won}${i2('V','W')}-${pr.lost}${i2('D','L')} · ${fmtSince(pr.last)}</div>
+            </div>
+            <div class="text-sm font-black" style="color:${pr.winPct>=50?p:mu}">${pr.winPct}%</div>
+        </div>`).join('');
+
+    const tabs = `
+    <div class="flex gap-1 p-1 rounded-2xl mb-3" style="background:${su}">
+        ${[
+            ['matches', i2('Partidos','Matches'), hist.length],
+            ['players', i2('Jugadores','Players'), players.length],
+            ['pairs',   i2('Parejas','Pairs'),     pairs.length]
+        ].map(([id,label,n])=>`
+            <button onclick="setHistTab('${id}')" class="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider scale-press"
+                style="background:${_histTab===id?p:'transparent'};color:${_histTab===id?'#000':mu}">
+                ${label}${n?` <span style="opacity:.7">${n}</span>`:''}
+            </button>`).join('')}
+    </div>`;
+
+    const body = _histTab==='players' ? playerCards
+               : _histTab==='pairs'   ? pairCards
+               : matchCards;
+
     return `
 <header class="px-4 pt-0 pb-3 flex items-center gap-3 flex-shrink-0 w-full max-w-4xl mx-auto">
     <button onclick="S.currentView='home';render();" class="p-2 rounded-xl scale-press"><span class="material-symbols-outlined text-on-surface-variant text-[20px]">arrow_back</span></button>
@@ -3206,7 +3537,8 @@ const HistoryView=()=>{
             <div class="text-[8px] uppercase font-bold" style="color:${mu}">${lab}</div>
         </div>`).join('')}
     </div>`:''}
-    ${matchCards}
+    ${tabs}
+    ${body}
 </div>
 
 ${BottomNav('history')}`;
@@ -3316,8 +3648,11 @@ function showMatchDetail(id){
 
         <!-- Actions -->
         <div class="mx-4 flex gap-2">
-            <button onclick="navigator.share&&navigator.share({title:'PadelPulse',text:'${match.teamA} ${match.setsA}-${match.setsB} ${match.teamB}'})" class="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase scale-press" style="background:${p};color:#000">
-                <span class="material-symbols-outlined text-[14px] align-middle">share</span> Compartir
+            <button onclick="shareMatch(${match.id},'whatsapp')" class="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase scale-press" style="background:${p};color:#000">
+                <span class="material-symbols-outlined text-[14px] align-middle">share</span> WhatsApp
+            </button>
+            <button onclick="shareMatch(${match.id})" class="py-3 px-4 rounded-2xl text-[11px] font-black uppercase scale-press" style="background:${su};color:${mu};border:1px solid rgba(255,255,255,0.06)">
+                <span class="material-symbols-outlined text-[14px] align-middle">ios_share</span>
             </button>
             <button onclick="if(confirm('¿Eliminar este partido?')){deleteMatchFromHistory(${match.id});document.getElementById('match-detail-modal').remove();}" class="py-3 px-4 rounded-2xl text-[11px] font-black uppercase scale-press" style="background:rgba(255,113,108,0.1);color:#ff716c;border:1px solid rgba(255,113,108,0.2)">
                 <span class="material-symbols-outlined text-[14px] align-middle">delete</span>
@@ -3973,13 +4308,18 @@ const SettingsView=()=>`
 
     <div class="bg-surface-container rounded-3xl p-4">
         <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mb-3">${i('partners')}</div>
+        <!-- Nombres ya usados: al escribir salen como sugerencia, para no
+             volver a teclear los mismos jugadores en cada partido -->
+        <datalist id="pp-known-players">
+            ${getKnownNames().map(n=>`<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('')}
+        </datalist>
         ${['A','B'].map(t=>`
         <div class="${t==='B'?'border-t border-white/5 pt-3 mt-3':''}">
             <div class="flex items-center gap-2 mb-2"><div class="w-2 h-2 rounded-full ${t==='A'?'bg-primary':'bg-outline-variant'}"></div><span class="text-[9px] font-bold ${t==='A'?'text-primary':'text-on-surface-variant'} uppercase tracking-wider">${i('team'+t)}</span></div>
             <input type="text" value="${S['team'+t].name}" maxlength="14" placeholder="${i('team'+t)}" oninput="S['team${t}'].name=this.value.toUpperCase()||'EQUIPO ${t}';saveState();" class="w-full bg-surface-container-high border border-outline-variant/30 rounded-xl px-3 py-2 text-on-surface text-sm font-bold mb-2">
             <div class="grid grid-cols-2 gap-2">
-                <input type="text" value="${S['team'+t].playerA||''}" maxlength="16" placeholder="${i('player1')}" oninput="S['team${t}'].playerA=this.value;saveState();" class="bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[11px] font-bold">
-                <input type="text" value="${S['team'+t].playerB||''}" maxlength="16" placeholder="${i('player2')}" oninput="S['team${t}'].playerB=this.value;saveState();" class="bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[11px] font-bold">
+                <input type="text" list="pp-known-players" value="${S['team'+t].playerA||''}" maxlength="16" placeholder="${i('player1')}" oninput="S['team${t}'].playerA=this.value;saveState();" class="bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[11px] font-bold">
+                <input type="text" list="pp-known-players" value="${S['team'+t].playerB||''}" maxlength="16" placeholder="${i('player2')}" oninput="S['team${t}'].playerB=this.value;saveState();" class="bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[11px] font-bold">
             </div>
         </div>`).join('')}
     </div>

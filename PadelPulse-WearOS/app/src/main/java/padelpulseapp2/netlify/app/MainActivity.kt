@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "5.0.0"
+        const val APP_VERSION = "5.0.5"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
     }
@@ -208,6 +208,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
                 delay(1000)
                 if (timerRunning) {
                     matchTimeSeconds++
+                    // El engine necesita el cronometro para guardarlo al terminar
+                    gameEngine?.clockSeconds = matchTimeSeconds
                     // Empuja salud al movil entre puntos, sin esperar a que pase nada
                     if (matchTimeSeconds % 10 == 0) pushHealthToPhone()
                     if (matchTimeSeconds % 30 == 0) sendHello()

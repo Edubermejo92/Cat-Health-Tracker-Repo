@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "5.0.0"
+        const val APP_VERSION = "5.0.5"
         var webView: WebView? = null
         var instance: MainActivity? = null
     }
@@ -257,6 +257,74 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         @JavascriptInterface
         fun toast(msg: String) {
             activity.runOnUiThread { Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show() }
+        }
+
+        // ── Compartir ────────────────────────────────────────────────────
+        // Dentro de un WebView no hay window.open ni navigator.share, asi que
+        // los botones de compartir no hacian nada. Todo pasa por intents nativos.
+
+        /** Hoja de compartir del sistema: WhatsApp, Telegram, correo, lo que haya. */
+        @JavascriptInterface
+        fun shareText(text: String, subject: String) {
+            activity.runOnUiThread {
+                runCatching {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, text)
+                        if (subject.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, subject)
+                    }
+                    activity.startActivity(Intent.createChooser(send, subject.ifEmpty { "PadelPulse" }))
+                }.onFailure {
+                    Toast.makeText(activity, "No se pudo compartir", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        /**
+         * Directo a WhatsApp. Si no esta instalado cae en la hoja de compartir
+         * normal, para no dejar al usuario con un boton que no hace nada.
+         */
+        @JavascriptInterface
+        fun shareToWhatsApp(text: String) {
+            activity.runOnUiThread {
+                val direct = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                    setPackage("com.whatsapp")
+                }
+                val ok = runCatching { activity.startActivity(direct); true }.getOrDefault(false)
+                if (!ok) {
+                    // WhatsApp Business o sin WhatsApp: probamos y si no, hoja generica
+                    val business = Intent(direct).setPackage("com.whatsapp.w4b")
+                    val ok2 = runCatching { activity.startActivity(business); true }.getOrDefault(false)
+                    if (!ok2) shareText(text, "PadelPulse")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun copyText(text: String) {
+            activity.runOnUiThread {
+                runCatching {
+                    val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("PadelPulse", text))
+                    Toast.makeText(activity, "Copiado", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        /** Abre una url fuera de la app (navegador), no dentro del WebView. */
+        @JavascriptInterface
+        fun openExternal(url: String) {
+            activity.runOnUiThread {
+                runCatching {
+                    activity.startActivity(
+                        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
         }
 
         @JavascriptInterface

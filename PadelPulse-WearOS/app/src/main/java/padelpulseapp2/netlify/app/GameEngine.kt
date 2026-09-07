@@ -11,6 +11,12 @@ import org.json.JSONObject
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 
 class GameEngine(context: Context? = null) {
+
+    companion object {
+        /** Tope de partidos guardados en el reloj. */
+        const val MAX_HISTORY = 50
+    }
+
     private val prefs: SharedPreferences? = context?.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
 
     var currentScreen by mutableStateOf("splash")
@@ -52,6 +58,9 @@ class GameEngine(context: Context? = null) {
     
     var faultCount by mutableIntStateOf(0)
     var lastPointWinner by mutableStateOf<String?>(null)
+
+    /** Cronometro del partido en segundos. Lo mantiene al dia MainActivity. */
+    var clockSeconds by mutableIntStateOf(0)
 
     // Health data
     var calories by mutableIntStateOf(0)
@@ -529,31 +538,67 @@ class GameEngine(context: Context? = null) {
         if (obj.has("superTieBreak")) superTb = obj.optBoolean("superTieBreak")
         if (obj.has("bestOf")) bestOf = obj.optInt("bestOf", bestOf)
         else if (obj.has("maxSets")) bestOf = obj.optInt("maxSets", bestOf)
-        SyncProtocol.optNullableString(obj, "nameA")?.let { nameA = it }
-        SyncProtocol.optNullableString(obj, "nameB")?.let { nameB = it }
+        // Los nombres que llegan del movil se guardan tambien en el historial
+        // de nombres del reloj: asi las parejas que escribes en el movil salen
+        // luego como sugerencia al editar el nombre desde la muñeca.
+        SyncProtocol.optNullableString(obj, "nameA")?.let {
+            nameA = it
+            saveTeamNameToHistory(it)
+        }
+        SyncProtocol.optNullableString(obj, "nameB")?.let {
+            nameB = it
+            saveTeamNameToHistory(it)
+        }
         if (obj.has("mode")) mode = SyncProtocol.normalizeMode(obj.optString("mode"))
         saveToDisk()
     }
 
     fun saveMatchToHistory() {
         try {
-            val historyJson = prefs?.getString("match_history", "[]") ?: "[]"
-            val array = org.json.JSONArray(historyJson)
-            
             val matchObj = JSONObject()
                 .put("date", System.currentTimeMillis())
                 .put("teamA", nameA)
                 .put("teamB", nameB)
                 .put("scoreA", setsA)
                 .put("scoreB", setsB)
-            
-            array.put(matchObj)
-            prefs?.edit()?.putString("match_history", array.toString())?.apply()
-            
-            // Also save unique team names history
+                .put("gamesA", gamesA)
+                .put("gamesB", gamesB)
+                .put("winner", winner ?: if (setsA > setsB) "A" else "B")
+                .put("duration", clockSeconds)
+                .put("kcal", calories)
+                .put("km", distanceKm)
+                .put("hr", heartRate)
+
+            // Mas reciente primero, y con tope: en un reloj no tiene sentido
+            // arrastrar cientos de partidos en SharedPreferences.
+            val previous = org.json.JSONArray(prefs?.getString("match_history", "[]") ?: "[]")
+            val out = org.json.JSONArray().put(matchObj)
+            for (i in 0 until minOf(previous.length(), MAX_HISTORY - 1)) {
+                out.put(previous.getJSONObject(i))
+            }
+            prefs?.edit()?.putString("match_history", out.toString())?.apply()
+
             saveTeamNameToHistory(nameA)
             saveTeamNameToHistory(nameB)
         } catch (e: Exception) {}
+    }
+
+    /** Resumen del historial para la pantalla de historial del reloj. */
+    fun historySummary(): Triple<Int, Int, Int> {
+        return try {
+            val array = org.json.JSONArray(prefs?.getString("match_history", "[]") ?: "[]")
+            var won = 0
+            for (i in 0 until array.length()) {
+                val m = array.getJSONObject(i)
+                // "A" es siempre la pareja de quien lleva el reloj
+                if (m.optString("winner", "") == "A") won++
+            }
+            val played = array.length()
+            val pct = if (played > 0) won * 100 / played else 0
+            Triple(played, won, pct)
+        } catch (e: Exception) {
+            Triple(0, 0, 0)
+        }
     }
 
     private fun saveTeamNameToHistory(name: String) {
