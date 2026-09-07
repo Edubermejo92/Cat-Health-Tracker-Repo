@@ -1,5 +1,11 @@
 # Compilar y firmar las dos apps en Android Studio
 
+> **Nota de esta rama.** Aquí solo está la app del móvil. Las rutas que
+> empiezan por `PadelPulse-WearOS/` son de la rama `padelpulse-live-wearos`.
+> Se mencionan porque las dos apps se publican en la **misma ficha de Play** y
+> hay que subirlas a la vez.
+
+
 Las dos carpetas son **proyectos Gradle independientes**. Se abren por separado:
 
 ```
