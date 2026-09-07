@@ -1,0 +1,11 @@
+# PadelPulse Live · Wear OS — pagina de presentacion.
+# El reloj no tiene version web: es una app Compose nativa. Esta pagina
+# explica que hace, como se instala y como se empareja.
+[build]
+  publish = "."
+  command = ""
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

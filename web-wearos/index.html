@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PadelPulse Live · Wear OS — el marcador en la muñeca</title>
+<meta name="description" content="El marcador de PadelPulse Live en tu reloj Wear OS: puntúa sin sacar el móvil, con pulso, calorías y distancia. Se sincroniza sola con la app del móvil.">
+<meta name="theme-color" content="#050807">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="PadelPulse Live · Wear OS">
+<meta property="og:description" content="Puntúa desde la muñeca. El reloj y el móvil van a la vez, sin códigos.">
+<meta property="og:image" content="/logo.png">
+
+<link rel="icon" href="/logo.png">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root{
+  --bg:#050807;
+  --surface:#0e1311;
+  --surface-2:#141a18;
+  --line:rgba(255,255,255,.07);
+  --text:#f2f5f4;
+  --dim:#9aa5a1;
+  --muted:#5f6b67;
+  --accent:#00FD87;
+  --accent-soft:rgba(0,253,135,.12);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:'Lexend',system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:var(--bg);color:var(--text);
+  line-height:1.6;-webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+
+.wrap{width:100%;max-width:1080px;margin:0 auto;padding:0 24px}
+.eyebrow{
+  font-size:10px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--accent);
+}
+
+/* ── Cabecera ── */
+header{padding:28px 0}
+header .wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header img{height:34px;width:auto;mix-blend-mode:screen}
+.badge{
+  font-size:9px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);background:var(--accent-soft);
+  border:1px solid rgba(0,253,135,.22);border-radius:999px;padding:5px 11px;
+}
+header nav{margin-left:auto;display:flex;gap:22px}
+header nav a{font-size:12px;font-weight:600;color:var(--dim)}
+header nav a:hover{color:var(--text)}
+@media (max-width:640px){header nav{display:none}}
+
+/* ── Portada ── */
+/* overflow:hidden recorta el resplandor de abajo, que mide mas que la
+   pantalla y en el movil sacaba una barra de scroll horizontal. */
+.hero{padding:48px 0 84px;position:relative;overflow:hidden}
+.hero::before{
+  content:'';position:absolute;top:-180px;left:50%;transform:translateX(-50%);
+  width:760px;height:520px;pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(0,253,135,.13),transparent 68%);
+  filter:blur(18px);
+}
+.hero .wrap{
+  position:relative;display:grid;gap:56px;align-items:center;
+  grid-template-columns:1.05fr .95fr;
+}
+@media (max-width:880px){
+  .hero{padding:32px 0 64px}
+  .hero .wrap{grid-template-columns:1fr;gap:44px}
+}
+.hero h1{
+  font-size:clamp(2.1rem,5.6vw,3.6rem);font-weight:900;line-height:1.06;
+  letter-spacing:-.03em;margin:16px 0 18px;
+}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p.lead{font-size:clamp(1rem,2vw,1.14rem);color:var(--dim);max-width:34ch}
+
+.cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  font-size:12px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
+  padding:14px 22px;border-radius:14px;transition:transform .15s,filter .15s;
+}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#04120b;box-shadow:0 8px 30px rgba(0,253,135,.22)}
+.btn-primary:hover{filter:brightness(1.07)}
+.btn-ghost{border:1px solid var(--line);color:var(--text);background:rgba(255,255,255,.03)}
+.btn-ghost:hover{border-color:rgba(0,253,135,.3)}
+
+.hero-note{margin-top:18px;font-size:12px;color:var(--muted);max-width:38ch}
+
+/* ── Reloj ── */
+.watch-stage{display:flex;justify-content:center;align-items:center}
+.watch{
+  width:min(300px,74vw);aspect-ratio:1;border-radius:50%;
+  background:linear-gradient(155deg,#242c29,#0b0f0e 62%);
+  padding:13px;position:relative;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.07),
+    0 34px 70px rgba(0,0,0,.62),
+    0 0 90px rgba(0,253,135,.09);
+}
+.watch::after{ /* corona */
+  content:'';position:absolute;right:-5px;top:37%;width:6px;height:38px;
+  border-radius:3px;background:linear-gradient(180deg,#3a4340,#1a201e);
+}
+.face{
+  width:100%;height:100%;border-radius:50%;background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:20px;text-align:center;position:relative;overflow:hidden;
+}
+.face::before{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 50% 8%,rgba(0,253,135,.1),transparent 58%);
+}
+.face-top{
+  font-size:8px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);position:relative;
+}
+.face-sets{display:flex;gap:5px;position:relative}
+.face-sets span{
+  font-size:8px;font-weight:700;padding:2px 7px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);color:var(--dim);
+}
+.face-sets span.win{border-color:rgba(0,253,135,.42);color:var(--accent)}
+.face-score{
+  display:flex;align-items:baseline;gap:10px;position:relative;
+  font-weight:900;letter-spacing:-.04em;line-height:1;
+}
+.face-score .a{font-size:46px;color:var(--accent);text-shadow:0 0 26px rgba(0,253,135,.42)}
+.face-score .sep{font-size:24px;color:rgba(255,255,255,.16);font-weight:300}
+.face-score .b{font-size:46px;color:#fff}
+.face-teams{
+  display:flex;gap:12px;font-size:8px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted);position:relative;
+}
+.face-teams b{color:var(--dim);font-weight:700}
+.face-health{
+  display:flex;gap:11px;margin-top:3px;position:relative;
+  font-size:8px;font-weight:700;color:var(--dim);
+}
+.face-health i{font-style:normal;opacity:.85}
+
+/* ── Bandas ── */
+section{padding:74px 0;border-top:1px solid var(--line)}
+section h2{
+  font-size:clamp(1.5rem,3.4vw,2.15rem);font-weight:900;letter-spacing:-.02em;
+  margin:14px 0 12px;line-height:1.15;
+}
+section p.sub{color:var(--dim);max-width:56ch;font-size:15px}
+
+.grid{display:grid;gap:16px;margin-top:38px}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.cols-2{grid-template-columns:repeat(2,1fr)}
+@media (max-width:820px){.cols-3,.cols-2{grid-template-columns:1fr}}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:20px;padding:24px;transition:border-color .18s,transform .18s;
+}
+.card:hover{border-color:rgba(0,253,135,.2);transform:translateY(-2px)}
+.card .ico{font-size:22px;line-height:1;margin-bottom:12px}
+.card h3{font-size:14px;font-weight:900;margin-bottom:7px;letter-spacing:-.01em}
+.card p{font-size:13px;color:var(--dim)}
+
+/* ── Pasos ── */
+.steps{counter-reset:paso;margin-top:38px;display:grid;gap:14px}
+.step{
+  display:flex;gap:18px;align-items:flex-start;
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:18px;padding:22px 24px;
+}
+.step::before{
+  counter-increment:paso;content:counter(paso);
+  flex:0 0 34px;height:34px;border-radius:50%;
+  background:var(--accent-soft);border:1px solid rgba(0,253,135,.28);
+  color:var(--accent);font-size:14px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;
+}
+.step h3{font-size:14px;font-weight:900;margin-bottom:5px}
+.step p{font-size:13px;color:var(--dim)}
+
+/* ── Aviso ── */
+.note{
+  margin-top:34px;background:var(--surface-2);border:1px solid var(--line);
+  border-left:3px solid var(--accent);border-radius:14px;padding:20px 22px;
+}
+.note h3{font-size:13px;font-weight:900;margin-bottom:6px}
+.note p{font-size:13px;color:var(--dim)}
+
+/* ── Ficha tecnica ── */
+.specs{margin-top:38px;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+.specs div{
+  display:flex;justify-content:space-between;gap:20px;align-items:baseline;
+  padding:15px 22px;border-bottom:1px solid var(--line);font-size:13px;
+}
+.specs div:last-child{border-bottom:0}
+.specs dt{color:var(--muted);font-weight:600}
+.specs dd{color:var(--text);font-weight:700;text-align:right}
+
+/* ── Pie ── */
+footer{border-top:1px solid var(--line);padding:44px 0 60px}
+footer .wrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+footer img{height:24px;mix-blend-mode:screen;opacity:.8}
+footer p{font-size:12px;color:var(--muted)}
+footer nav{margin-left:auto;display:flex;gap:20px}
+footer nav a{font-size:12px;color:var(--dim)}
+footer nav a:hover{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <img src="/logo.png" alt="PadelPulse Live">
+    <span class="badge">Wear OS</span>
+    <nav>
+      <a href="#que-hace">Qué hace</a>
+      <a href="#instalar">Instalación</a>
+      <a href="#ficha">Ficha técnica</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">El marcador, en la muñeca</span>
+      <h1>Puntúa sin <em>sacar el móvil</em> del bolsillo.</h1>
+      <p class="lead">
+        PadelPulse Live para Wear OS lleva el marcador a tu reloj. Un toque por punto,
+        y el móvil se entera al instante. Sin códigos, sin emparejar nada a mano.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://padelpulselive.netlify.app">Ver la app del móvil</a>
+        <a class="btn btn-ghost" href="#instalar">Cómo se instala</a>
+      </div>
+      <p class="hero-note">
+        La app del reloj se instala sola al instalar la del móvil: son la misma
+        ficha de Google&nbsp;Play, no hay que buscarla aparte.
+      </p>
+    </div>
+
+    <div class="watch-stage">
+      <div class="watch">
+        <div class="face">
+          <div class="face-top">Set 2 · Juegos</div>
+          <div class="face-sets"><span class="win">6-4</span><span>3-4</span></div>
+          <div class="face-score">
+            <span class="a">40</span><span class="sep">–</span><span class="b">30</span>
+          </div>
+          <div class="face-teams"><b>NOSOTROS</b> vs <b>ELLOS</b></div>
+          <div class="face-health">
+            <i>💓 142</i><i>🔥 486</i><i>🏃 3,8</i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="que-hace">
+  <div class="wrap">
+    <span class="eyebrow">Qué hace</span>
+    <h2>Todo el partido, sin mirar el móvil</h2>
+    <p class="sub">
+      El reloj no es un mando a distancia del móvil: lleva el partido entero por su
+      cuenta. Si te quedas sin batería en el móvil, el marcador sigue.
+    </p>
+
+    <div class="grid cols-3">
+      <div class="card">
+        <div class="ico">🎾</div>
+        <h3>Reglas de pádel de verdad</h3>
+        <p>Ventajas, punto de oro, tie-break y super tie-break. Al mejor de 1, 3 o 5 sets.</p>
+      </div>
+      <div class="card">
+        <div class="ico">💓</div>
+        <h3>Pulso, calorías y distancia</h3>
+        <p>Usa los sensores del reloj mientras juegas, y el móvil deja de estimar: manda la muñeca.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🔄</div>
+        <h3>Se sincroniza sola</h3>
+        <p>En cuanto las dos apps se ven, se emparejan sin códigos. Puntúa desde donde quieras.</p>
+      </div>
+      <div class="card">
+        <div class="ico">⏱️</div>
+        <h3>Actividad en curso</h3>
+        <p>El partido aparece en la esfera del reloj, con el crono corriendo. Vuelves de un toque.</p>
+      </div>
+      <div class="card">
+        <div class="ico">📊</div>
+        <h3>Historial en el reloj</h3>
+        <p>Los últimos partidos, con quién, cuánto duraron y cómo acabaron.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🔋</div>
+        <h3>Pensado para la batería</h3>
+        <p>Los mensajes se agrupan: un partido entero cuesta muy poco a la muñeca.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="instalar">
+  <div class="wrap">
+    <span class="eyebrow">Instalación</span>
+    <h2>Tres pasos, y ninguno es en el reloj</h2>
+    <p class="sub">
+      No hay que buscar nada en la tienda del reloj ni teclear ningún código.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div>
+          <h3>Empareja el reloj con el móvil</h3>
+          <p>Con la app de Wear OS, como cualquier reloj. Esto se hace una vez y no es cosa de PadelPulse.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Instala PadelPulse Live en el móvil</h3>
+          <p>Desde Google Play. Google detecta el reloj emparejado e instala la versión de Wear OS sola.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Abre las dos apps</h3>
+          <p>Se encuentran solas y se emparejan sin códigos. Elige quién manda, el móvil o el reloj, y a jugar.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <h3>Si el reloj no aparece</h3>
+      <p>
+        Casi siempre es el emparejamiento del sistema, no la app: comprueba en la app de
+        Wear OS del móvil que el reloj sale como conectado, y que las dos apps están
+        instaladas con la misma cuenta de Google.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="ficha">
+  <div class="wrap">
+    <span class="eyebrow">Ficha técnica</span>
+    <h2>Lo que necesitas</h2>
+
+    <dl class="specs">
+      <div><dt>Sistema</dt><dd>Wear OS 3 o superior</dd></div>
+      <div><dt>Conexión con el móvil</dt><dd>Wearable Data Layer (Bluetooth o Wi-Fi)</dd></div>
+      <div><dt>Sensores</dt><dd>Pulso y podómetro, si el reloj los tiene</dd></div>
+      <div><dt>Idiomas</dt><dd>Español e inglés</dd></div>
+      <div><dt>Se instala</dt><dd>Con la app del móvil, misma ficha de Play</dd></div>
+      <div><dt>Cuenta</dt><dd>Opcional; la sesión llega desde el móvil</dd></div>
+    </dl>
+
+    <div class="note">
+      <h3>El reloj no te pide contraseñas</h3>
+      <p>
+        Teclear un correo y una contraseña en una pantalla de 45&nbsp;mm es una tortura.
+        Inicias sesión en el móvil y el reloj la recibe por el canal cifrado del sistema,
+        sin salir a internet. Y quien no quiera cuenta, juega igual.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <img src="/logo.png" alt="PadelPulse Live">
+    <p>PadelPulse Live · Wear OS</p>
+    <nav>
+      <a href="https://padelpulselive.netlify.app">App del móvil</a>
+      <a href="#instalar">Instalación</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
