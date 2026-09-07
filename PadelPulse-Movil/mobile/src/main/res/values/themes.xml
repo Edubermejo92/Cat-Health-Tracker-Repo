@@ -1,8 +1,0 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Definición estable para evitar crashes al abrir -->
-    <style name="Theme.PadelPulseLive" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:statusBarColor">#000000</item>
-        <item name="android:windowBackground">#000000</item>
-        <item name="android:forceDarkAllowed">false</item>
-    </style>
-</resources>
