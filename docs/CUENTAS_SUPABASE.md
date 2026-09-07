@@ -36,7 +36,7 @@ publicable a mano.
 |------------|-------------------------------------------|------------------------|
 | `profiles` | Nombre visible del usuario                | `id` (= `auth.uid()`)  |
 | `matches`  | Partidos terminados, con salud incluida   | `(user_id, local_id)`  |
-| `players`  | Reservada (ahora los nombres salen de `matches`) | `(user_id, name)` |
+| `players`  | Agenda: amigos, telefono y pareja habitual | `(user_id, name)` |
 | `settings` | Ajustes (idioma, tema, punto de oro...)   | `user_id`              |
 
 `matches` lleva ademas un indice por `(user_id, played_at desc)`, que es
@@ -50,10 +50,20 @@ partido no lo duplique: la app manda
 `POST /rest/v1/matches?on_conflict=user_id,local_id` con
 `Prefer: resolution=merge-duplicates`.
 
-`players` esta creada pero la app no la usa: los nombres de jugadores salen
-del propio historial de partidos, asi que no hace falta una segunda lista
-que mantener en sincronia. Se queda por si algun dia hacen falta jugadores
-que no hayan jugado todavia.
+### La agenda
+
+`players` es la agenda de gente con la que juegas. Quien juega un partido
+entra solo -nadie va a teclear una lista de amigos a mano- y luego se le
+puede poner telefono, correo y notas.
+
+Hay un indice unico parcial, `players_una_pareja_habitual`, que garantiza
+**una sola pareja habitual por usuario**: si dos moviles marcan parejas
+distintas, gana la marcada mas tarde y la base impide que queden dos.
+
+Las fichas se mezclan por fecha de modificacion: corregir un telefono en el
+movil no lo deshace la nube, ni al reves.
+
+`profiles` guarda ademas tus propios datos: nombre, telefono y club.
 
 ### Ajustes
 
@@ -123,5 +133,10 @@ vacia, comprobado despues):
 | Sin sesion (clave publicable a pelo) lee partidos | ✅ no ve nada |
 | Sin sesion escribe | ✅ bloqueado |
 | Sesion sin usuario (token caducado) lee | ✅ no ve nada |
+| Corregir un telefono duplica la ficha | ✅ no, la actualiza |
+| Marcar una segunda pareja habitual | ✅ bloqueado por el indice |
+| Otro usuario ve o cambia tu agenda | ✅ no ve nada, 0 filas cambiadas |
+| Sin sesion lee la agenda | ✅ no ve nada |
+| El perfil se crea solo al registrarse | ✅ lo hace el disparador |
 
 El analizador de seguridad de Supabase no da ningun aviso.

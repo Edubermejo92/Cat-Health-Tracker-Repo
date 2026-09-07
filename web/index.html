@@ -3104,6 +3104,14 @@ function saveMatchToHistory(){
         if(hist.length>100) hist.pop();
         localStorage.setItem('pp_match_history', JSON.stringify(hist));
     }catch(e){}
+
+    // Los que han jugado entran solos en la agenda. Nadie va a teclear una
+    // lista de amigos a mano; luego ya se le pone telefono a quien haga falta.
+    if(typeof Contacts!=='undefined'){
+        [record.playerA1, record.playerA2, record.playerB1, record.playerB2]
+            .filter(Boolean)
+            .forEach(n => { if(!Contacts.find(n)) Contacts.upsert(n, {}); });
+    }
 }
 
 /** Texto para compartir un partido guardado del historial. */
@@ -3418,6 +3426,8 @@ const Auth = {
             if(!ajustesBajados) await this.pushSettings();
             await this.pushAll();
             const bajados = await this.pullAll();
+            await Contacts.pull();
+            await Contacts.push();
             this.lastSync = Date.now();
             this.lastError = null;
             if(!quiet) showToast(bajados
@@ -3437,6 +3447,257 @@ const Auth = {
         setTimeout(()=>{ this.syncNow(true).catch(()=>{}); }, 1200);
     }
 };
+
+
+// ═══════════════════════════════════════════
+// AGENDA: mis datos, mis amigos y mi pareja
+// ═══════════════════════════════════════════
+
+/**
+ * Lo que la app recuerda de la gente con la que juegas.
+ *
+ * Los nombres salen solos del historial, pero un nombre no sirve para
+ * llamar a nadie: aqui se guarda el telefono, si es de los habituales y
+ * quien es tu pareja de padel. Todo va tambien a la nube con la cuenta,
+ * asi que cambiar de movil no cuesta volver a escribirlo.
+ */
+const Contacts = {
+    me: { name:'', phone:'', club:'' },
+    list: [],                 // {name, phone, email, favorite, partner, notes, updated}
+
+    load(){
+        try{
+            const me = JSON.parse(localStorage.getItem('pp_me')||'null');
+            if(me) this.me = Object.assign(this.me, me);
+        }catch(e){}
+        try{ this.list = JSON.parse(localStorage.getItem('pp_friends')||'[]'); }catch(e){ this.list = []; }
+    },
+
+    persist(){
+        try{
+            localStorage.setItem('pp_me', JSON.stringify(this.me));
+            localStorage.setItem('pp_friends', JSON.stringify(this.list));
+        }catch(e){}
+    },
+
+    /** Busca sin distinguir mayusculas ni espacios de sobra. */
+    find(name){
+        const k = String(name||'').trim().toLowerCase();
+        return this.list.find(f => f.name.trim().toLowerCase() === k) || null;
+    },
+
+    /** Crea o actualiza. Devuelve la ficha. */
+    upsert(name, datos){
+        const nombre = String(name||'').trim();
+        if(!nombre) return null;
+        let f = this.find(nombre);
+        if(!f){
+            f = { name:nombre, phone:'', email:'', favorite:false, partner:false, notes:'' };
+            this.list.push(f);
+        }
+        Object.assign(f, datos||{});
+        f.name = nombre;
+        f.updated = new Date().toISOString();
+        this.persist();
+        return f;
+    },
+
+    remove(name){
+        const f = this.find(name);
+        if(!f) return;
+        this.list = this.list.filter(x => x !== f);
+        this.persist();
+    },
+
+    /** La pareja habitual. Solo puede haber una. */
+    partner(){ return this.list.find(f => f.partner) || null; },
+
+    setPartner(name){
+        const f = this.upsert(name, {});
+        if(!f) return;
+        this.list.forEach(x => { x.partner = (x === f); });
+        f.favorite = true;
+        this.persist();
+    },
+
+    clearPartner(){
+        this.list.forEach(x => { x.partner = false; });
+        this.persist();
+    },
+
+    toggleFavorite(name){
+        const f = this.upsert(name, {});
+        if(!f) return;
+        f.favorite = !f.favorite;
+        if(!f.favorite) f.partner = false;
+        this.persist();
+    },
+
+    /**
+     * Los amigos ordenados como interesa verlos: la pareja primero, luego
+     * los favoritos, y despues por quien ha jugado mas.
+     */
+    ordered(){
+        const stats = {};
+        getPlayerStats().forEach(p => { stats[p.name.trim().toLowerCase()] = p; });
+        return this.list.map(f => Object.assign({}, f, {
+            stats: stats[f.name.trim().toLowerCase()] || null
+        })).sort((a,b) =>
+            (b.partner?1:0)-(a.partner?1:0) ||
+            (b.favorite?1:0)-(a.favorite?1:0) ||
+            ((b.stats&&b.stats.played)||0)-((a.stats&&a.stats.played)||0) ||
+            a.name.localeCompare(b.name)
+        );
+    },
+
+    /** Telefono en formato internacional, que es lo que quiere WhatsApp. */
+    waNumber(phone){
+        const n = String(phone||'').replace(/[^\d+]/g,'');
+        if(!n) return '';
+        if(n.startsWith('+')) return n.slice(1);
+        // Sin prefijo asumimos España, que es donde esta el usuario
+        return n.length === 9 ? '34' + n : n;
+    },
+
+    // ── Nube ──
+
+    toRow(f){
+        return {
+            name: f.name,
+            phone: f.phone || null,
+            email: f.email || null,
+            favorite: !!f.favorite,
+            is_partner: !!f.partner,
+            notes: f.notes || null,
+            updated_at: f.updated || new Date().toISOString()
+        };
+    },
+
+    fromRow(r){
+        return {
+            name: r.name,
+            phone: r.phone || '',
+            email: r.email || '',
+            favorite: !!r.favorite,
+            partner: !!r.is_partner,
+            notes: r.notes || '',
+            updated: r.updated_at
+        };
+    },
+
+    async push(){
+        if(!Auth.isIn) return;
+        if(this.list.length){
+            const rows = this.list.map(f => Object.assign(this.toRow(f), { user_id: Auth.user.id }));
+            await Auth.api('/rest/v1/players?on_conflict=user_id,name', {
+                method:'POST',
+                headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
+                body: rows
+            });
+        }
+        await Auth.api('/rest/v1/profiles?on_conflict=id', {
+            method:'POST',
+            headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
+            body:[{
+                id: Auth.user.id,
+                display_name: this.me.name || (Auth.user.display_name||''),
+                phone: this.me.phone || null,
+                club: this.me.club || null,
+                updated_at: new Date().toISOString()
+            }]
+        });
+    },
+
+    /**
+     * Baja la agenda y la mezcla. Gana la ficha modificada mas tarde, para
+     * que corregir un telefono en el movil no lo deshaga la nube ni al reves.
+     */
+    async pull(){
+        if(!Auth.isIn) return 0;
+        let nuevos = 0;
+        const rows = await Auth.api('/rest/v1/players?select=*');
+        if(Array.isArray(rows)){
+            rows.forEach(r => {
+                const remoto = this.fromRow(r);
+                const local = this.find(remoto.name);
+                if(!local){ this.list.push(remoto); nuevos++; }
+                else if(!local.updated || new Date(remoto.updated) > new Date(local.updated)){
+                    Object.assign(local, remoto);
+                }
+            });
+            // Una sola pareja habitual, por si dos moviles marcaron distinta
+            const parejas = this.list.filter(f => f.partner);
+            if(parejas.length > 1){
+                parejas.sort((a,b)=> new Date(b.updated||0) - new Date(a.updated||0));
+                parejas.slice(1).forEach(f => { f.partner = false; });
+            }
+        }
+        const perfil = await Auth.api('/rest/v1/profiles?select=*&limit=1');
+        if(Array.isArray(perfil) && perfil.length){
+            const r = perfil[0];
+            if(!this.me.name)  this.me.name  = r.display_name || '';
+            if(!this.me.phone) this.me.phone = r.phone || '';
+            if(!this.me.club)  this.me.club  = r.club || '';
+        }
+        this.persist();
+        return nuevos;
+    }
+};
+
+/** El ultimo partido jugado, que es el que casi siempre se quiere repetir. */
+function getLastMatch(){
+    const h = getMatchHistory();
+    return h.length ? h[0] : null;
+}
+
+/** Vuelve a montar el partido del historial con los mismos de siempre. */
+function repeatMatch(id){
+    const m = id ? getMatchHistory().find(x => x.id === id) : getLastMatch();
+    if(!m) return;
+    S.teamA.name = m.teamA || 'LOCAL';
+    S.teamB.name = m.teamB || 'VISITA';
+    S.teamA.playerA = m.playerA1 || ''; S.teamA.playerB = m.playerA2 || '';
+    S.teamB.playerA = m.playerB1 || ''; S.teamB.playerB = m.playerB2 || '';
+    saveState();
+    startNewMatch();
+    showToast(i2('Mismos jugadores que la ultima vez','Same players as last time'), 2200);
+}
+
+/** Monta un partido con tu pareja habitual ya puesta en tu equipo. */
+function useMyPair(){
+    const p = Contacts.partner();
+    if(!p) return;
+    S.teamA.playerA = Contacts.me.name || S.teamA.playerA || '';
+    S.teamA.playerB = p.name;
+    saveState();
+    render();
+    showToast(i2(`Juegas con ${p.name}`,`Playing with ${p.name}`), 2000);
+}
+
+/** Abre WhatsApp con esa persona, no la hoja de compartir generica. */
+function whatsappTo(name, texto){
+    const f = Contacts.find(name);
+    const num = f ? Contacts.waNumber(f.phone) : '';
+    const t = texto || getShareText();
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(!num){
+        showToast(i2('No tienes su telefono guardado','No phone saved for them'), 2500);
+        shareSocial('whatsapp', t);
+        return;
+    }
+    const url = 'https://wa.me/' + num + '?text=' + encodeURIComponent(t);
+    if(b && b.openExternal){ b.openExternal(url); return; }
+    window.open(url, '_blank');
+}
+
+function callTo(name){
+    const f = Contacts.find(name);
+    if(!f || !f.phone){ showToast(i2('No tienes su telefono guardado','No phone saved for them'), 2500); return; }
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    const url = 'tel:' + String(f.phone).replace(/\s/g,'');
+    if(b && b.openExternal){ b.openExternal(url); return; }
+    window.location.href = url;
+}
 
 /** Pantalla de entrada: usuario/contraseña o cuenta nueva. */
 let _authMode = 'in';   // 'in' | 'up'
@@ -3461,6 +3722,23 @@ function skipAuth(){
 
 function authWasSkipped(){
     try{ return localStorage.getItem('pp_auth_skipped')==='1'; }catch(e){ return false; }
+}
+
+/**
+ * Guarda tus datos segun los escribes. No llama a render() a proposito: si
+ * repintase, el teclado perderia el foco a cada letra.
+ */
+let _meSyncTimer = null;
+function saveMe(){
+    const g = (id)=> (document.getElementById(id)||{}).value || '';
+    Contacts.me.name  = g('me-name').trim();
+    Contacts.me.phone = g('me-phone').trim();
+    Contacts.me.club  = g('me-club').trim();
+    Contacts.persist();
+    if(Auth.isIn){
+        clearTimeout(_meSyncTimer);
+        _meSyncTimer = setTimeout(()=>Contacts.push().catch(()=>{}), 1500);
+    }
 }
 
 /** Desde ajustes: volver a la pantalla de cuenta para entrar o registrarse. */
@@ -3642,6 +3920,80 @@ function fmtSince(iso){
     return i2(`hace ${months} mes${months>1?'es':''}`,`${months} mo ago`);
 }
 
+
+/**
+ * Ficha de contacto de un amigo. Un formulario corto y nada mas: telefono
+ * para poder llamarle o escribirle, y la marca de pareja habitual.
+ */
+function editFriend(name){
+    const f = Contacts.find(name) || Contacts.upsert(name, {});
+    if(!f) return;
+    const p=tc.primary(), mu=tc.muted(), su=tc.surf(), te=tc.text();
+    const esc = (x)=>String(x||'').replace(/"/g,'&quot;');
+
+    const el = document.createElement('div');
+    el.id = 'friend-edit-modal';
+    el.style.cssText = 'position:fixed;inset:0;z-index:400;display:flex;align-items:flex-end;background:rgba(0,0,0,0.72)';
+    el.onclick = (e)=>{ if(e.target===el) el.remove(); };
+    el.innerHTML = `
+    <div class="w-full rounded-t-3xl p-5 pb-8 slide-up" style="background:#111;border-top:1px solid rgba(255,255,255,0.08)">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center text-[16px] font-black"
+                 style="background:${p}22;color:${p}">${f.name.trim().charAt(0).toUpperCase()}</div>
+            <div class="text-base font-black" style="color:${te}">${f.name}</div>
+            <button onclick="document.getElementById('friend-edit-modal').remove()" class="ml-auto p-2 rounded-xl" style="background:rgba(255,255,255,0.06)">
+                <span class="material-symbols-outlined text-[18px]" style="color:${mu}">close</span>
+            </button>
+        </div>
+
+        <label class="text-[9px] font-black uppercase tracking-widest" style="color:${mu}">${i2('Telefono','Phone')}</label>
+        <input id="fr-phone" type="tel" value="${esc(f.phone)}" placeholder="+34 600 000 000"
+            class="w-full mt-1 mb-3 rounded-xl px-3 py-3 text-sm font-bold"
+            style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:${te}">
+
+        <label class="text-[9px] font-black uppercase tracking-widest" style="color:${mu}">${i2('Correo (opcional)','Email (optional)')}</label>
+        <input id="fr-email" type="email" value="${esc(f.email)}" placeholder="—"
+            class="w-full mt-1 mb-3 rounded-xl px-3 py-3 text-sm font-bold"
+            style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:${te}">
+
+        <label class="text-[9px] font-black uppercase tracking-widest" style="color:${mu}">${i2('Notas','Notes')}</label>
+        <input id="fr-notes" type="text" value="${esc(f.notes)}" placeholder="${i2('Zurdo, juega en drive...','Lefty, plays forehand side...')}"
+            class="w-full mt-1 mb-4 rounded-xl px-3 py-3 text-sm"
+            style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:${te}">
+
+        <button onclick="toggleFriendPartner('${String(f.name).replace(/'/g,"\\'")}')"
+            class="w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest scale-press mb-2"
+            style="background:${f.partner?p:'rgba(255,255,255,0.05)'};color:${f.partner?'#04120B':te};border:1px solid ${f.partner?p:'rgba(255,255,255,0.08)'}">
+            ${f.partner ? i2('★ Es mi pareja de padel','★ My padel partner') : i2('Marcar como mi pareja','Set as my partner')}
+        </button>
+
+        <button onclick="saveFriend('${String(f.name).replace(/'/g,"\\'")}')"
+            class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-widest scale-press"
+            style="background:${p};color:#04120B">${i2('Guardar','Save')}</button>
+    </div>`;
+    document.body.appendChild(el);
+    setTimeout(()=>{ const i=document.getElementById('fr-phone'); if(i) i.focus(); }, 120);
+}
+
+function saveFriend(name){
+    const g = (id)=> (document.getElementById(id)||{}).value || '';
+    Contacts.upsert(name, { phone:g('fr-phone').trim(), email:g('fr-email').trim(), notes:g('fr-notes').trim() });
+    const m = document.getElementById('friend-edit-modal'); if(m) m.remove();
+    if(Auth.isIn) Contacts.push().catch(()=>{});
+    showToast(i2('Guardado','Saved'), 1800);
+    render();
+}
+
+function toggleFriendPartner(name){
+    const f = Contacts.find(name);
+    if(f && f.partner) Contacts.clearPartner();
+    else Contacts.setPartner(name);
+    const m = document.getElementById('friend-edit-modal'); if(m) m.remove();
+    if(Auth.isIn) Contacts.push().catch(()=>{});
+    render();
+    editFriend(name);
+}
+
 /** Ficha de un jugador, con su balance y sus compañeros/rivales habituales. */
 function showPlayerDetail(name){
     const st = getPlayerStats().find(p=>p.name===name);
@@ -3667,6 +4019,42 @@ function showPlayerDetail(name){
         </header>
 
         <div class="px-4">
+            ${(()=>{
+                const f = Contacts.find(name);
+                const q = String(name).replace(/'/g,"\\'");
+                if(f && f.phone) return `
+                <div class="rounded-2xl p-3 mb-3" style="background:${su};${f.partner?`border:1px solid ${p}40`:''}">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="min-w-0">
+                            <div class="text-[9px] uppercase font-bold tracking-widest" style="color:${mu}">
+                                ${f.partner ? i2('Mi pareja de padel','My padel partner') : i2('Contacto','Contact')}
+                            </div>
+                            <div class="text-sm font-black" style="color:${te}">${f.phone}</div>
+                            ${f.notes?`<div class="text-[10px] mt-0.5" style="color:${mu}">${f.notes}</div>`:''}
+                        </div>
+                        <button onclick="editFriend('${q}')" class="p-2 rounded-xl scale-press" style="background:rgba(255,255,255,0.06)">
+                            <span class="material-symbols-outlined text-[16px]" style="color:${mu}">edit</span>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="whatsappTo('${q}', i2('Echamos un padel?','Fancy a padel game?'))"
+                            class="py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest scale-press"
+                            style="background:rgba(37,211,102,0.14);color:#25D366">WhatsApp</button>
+                        <button onclick="callTo('${q}')"
+                            class="py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest scale-press"
+                            style="background:rgba(255,255,255,0.06);color:${te}">${i2('Llamar','Call')}</button>
+                    </div>
+                </div>`;
+                return `
+                <button onclick="editFriend('${q}')"
+                    class="w-full rounded-2xl p-3 mb-3 flex items-center gap-2 scale-press"
+                    style="background:${su};border:1px dashed rgba(255,255,255,0.12)">
+                    <span class="material-symbols-outlined text-[18px]" style="color:${p}">person_add</span>
+                    <span class="text-[11px] font-black uppercase tracking-wider" style="color:${p}">
+                        ${i2('Guardar su telefono','Save their phone')}
+                    </span>
+                </button>`;
+            })()}
             <div class="grid grid-cols-3 gap-2 mb-3">
                 ${[
                     [st.won, i2('Ganados','Won'), p],
@@ -3922,14 +4310,54 @@ const HistoryView=()=>{
             <div class="text-sm font-black" style="color:${pr.winPct>=50?p:mu}">${pr.winPct}%</div>
         </div>`).join('');
 
+    // ── Agenda de amigos ──
+    const amigos = Contacts.ordered();
+    const friendCards = amigos.length===0 ? `
+    <div class="flex flex-col items-center justify-center py-16 gap-3">
+        <span class="material-symbols-outlined text-[48px]" style="color:${mu}">contacts</span>
+        <div class="text-sm font-bold" style="color:${mu}">${i2('Sin amigos todavia','No friends yet')}</div>
+        <div class="text-xs text-center px-8" style="color:${mu}">${i2('Se apuntan solos en cuanto juegan un partido contigo','They get added on their own as soon as they play a match with you')}</div>
+    </div>` : amigos.map(f=>`
+        <div class="rounded-2xl p-3 mb-2 flex items-center gap-3" style="background:${su};${f.partner?`border:1px solid ${p}40`:''}">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center text-[14px] font-black flex-shrink-0"
+                 style="background:${f.partner?p:'rgba(255,255,255,0.06)'};color:${f.partner?'#04120B':te}">
+                ${f.name.trim().charAt(0).toUpperCase()}
+            </div>
+            <div class="flex-1 min-w-0 scale-press" onclick="showPlayerDetail('${esc(f.name)}')">
+                <div class="text-xs font-black truncate flex items-center gap-1" style="color:${te}">
+                    ${f.name}
+                    ${f.partner?`<span class="text-[8px] font-black px-1.5 py-0.5 rounded-full" style="background:${p}22;color:${p}">${i2('MI PAREJA','MY PARTNER')}</span>`
+                     : f.favorite?`<span style="color:${p};font-size:10px">★</span>`:''}
+                </div>
+                <div class="text-[9px] truncate" style="color:${mu}">
+                    ${f.phone ? f.phone : i2('sin telefono','no phone')}
+                    ${f.stats?` · ${f.stats.played} ${i2('partidos','matches')} · ${f.stats.winPct}%`:''}
+                </div>
+            </div>
+            ${f.phone?`
+            <button onclick="event.stopPropagation();whatsappTo('${esc(f.name)}', i2('Echamos un padel?','Fancy a padel game?'))"
+                class="p-2 rounded-xl scale-press" style="background:rgba(37,211,102,0.12)" title="WhatsApp">
+                <span class="material-symbols-outlined text-[16px]" style="color:#25D366">chat</span>
+            </button>
+            <button onclick="event.stopPropagation();callTo('${esc(f.name)}')"
+                class="p-2 rounded-xl scale-press" style="background:rgba(255,255,255,0.06)" title="${i2('Llamar','Call')}">
+                <span class="material-symbols-outlined text-[16px]" style="color:${mu}">call</span>
+            </button>`:`
+            <button onclick="event.stopPropagation();editFriend('${esc(f.name)}')"
+                class="px-2.5 py-1.5 rounded-xl scale-press text-[9px] font-black uppercase" style="background:${p}18;color:${p}">
+                ${i2('Añadir','Add')}
+            </button>`}
+        </div>`).join('');
+
     const tabs = `
     <div class="flex gap-1 p-1 rounded-2xl mb-3" style="background:${su}">
         ${[
             ['matches', i2('Partidos','Matches'), hist.length],
             ['players', i2('Jugadores','Players'), players.length],
-            ['pairs',   i2('Parejas','Pairs'),     pairs.length]
+            ['pairs',   i2('Parejas','Pairs'),     pairs.length],
+            ['friends', i2('Amigos','Friends'),    amigos.length]
         ].map(([id,label,n])=>`
-            <button onclick="setHistTab('${id}')" class="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider scale-press"
+            <button onclick="setHistTab('${id}')" class="flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider scale-press"
                 style="background:${_histTab===id?p:'transparent'};color:${_histTab===id?'#000':mu}">
                 ${label}${n?` <span style="opacity:.7">${n}</span>`:''}
             </button>`).join('')}
@@ -3937,6 +4365,7 @@ const HistoryView=()=>{
 
     const body = _histTab==='players' ? playerCards
                : _histTab==='pairs'   ? pairCards
+               : _histTab==='friends' ? friendCards
                : matchCards;
 
     return `
@@ -4234,6 +4663,37 @@ const SetupView=()=>{
         <img src="${LOGO_BASE64}" class="h-20 mb-6" style="object-fit:contain;mix-blend-mode:screen;flex-shrink:0">
 
         <div class="w-full max-w-sm flex flex-col gap-4">
+
+            <!-- ── ÚLTIMO PARTIDO Y PAREJA HABITUAL ── -->
+            ${(()=>{
+                const ult = getLastMatch();
+                const par = Contacts.partner();
+                if(!ult && !par) return '';
+                const nombresUlt = ult ? [ult.playerA1,ult.playerA2,ult.playerB1,ult.playerB2].filter(Boolean) : [];
+                return `
+                <div class="rounded-3xl p-4" style="background:${su};border:1px solid rgba(255,255,255,0.06)">
+                    ${ult?`
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:${mu};margin-bottom:10px;text-align:center">
+                        ${i2('Ultimo partido','Last match')} · ${fmtSince(ult.date)}
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:4px">
+                        <span style="font-size:13px;font-weight:900;color:${ult.winner==='A'?p:te};max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ult.teamA}</span>
+                        <span style="font-size:15px;font-weight:900;color:${p}">${ult.setsA}-${ult.setsB}</span>
+                        <span style="font-size:13px;font-weight:900;color:${ult.winner==='B'?p:te};max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ult.teamB}</span>
+                    </div>
+                    ${nombresUlt.length?`<div style="font-size:9px;color:${mu};text-align:center;margin-bottom:12px">${nombresUlt.join(' · ')}</div>`:'<div style="height:8px"></div>'}
+                    <button onclick="repeatMatch(${ult.id})"
+                        style="width:100%;padding:12px;border-radius:16px;border:1px solid ${p}35;background:${p}15;color:${p};font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer">
+                        ↻ ${i2('Repetir con los mismos','Rematch, same players')}
+                    </button>`:''}
+
+                    ${par?`
+                    <button onclick="useMyPair()"
+                        style="width:100%;padding:12px;border-radius:16px;margin-top:${ult?'8px':'0'};border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:${te};font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer">
+                        ★ ${i2('Jugar con','Play with')} ${par.name}
+                    </button>`:''}
+                </div>`;
+            })()}
 
             <!-- ── FORMATO DE PARTIDO ── -->
             <div class="rounded-3xl p-4" style="background:${su};border:1px solid rgba(255,255,255,0.06)">
@@ -4759,6 +5219,39 @@ const SettingsView=()=>`
         </button>`}
     </div>
 
+    <!-- MIS DATOS: lo que la app sabe de ti -->
+    <div class="bg-surface-container rounded-3xl p-4">
+        <div class="flex items-center gap-3 mb-3">
+            <span class="material-symbols-outlined text-primary">badge</span>
+            <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">${i2('Mis datos','My details')}</div>
+        </div>
+        <div class="grid grid-cols-1 gap-2">
+            <input type="text" id="me-name" value="${(Contacts.me.name||'').replace(/"/g,'&quot;')}" maxlength="24"
+                placeholder="${i2('Tu nombre','Your name')}" oninput="saveMe()"
+                class="w-full bg-surface-container-high border border-outline-variant/30 rounded-xl px-3 py-2 text-on-surface text-sm font-bold">
+            <div class="grid grid-cols-2 gap-2">
+                <input type="tel" id="me-phone" value="${(Contacts.me.phone||'').replace(/"/g,'&quot;')}" maxlength="20"
+                    placeholder="${i2('Telefono','Phone')}" oninput="saveMe()"
+                    class="bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[11px] font-bold">
+                <input type="text" id="me-club" value="${(Contacts.me.club||'').replace(/"/g,'&quot;')}" maxlength="24"
+                    placeholder="${i2('Tu club','Your club')}" oninput="saveMe()"
+                    class="bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[11px] font-bold">
+            </div>
+        </div>
+        ${Contacts.partner()?`
+        <div class="mt-3 pt-3 flex items-center gap-2" style="border-top:1px solid rgba(255,255,255,0.05)">
+            <span class="material-symbols-outlined text-[16px]" style="color:${tc.primary()}">favorite</span>
+            <span class="text-[10px]" style="color:${tc.muted()}">${i2('Tu pareja','Your partner')}:</span>
+            <span class="text-[11px] font-black" style="color:${tc.primary()}">${Contacts.partner().name}</span>
+            <button onclick="S.currentView='history';setHistTab('friends');" class="ml-auto text-[9px] font-black uppercase" style="color:${tc.muted()}">${i2('Cambiar','Change')}</button>
+        </div>`:`
+        <button onclick="S.currentView='history';setHistTab('friends');"
+            class="w-full mt-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest scale-press"
+            style="background:rgba(255,255,255,0.05);color:${tc.muted()};border:1px dashed rgba(255,255,255,0.1)">
+            ${i2('Elegir mi pareja de padel','Choose my padel partner')}
+        </button>`}
+    </div>
+
     <!-- IDIOMA -->
     <div class="bg-surface-container rounded-3xl p-4">
         <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mb-3">${i('language')}</div>
@@ -5099,6 +5592,7 @@ function showSplash(){
  * El modo espectador (enlace compartido) nunca pide cuenta.
  */
 Auth.load();
+Contacts.load();
 if (!SPECTATOR) {
     if (!Auth.isIn && !authWasSkipped()) {
         S.currentView = 'auth';
