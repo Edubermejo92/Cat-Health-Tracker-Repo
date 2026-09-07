@@ -1,7 +1,0 @@
-<resources>
-    <!-- Capacidad que anuncia el reloj para que el movil pueda descubrirlo.
-         Tiene que coincidir con PhoneLink.CAPABILITY_WATCH. -->
-    <string-array name="android_wear_capabilities">
-        <item>padelpulse_watch</item>
-    </string-array>
-</resources>
