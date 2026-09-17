@@ -561,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.0.8', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.0.9', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -3085,8 +3085,16 @@ function saveMatchToHistory(){
     const ptsA = S.momentum.filter(m=>m.team==='A').length;
     const gA=S.setsHistory.reduce((a,s)=>a+s.a,0)+S.teamA.games;
     const gB=S.setsHistory.reduce((a,s)=>a+s.b,0)+S.teamB.games;
+    // El identificador tiene que ser unico: es la clave con la que el partido
+    // viaja a la nube -(user_id, local_id)- y dos partidos guardados en el
+    // mismo milisegundo se pisarian, subiendo solo uno. Se fuerza que siempre
+    // sea mayor que el ultimo guardado.
+    const previos = getMatchHistory();
+    const ultimoId = previos.length ? Number(previos[0].id) || 0 : 0;
+    const nuevoId = Math.max(Date.now(), ultimoId + 1);
+
     const record = {
-        id: Date.now(),
+        id: nuevoId,
         date: new Date().toISOString(),
         teamA: S.teamA.name, teamB: S.teamB.name,
         playerA1: S.teamA.playerA, playerA2: S.teamA.playerB,
@@ -3355,6 +3363,16 @@ const Auth = {
             return;
         }
         this.applySession(data);
+
+        // El enlace de "he perdido la contraseña" trae una sesion temporal y
+        // marcada como recovery: en vez de entrar y ya, se pide la nueva.
+        if(data.type === 'recovery'){
+            this.status = 'newpass';
+            S.currentView = 'auth';
+            render();
+            return;
+        }
+
         showToast(i2('Sesion iniciada con Google','Signed in with Google'), 2200);
         this.syncNow(true).catch(()=>{});
         render();
@@ -3373,6 +3391,7 @@ const Auth = {
             if(k) d[k] = decodeURIComponent(v||'');
         });
         if(!d.access_token) return false;
+        const esRecuperacion = (d.type === 'recovery');
         history.replaceState(null, '', location.pathname + location.search);
         this.session = {
             access_token: d.access_token,
@@ -3386,6 +3405,12 @@ const Auth = {
             this.status = 'in';
             this.persist();
             PPSync.sendAccountToWatch();
+            if(esRecuperacion){
+                this.status = 'newpass';
+                S.currentView = 'auth';
+                render();
+                return true;
+            }
             if(S.currentView === 'auth'){
                 S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
             }
@@ -3507,6 +3532,69 @@ const Auth = {
             return i2('Sin conexion con el servidor','Cannot reach the server');
         }
         return msg;
+    },
+
+    // ── He perdido la contraseña ──
+
+    /**
+     * Manda el correo para poner una contraseña nueva.
+     *
+     * No existe "recuperar la contraseña": el servidor solo guarda un hash y
+     * nadie -ni el usuario, ni nosotros, ni Supabase- puede volver a leerla.
+     * Lo que se manda es un enlace de un solo uso para escribir otra.
+     */
+    async requestReset(email){
+        const correo = (email||'').trim();
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)){
+            this.lastError = i2('Pon el correo de tu cuenta','Enter your account email');
+            render(); return;
+        }
+        this.status='busy'; this.lastError=null; this.errorHint=null; render();
+        try{
+            const vuelta = (typeof window!=='undefined' && window.AndroidBridge && window.AndroidBridge.signInWithGoogle)
+                ? 'padelpulse://auth'
+                : (location.origin + location.pathname);
+            await this.api('/auth/v1/recover', {
+                method:'POST', auth:false,
+                body:{ email: correo },
+                headers:{ 'redirect_to': vuelta }
+            });
+            this.pendingEmail = correo;
+            this.status = 'reset';
+        }catch(e){
+            this.status='anon';
+            this.lastError = this.human(e.message);
+        }
+        render();
+    },
+
+    /**
+     * Escribe la contraseña nueva. Solo funciona con la sesion temporal que
+     * trae el enlace del correo, que es lo que demuestra que quien lo pide es
+     * el dueño de la cuenta.
+     */
+    async updatePassword(nueva){
+        if((nueva||'').length < 6){
+            this.lastError = i2('La contraseña necesita 6 caracteres como minimo','Password needs at least 6 characters');
+            render(); return false;
+        }
+        this.status='busy'; this.lastError=null; this.errorHint=null; render();
+        try{
+            await this.api('/auth/v1/user', { method:'PUT', body:{ password: nueva } });
+            this.status='in';
+            _authForm.pass = '';
+            showToast(i2('Contraseña cambiada','Password changed'), 2500);
+            if(S.currentView==='auth'){
+                S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
+            }
+            render();
+            return true;
+        }catch(e){
+            this.status='newpass';
+            this.lastError = this.human(e.message);
+            render();
+            return false;
+        }
     },
 
     /** Vuelve al formulario desde la pantalla de confirmar correo. */
@@ -3955,6 +4043,26 @@ function toggleAuthPass(){
     if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
 }
 
+let _resetShowPass = false;
+
+function askReset(){
+    const el = document.getElementById('auth-email');
+    if(el && el.value) _authForm.email = el.value;
+    Auth.requestReset(_authForm.email);
+}
+
+function submitNewPass(){
+    const a = (document.getElementById('np-1')||{}).value || '';
+    const b = (document.getElementById('np-2')||{}).value || '';
+    if(a !== b){
+        Auth.lastError = i2('Las dos contraseñas no coinciden','The two passwords do not match');
+        render(); return;
+    }
+    Auth.updatePassword(a);
+}
+
+function toggleResetPass(){ _resetShowPass = !_resetShowPass; render(); }
+
 function submitAuth(){
     // Se lee del campo y no solo de _authForm: el gestor de contraseñas y el
     // autorrelleno del sistema escriben directamente en el input sin disparar
@@ -4032,6 +4140,75 @@ const AuthView = () => {
     const busy = Auth.status==='busy';
     const up = _authMode==='up';
     const esc = (x)=>String(x||'').replace(/"/g,'&quot;');
+
+    // Enlace de recuperacion abierto: toca escribir la contraseña nueva.
+    if(Auth.status === 'newpass'){
+        return `
+<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+    <div class="w-full rounded-3xl p-6" style="background:${su}">
+        <div class="text-base font-black mb-1 text-center" style="color:${te}">
+            ${i2('Nueva contraseña','New password')}
+        </div>
+        <div class="text-[11px] leading-relaxed mb-4 text-center" style="color:${mu}">
+            ${i2('Escribela dos veces para no equivocarte. Minimo 6 caracteres.',
+                  'Type it twice so you do not mistype it. At least 6 characters.')}
+        </div>
+
+        <div class="relative mb-2">
+            <input id="np-1" type="${_resetShowPass?'text':'password'}" autocomplete="new-password"
+                placeholder="${i2('Nueva contraseña','New password')}"
+                class="w-full rounded-2xl px-4 py-3 pr-12 text-sm font-bold"
+                style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
+            <button onclick="toggleResetPass()" tabindex="-1"
+                class="absolute right-1 top-1/2 p-2 rounded-xl" style="transform:translateY(-50%)">
+                <span class="material-symbols-outlined text-[17px]" style="color:${mu}">${_resetShowPass?'visibility_off':'visibility'}</span>
+            </button>
+        </div>
+        <input id="np-2" type="${_resetShowPass?'text':'password'}" autocomplete="new-password"
+            placeholder="${i2('Repitela','Repeat it')}"
+            onkeydown="if(event.key==='Enter'){submitNewPass()}"
+            class="w-full rounded-2xl px-4 py-3 text-sm font-bold"
+            style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
+
+        ${Auth.lastError?`
+        <div class="mt-3 rounded-2xl p-3 text-[11px] leading-relaxed"
+             style="background:rgba(255,113,108,.1);border:1px solid rgba(255,113,108,.25);color:#ff716c">
+            ${Auth.lastError}
+        </div>`:''}
+
+        <button onclick="submitNewPass()" ${busy?'disabled':''}
+            class="w-full mt-3 py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="background:${p};color:#04120B;opacity:${busy?.6:1}">
+            ${busy ? i2('Guardando…','Saving…') : i2('Guardar y entrar','Save and sign in')}
+        </button>
+    </div>
+</div>`;
+    }
+
+    // Correo de recuperacion enviado.
+    if(Auth.status === 'reset'){
+        return `
+<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+    <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
+        <div style="font-size:40px;line-height:1;margin-bottom:10px">🔑</div>
+        <div class="text-base font-black mb-2" style="color:${te}">${i2('Mira tu correo','Check your email')}</div>
+        <div class="text-[12px] leading-relaxed mb-1" style="color:${mu}">
+            ${i2('Te hemos mandado un enlace a','We sent a link to')}
+        </div>
+        <div class="text-[13px] font-bold mb-4" style="color:${p}">${esc(Auth.pendingEmail)}</div>
+        <div class="text-[11px] leading-relaxed mb-5" style="color:${mu}">
+            ${i2('Abrelo y podras escribir una contraseña nueva. El enlace vale una sola vez.',
+                  'Open it and you can set a new password. The link works once.')}
+        </div>
+        <button onclick="Auth.backToForm()"
+            class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="background:${p};color:#04120B">${i2('Volver','Back')}</button>
+        <button onclick="askReset()" class="w-full mt-2 py-2 text-[11px] font-bold" style="color:${mu}">
+            ${i2('No me ha llegado, reenviar','It did not arrive, resend')}
+        </button>
+    </div>
+</div>`;
+    }
 
     // Pantalla aparte: la cuenta existe pero falta confirmar el correo.
     if(Auth.status === 'confirm'){
@@ -4145,6 +4322,11 @@ const AuthView = () => {
             class="w-full mt-2 py-2 text-[11px] font-bold" style="color:${mu}">
             ${up ? i2('Ya tengo cuenta','I already have an account') : i2('Crear una cuenta nueva','Create a new account')}
         </button>
+
+        ${up?'':`
+        <button onclick="askReset()" class="w-full py-1.5 text-[11px] font-bold underline" style="color:${mu};opacity:.8">
+            ${i2('He perdido la contraseña','I forgot my password')}
+        </button>`}
     </div>
 
     <button onclick="skipAuth()" class="mt-5 text-[11px] font-bold underline" style="color:${mu}">
@@ -4957,13 +5139,76 @@ function showThemePicker(){
     document.body.appendChild(el);
 }
 
+
+/**
+ * El historial es de quien tiene cuenta.
+ *
+ * Sin cuenta se juega igual y el marcador funciona entero, pero el historial
+ * -partidos, jugadores, parejas y agenda- pide entrar. Los partidos se
+ * siguen guardando en el movil mientras tanto, asi que al registrarse
+ * aparecen todos y se suben a la nube: no se pierde nada por haber jugado
+ * antes de crear la cuenta.
+ */
+function historyLocked(){
+    return !Auth.isIn;
+}
+
+/** Cuantos partidos esperan guardados a que el usuario entre. */
+function matchesWaiting(){
+    try{ return (JSON.parse(localStorage.getItem('pp_match_history')||'[]')).length; }catch(e){ return 0; }
+}
+
+const LockedHistoryView = () => {
+    const p = tc.primary(), mu = tc.muted(), su = tc.surf2(), te = tc.text();
+    const esperando = matchesWaiting();
+    return `
+<header class="px-4 pt-0 pb-3 flex items-center gap-3 flex-shrink-0 w-full max-w-4xl mx-auto">
+    <button onclick="S.currentView='home';render();" class="p-2 rounded-xl scale-press">
+        <span class="material-symbols-outlined text-on-surface-variant text-[20px]">arrow_back</span>
+    </button>
+    <span class="text-on-surface font-bold text-base">${i2('Historial','History')}</span>
+</header>
+<div class="flex-1 scrollable px-6 pb-4 w-full max-w-md mx-auto flex flex-col items-center justify-center text-center">
+    <div class="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+         style="background:${p}18;border:1px solid ${p}35">
+        <span class="material-symbols-outlined text-[30px]" style="color:${p}">lock</span>
+    </div>
+    <div class="text-base font-black mb-2" style="color:${te}">
+        ${i2('El historial necesita cuenta','History needs an account')}
+    </div>
+    <div class="text-[12px] leading-relaxed mb-5" style="color:${mu}">
+        ${i2('El marcador funciona entero sin cuenta. El historial de partidos, las estadisticas de cada jugador, las parejas y la agenda se guardan en tu cuenta para que los tengas en cualquier movil.',
+              'The scoreboard works fully without an account. Match history, per-player stats, pairs and your contacts live in your account so you have them on any phone.')}
+    </div>
+    ${esperando?`
+    <div class="w-full rounded-2xl p-3 mb-4" style="background:${su};border:1px solid ${p}25">
+        <div class="text-[11px] font-bold" style="color:${p}">
+            ${esperando===1 ? i2('Tienes 1 partido guardado','You have 1 saved match')
+                            : i2(`Tienes ${esperando} partidos guardados`,`You have ${esperando} saved matches`)}
+        </div>
+        <div class="text-[10px] mt-1" style="color:${mu}">
+            ${i2('Se suben en cuanto entres. No se pierde nada.','They upload as soon as you sign in. Nothing is lost.')}
+        </div>
+    </div>`:''}
+    <button onclick="goToAuth()"
+        class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-widest scale-press"
+        style="background:${p};color:#04120B">
+        ${i2('Entrar o crear cuenta','Sign in or sign up')}
+    </button>
+    <button onclick="S.currentView='home';render();" class="mt-3 text-[11px] font-bold" style="color:${mu}">
+        ${i2('Seguir jugando sin cuenta','Keep playing without an account')}
+    </button>
+</div>
+${BottomNav('history')}`;
+};
+
 const BottomNav=(active)=>`
 <nav class="bg-surface-container-lowest border-t border-white/5 flex justify-center w-full" style="position:fixed;bottom:0;left:0;right:0;z-index:100;padding-bottom:env(safe-area-inset-bottom,0)">
     <div class="dk-nav grid grid-cols-5 gap-0 px-1 py-1 w-full max-w-5xl">
     ${[
         {id:'home',    icon:'scoreboard', label:'Marcador'},
         {id:'stats',   icon:'monitoring', label:'Stats'},
-        {id:'history', icon:'history',    label:'Historial'},
+        {id:'history', icon: historyLocked()?'lock':'history', label:'Historial'},
         {id:'activity',icon:'list_alt',   label:'Actividad'},
         {id:'settings',icon:'tune',       label:'Ajustes'}
     ].map(item=>`
@@ -5017,6 +5262,8 @@ const SetupView=()=>{
 
             <!-- ── ÚLTIMO PARTIDO Y PAREJA HABITUAL ── -->
             ${(()=>{
+                // Tambien es historial: sin cuenta no se enseña.
+                if(historyLocked()) return '';
                 const ult = getLastMatch();
                 const par = Contacts.partner();
                 if(!ult && !par) return '';
@@ -5570,7 +5817,9 @@ const SettingsView=()=>`
         </button>`}
     </div>
 
-    <!-- MIS DATOS: lo que la app sabe de ti -->
+    <!-- MIS DATOS: lo que la app sabe de ti. Va con la cuenta, asi que sin
+         cuenta no tiene donde guardarse. -->
+    ${historyLocked() ? '' : `
     <div class="bg-surface-container rounded-3xl p-4">
         <div class="flex items-center gap-3 mb-3">
             <span class="material-symbols-outlined text-primary">badge</span>
@@ -5601,7 +5850,7 @@ const SettingsView=()=>`
             style="background:rgba(255,255,255,0.05);color:${tc.muted()};border:1px dashed rgba(255,255,255,0.1)">
             ${i2('Elegir mi pareja de padel','Choose my padel partner')}
         </button>`}
-    </div>
+    </div>`}
 
     <!-- IDIOMA -->
     <div class="bg-surface-container rounded-3xl p-4">
@@ -5820,7 +6069,7 @@ function render(){
             case 'home':     app.innerHTML=HomeView(); break;
             case 'faults':   app.innerHTML=FaultsView(); break;
             case 'stats':    app.innerHTML=StatsView(); break;
-            case 'history':  app.innerHTML=HistoryView(); break;
+            case 'history':  app.innerHTML = historyLocked() ? LockedHistoryView() : HistoryView(); break;
             case 'activity': app.innerHTML=ActivityView(); break;
             case 'settings': app.innerHTML=SettingsView(); break;
             default:         app.innerHTML=HomeView();

@@ -11,7 +11,8 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * Inicio de sesion con Google.
+ * Vuelta desde el navegador: inicio de sesion con Google y enlace de
+ * recuperacion de contraseña. Los dos entran por padelpulse://auth.
  *
  * Google no permite iniciar sesion dentro de un WebView -devuelve
  * "disallowed_useragent"-, asi que la pantalla de Google se abre en el
@@ -90,6 +91,9 @@ object GoogleAuth {
             .put("access_token", token)
             .put("refresh_token", datos["refresh_token"] ?: "")
             .put("expires_in", (datos["expires_in"] ?: "3600").toIntOrNull() ?: 3600)
+            // "recovery" = viene del correo de "he perdido la contraseña". La
+            // sesion sirve solo para escribir la nueva, no para entrar sin mas.
+            .put("type", datos["type"] ?: "")
         usuario(supabaseUrl, apiKey, token)?.let { sesion.put("user", it) }
         return sesion.toString()
     }
