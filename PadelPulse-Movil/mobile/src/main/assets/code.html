@@ -3520,6 +3520,14 @@ const Auth = {
                                  'Add padelpulse://auth in Supabase, Authentication › URL Configuration.');
             return i2('El servidor rechazo la vuelta a la app','The server rejected the return to the app');
         }
+        // El correo integrado de Supabase deja muy pocos envios por hora, y se
+        // agota enseguida con varios testers. Decir "prueba en un minuto"
+        // engañaba: el limite se cuenta por horas.
+        if(m.includes('email_send_rate') || m.includes('email rate')){
+            this.errorHint = i2('El servidor de correo esta limitado. Si ya tienes cuenta, entra con tu contraseña.',
+                                 'The mail server is rate limited. If you already have an account, sign in with your password.');
+            return i2('Se han mandado demasiados correos. Espera un rato.','Too many emails sent. Wait a while.');
+        }
         if(m.includes('rate limit') || m.includes('too many')){
             return i2('Demasiados intentos. Prueba dentro de un minuto.','Too many attempts. Try again in a minute.');
         }
