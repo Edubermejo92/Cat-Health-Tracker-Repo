@@ -30,7 +30,6 @@ class GameEngine(context: Context? = null) {
     var nameB by mutableStateOf("PAREJA B")
 
     // SOLO / PHONE / WATCH — ver docs/PROTOCOLO_SINCRONIZACION.md
-    var mode by mutableStateOf(SyncProtocol.MODE_SOLO)
     var goldenPoint by mutableStateOf(false)
     var goldenPointActive by mutableStateOf(false)
     var bestOf by mutableIntStateOf(3)
@@ -124,7 +123,7 @@ class GameEngine(context: Context? = null) {
     }
 
     fun handleFault(servingTeam: String): Int {
-        if (over || isRemoteControlled()) return faultCount
+        if (over) return faultCount
         if (faultCount == 0) {
             faultCount = 1
             speakText("fault")
@@ -144,7 +143,7 @@ class GameEngine(context: Context? = null) {
     }
 
     fun addPoint(team: String) {
-        if (over || isRemoteControlled()) return
+        if (over) return
         saveState()
         faultCount = 0
         lastPointWinner = team
@@ -327,7 +326,7 @@ class GameEngine(context: Context? = null) {
     }
 
     fun decreasePoint(team: String) {
-        if (over || isRemoteControlled()) return
+        if (over) return
         saveState()
         faultCount = 0
         if (isTb || (superTb && setsA + setsB == bestOf - 1 && gamesA == 0 && gamesB == 0)) {
@@ -401,7 +400,7 @@ class GameEngine(context: Context? = null) {
         return org.json.JSONObject()
             .put("v", 2)
             .put("code", code)
-            .put("syncMode", mode)
+            .put("syncMode", SyncProtocol.MODE_SYNC)
             .put("teams", org.json.JSONObject()
                 .put("A", org.json.JSONObject()
                     .put("points", if (isTb || isSuperTbActive()) tbPtsA else ptsA)
@@ -431,11 +430,30 @@ class GameEngine(context: Context? = null) {
     }
 
 
-    /** True cuando manda el movil: el reloj es un mando, no puntua por su cuenta. */
-    fun isRemoteControlled(): Boolean = mode == SyncProtocol.MODE_PHONE
+    /**
+     * Revision del marcador. Sube en cada cambio hecho aqui y viaja con el
+     * estado: si el movil y el reloj puntuan casi a la vez, gana el que traiga
+     * la revision mas alta.
+     */
+    var syncRev by mutableIntStateOf(0)
+        private set
 
-    /** True cuando este reloj es la fuente de verdad del marcador. */
-    fun isMaster(): Boolean = mode == SyncProtocol.MODE_WATCH
+    fun bumpRev() { syncRev += 1 }
+
+    /**
+     * ¿Hacemos caso al estado que llega del movil?
+     *
+     * Si trae revision mas alta, si. Si empatan -los dos tocaron en el mismo
+     * instante- gana el movil, por decidir algo estable: si cada aparato
+     * eligiera distinto, los marcadores quedarian diferentes para siempre.
+     * Un estado sin revision viene de una version antigua: se acepta.
+     */
+    fun acceptRemoteRev(remoteRev: Int?): Boolean {
+        if (remoteRev == null) return true
+        return remoteRev >= syncRev
+    }
+
+    fun adoptRev(remoteRev: Int?) { if (remoteRev != null) syncRev = remoteRev }
 
     /**
      * Estado canonico v3. Los puntos normales van siempre como indice 0-3 en
@@ -448,7 +466,8 @@ class GameEngine(context: Context? = null) {
             .put("src", SyncProtocol.SRC_WATCH)
             .put("seq", seq)
             .put("ts", System.currentTimeMillis())
-            .put("mode", SyncProtocol.normalizeMode(mode))
+            .put("mode", SyncProtocol.MODE_SYNC)
+            .put(SyncProtocol.FIELD_REV, syncRev)
             .put("match", JSONObject()
                 .put("bestOf", bestOf)
                 .put("goldenPoint", goldenPoint)
@@ -523,7 +542,6 @@ class GameEngine(context: Context? = null) {
             goldenPoint = m.optBoolean("goldenPoint", goldenPoint)
             superTb = m.optBoolean("superTieBreak", superTb)
         }
-        if (obj.has("mode")) mode = SyncProtocol.normalizeMode(obj.optString("mode"))
         // La salud la mide el reloj: un estado del movil nunca la pisa.
         saveToDisk()
         return obj.optInt("clock", -1)
@@ -549,7 +567,6 @@ class GameEngine(context: Context? = null) {
             nameB = it
             saveTeamNameToHistory(it)
         }
-        if (obj.has("mode")) mode = SyncProtocol.normalizeMode(obj.optString("mode"))
         saveToDisk()
     }
 
@@ -652,7 +669,6 @@ class GameEngine(context: Context? = null) {
         obj.put("winner", winner)
         obj.put("theme", theme)
         obj.put("lang", lang)
-        obj.put("mode", mode)
         obj.put("goldenPoint", goldenPoint)
         obj.put("goldenPointActive", goldenPointActive)
         obj.put("bestOf", bestOf)
@@ -686,7 +702,6 @@ class GameEngine(context: Context? = null) {
             winner = if (obj.has("winner") && !obj.isNull("winner")) obj.getString("winner") else null
             theme = obj.optString("theme", "neon")
             lang = obj.optString("lang", "es")
-            mode = SyncProtocol.normalizeMode(obj.optString("mode", SyncProtocol.MODE_SOLO))
             goldenPoint = obj.optBoolean("goldenPoint", false)
             goldenPointActive = obj.optBoolean("goldenPointActive", false)
             bestOf = obj.optInt("bestOf", 3)

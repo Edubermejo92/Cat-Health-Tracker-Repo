@@ -44,7 +44,6 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     // durante el Crossfade se componen dos pantallas a la vez y se peleaban
     // por el mismo estado.
     val langState = rememberScalingLazyListState()
-    val modeState = rememberScalingLazyListState()
     val pairState = rememberScalingLazyListState()
     val scoreState = rememberScalingLazyListState()
     val settingsState = rememberScalingLazyListState()
@@ -55,7 +54,6 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     // que no tienen scroll (splash, resume, fin) no se muestra ninguno.
     val activeState = when (engine.currentScreen) {
         "lang" -> langState
-        "mode" -> modeState
         "bt" -> pairState
         "score" -> scoreState
         "settings" -> settingsState
@@ -85,12 +83,11 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                         "splash" -> SplashScreen(engine, activity)
                         "resume" -> ResumeScreen(engine, activity)
                         "lang" -> LangScreen(engine, activity, langState)
-                        "mode" -> ModeScreen(engine, activity, modeState)
                         "bt" -> PairScreen(engine, activity, pairState)
                         "score" -> ScoreScreen(
                             engine, activity, scoreState, nameState,
                             { engine.currentScreen = "settings" },
-                            { engine.currentScreen = "mode" },
+                            { engine.currentScreen = "bt" },
                             { engine.currentScreen = "end" }
                         )
                         "settings" -> SettingsScreen(engine, activity, settingsState) { engine.currentScreen = "score" }
@@ -114,8 +111,6 @@ fun linkLabel(engine: GameEngine): String {
     return when {
         !PhoneLink.connected -> if (es) "SIN MOVIL" else "NO PHONE"
         !PhoneLink.paired -> if (es) "SIN VINCULAR" else "NOT LINKED"
-        SyncProtocol.normalizeMode(engine.mode) == SyncProtocol.MODE_SOLO ->
-            if (es) "SOLO" else "SOLO"
         else -> if (es) "CONECTADO" else "CONNECTED"
     }
 }
@@ -331,115 +326,11 @@ fun LangScreen(
         item {
             Spacer(Modifier.height(8.dp))
             Button(
-                onClick = { engine.currentScreen = "mode" },
+                onClick = { activity.startTimer(); engine.currentScreen = "score" },
                 colors = ButtonDefaults.buttonColors(backgroundColor = accent),
                 modifier = Modifier.fillMaxWidth(0.78f).height(38.dp)
             ) {
                 Text(ui.done.uppercase(), color = Color.Black, fontWeight = FontWeight.Black, fontSize = PP.Body)
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Modo de sincronizacion
-// ─────────────────────────────────────────────────────────────────────
-
-private data class ModeOption(
-    val id: String, val emoji: String, val title: String, val subtitle: String
-)
-
-@Composable
-fun ModeScreen(
-    engine: GameEngine,
-    activity: MainActivity,
-    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
-) {
-    val accent = ThemeUtils.getColor(engine.theme)
-    val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-    val es = engine.lang == "es"
-
-    val options = listOf(
-        ModeOption(SyncProtocol.MODE_SOLO, "⌚", ui.solo,
-            if (es) "El reloj va por su cuenta" else "Watch on its own"),
-        ModeOption(SyncProtocol.MODE_WATCH, "⌚→📱", ui.watchCtrl,
-            if (es) "Puntuas en la muñeca" else "You score on the wrist"),
-        ModeOption(SyncProtocol.MODE_PHONE, "📱→⌚", ui.phoneCtrl,
-            if (es) "El reloj solo muestra" else "Watch only displays")
-    )
-
-    ScalingLazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 26.dp)
-    ) {
-        item { BackRow(engine) { engine.currentScreen = "lang" } }
-        item { PPLabel(ui.chooseMode, color = accent, size = PP.Label) }
-        item { Spacer(Modifier.height(2.dp)) }
-
-        items(options) { opt ->
-            val sel = SyncProtocol.normalizeMode(engine.mode) == opt.id
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(0.94f)
-                    .padding(vertical = 2.dp)
-                    .clip(PP.CardShape)
-                    .background(if (sel) accent.copy(alpha = 0.16f) else PP.Surface)
-                    .border(
-                        1.dp,
-                        if (sel) accent.copy(alpha = 0.55f) else PP.Line,
-                        PP.CardShape
-                    )
-                    .clickable {
-                        engine.mode = opt.id
-                        engine.saveState()
-                        activity.sendSettingsToPhone()
-                    }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(opt.emoji, fontSize = 14.sp)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        opt.title.uppercase(),
-                        color = if (sel) accent else Color.White,
-                        fontSize = PP.Label,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1
-                    )
-                    Text(
-                        opt.subtitle,
-                        color = PP.TextMuted,
-                        fontSize = PP.Micro,
-                        maxLines = 2
-                    )
-                }
-            }
-        }
-
-        item {
-            Spacer(Modifier.height(6.dp))
-            LinkPill(engine)
-            Spacer(Modifier.height(6.dp))
-        }
-
-        item {
-            Button(
-                onClick = {
-                    val mode = SyncProtocol.normalizeMode(engine.mode)
-                    if (mode == SyncProtocol.MODE_SOLO) {
-                        activity.startTimer()
-                        engine.currentScreen = "score"
-                    } else {
-                        engine.currentScreen = "bt"
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(backgroundColor = accent),
-                modifier = Modifier.fillMaxWidth(0.78f).height(38.dp)
-            ) {
-                Text(ui.play.uppercase(), color = Color.Black, fontWeight = FontWeight.Black, fontSize = PP.Body)
             }
         }
     }
@@ -514,7 +405,7 @@ fun PairScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 24.dp)
     ) {
-        item { BackRow(engine) { engine.currentScreen = "mode" } }
+        item { BackRow(engine) { engine.currentScreen = "score" } }
 
         item {
             Row(
@@ -623,8 +514,8 @@ fun PairScreen(
         item {
             Chip(
                 onClick = {
-                    engine.mode = SyncProtocol.MODE_SOLO
-                    engine.saveState()
+                    // Jugar ya, sin esperar al movil. Si aparece mas tarde, se
+                    // vincula solo y el marcador se pone al dia.
                     activity.startTimer()
                     engine.currentScreen = "score"
                 },
@@ -727,8 +618,8 @@ fun SettingsScreen(
                         )
                     )
                     CompactChip(
-                        onClick = { engine.currentScreen = "mode" },
-                        label = { Text(ui.chMode, fontSize = PP.Micro) },
+                        onClick = { engine.currentScreen = "bt" },
+                        label = { Text(if (engine.lang == "es") "MOVIL" else "PHONE", fontSize = PP.Micro) },
                         colors = ChipDefaults.primaryChipColors(
                             backgroundColor = PP.SurfaceHigh, contentColor = accent
                         )

@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "5.0.7"
+        const val APP_VERSION = "5.0.8"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -167,6 +167,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onResume() {
         super.onResume()
+        // Si mandamos al usuario al navegador para entrar con Google y vuelve
+        // sin sesion -cancelo, o Supabase rechazo la vuelta-, la pantalla se
+        // quedaria bloqueada esperando. Avisamos para que se desbloquee.
+        evalJs("if(window.Auth) Auth.onReturnToApp();")
         WearLink.addListeners(this, messageListener, capabilityListener)
         WearLink.refreshConnection(this)
         sendHello()
