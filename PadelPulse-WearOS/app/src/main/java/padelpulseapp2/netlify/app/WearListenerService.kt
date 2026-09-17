@@ -76,15 +76,21 @@ class WearListenerService : WearableListenerService() {
     }
 
     private fun onState(engine: GameEngine, obj: JSONObject) {
-        // Solo obedecemos al movil cuando el movil es el maestro
-        if (SyncProtocol.normalizeMode(engine.mode) != SyncProtocol.MODE_PHONE) return
+        // v2 anidaba el estado en {"snapshot": "..."}
+        val state = if (obj.has("snapshot"))
+            runCatching { JSONObject(obj.getString("snapshot")) }.getOrDefault(obj)
+        else obj
+
+        // Ya no hay modos: se hace caso al movil si su marcador es mas nuevo
+        // que el nuestro. Asi puntua quien quiera desde donde quiera.
+        val remoteRev = if (state.has(SyncProtocol.FIELD_REV))
+            state.optInt(SyncProtocol.FIELD_REV) else null
+        if (!engine.acceptRemoteRev(remoteRev)) return
+
         PhoneLink.applyingRemote = true
         try {
-            // v2 anidaba el estado en {"snapshot": "..."}
-            val state = if (obj.has("snapshot"))
-                runCatching { JSONObject(obj.getString("snapshot")) }.getOrDefault(obj)
-            else obj
             val clock = engine.applyState(state)
+            engine.adoptRev(remoteRev)
             if (clock >= 0) MainActivity.instance?.setMatchClock(clock)
             MainActivity.instance?.refreshOngoingActivity()
             if (engine.over && engine.currentScreen == "score") engine.currentScreen = "end"
@@ -95,9 +101,11 @@ class WearListenerService : WearableListenerService() {
         }
     }
 
-    /** Comando del movil cuando manda el reloj (el movil se usa como mando). */
+    /**
+     * Accion suelta del movil. Las versiones nuevas mandan el estado entero,
+     * pero un movil sin actualizar sigue mandando esto y hay que atenderlo.
+     */
     private fun onCommand(engine: GameEngine, obj: JSONObject) {
-        if (SyncProtocol.normalizeMode(engine.mode) != SyncProtocol.MODE_WATCH) return
         val team = obj.optString("team", "A").ifEmpty { "A" }
         when (obj.optString("action", "")) {
             "point" -> engine.addPoint(team)
@@ -116,7 +124,6 @@ class WearListenerService : WearableListenerService() {
 
     private fun onSettings(engine: GameEngine, obj: JSONObject) {
         engine.applySettings(obj)
-        MainActivity.instance?.syncModeFromEngine()
     }
 
     companion object {

@@ -45,8 +45,9 @@ fun ScoreScreen(
     LaunchedEffect(engine.over) { if (engine.over) onEnd() }
 
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-    // Cuando manda el movil, el reloj es un visor: nada de puntuar aqui
-    val readOnly = SyncProtocol.normalizeMode(engine.mode) == SyncProtocol.MODE_PHONE
+    // Ya no hay modo de solo lectura: se puntua desde el reloj siempre, y el
+    // movil se entera. Se conserva la variable para no tocar todo el layout.
+    val readOnly = false
 
     val editing = editingTeam
     val picker = showPicker

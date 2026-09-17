@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "5.0.7"
+        const val APP_VERSION = "5.0.8"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
     }
@@ -63,15 +63,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     /** Modo actual normalizado (SOLO / PHONE / WATCH). Fuente unica: el engine. */
     val syncMode: String
-        get() = SyncProtocol.normalizeMode(gameEngine?.mode)
+        get() = SyncProtocol.MODE_SYNC
 
     val isPaired: Boolean
         get() = PhoneLink.paired
-
-    /** Hook para que el servicio normalice el modo tras aplicar ajustes remotos. */
-    fun syncModeFromEngine() {
-        gameEngine?.let { it.mode = SyncProtocol.normalizeMode(it.mode) }
-    }
 
     fun onPhoneHello(appVersion: String, proto: Int) {
         phoneAppVersion = appVersion
@@ -120,27 +115,18 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         val engine = gameEngine ?: return
         PhoneLink.send(
             this, SyncProtocol.PATH_HELLO,
-            SyncProtocol.hello(PhoneLink.nextSeq(), APP_VERSION, engine.mode, PhoneLink.paired)
+            SyncProtocol.hello(PhoneLink.nextSeq(), APP_VERSION, SyncProtocol.MODE_SYNC, PhoneLink.paired)
         )
     }
 
-    /** Difunde el estado. Solo si mandamos nosotros: si no, callamos. */
+    /** Difunde el estado al movil. Siempre que haya movil vinculado. */
     fun pushStateToPhone() {
         val engine = gameEngine ?: return
         if (PhoneLink.applyingRemote) return
-        if (syncMode != SyncProtocol.MODE_WATCH || !PhoneLink.paired) return
+        if (!PhoneLink.paired) return
         PhoneLink.send(
             this, SyncProtocol.PATH_STATE,
             engine.buildState(PhoneLink.nextSeq(), matchTimeSeconds)
-        )
-    }
-
-    /** Manda una accion al movil cuando el maestro es el movil. */
-    fun sendCommandToPhone(action: String, team: String? = null) {
-        if (syncMode != SyncProtocol.MODE_PHONE || !PhoneLink.paired) return
-        PhoneLink.send(
-            this, SyncProtocol.PATH_CMD,
-            SyncProtocol.command(PhoneLink.nextSeq(), action, team)
         )
     }
 
@@ -165,20 +151,23 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
             SyncProtocol.settings(
                 PhoneLink.nextSeq(), engine.lang, engine.theme,
                 ThemeUtils.getHexColor(engine.theme), engine.goldenPoint,
-                engine.superTb, engine.bestOf, engine.nameA, engine.nameB, engine.mode
+                engine.superTb, engine.bestOf, engine.nameA, engine.nameB, SyncProtocol.MODE_SYNC
             )
         )
     }
 
     /**
-     * Punto unico tras cualquier accion local sobre el marcador: si mandamos
-     * nosotros difundimos el estado; si manda el movil, mandamos el comando.
+     * Punto unico tras cualquier accion local sobre el marcador: sube la
+     * revision y manda el estado entero.
+     *
+     * Se manda el estado completo y no la accion suelta a proposito: si un
+     * mensaje se pierde -y por Bluetooth se pierden-, el siguiente estado
+     * vuelve a poner a los dos de acuerdo. Con acciones sueltas, un punto
+     * perdido dejaria los marcadores descuadrados hasta el final del partido.
      */
     fun onLocalScoreAction(action: String, team: String? = null) {
-        when (syncMode) {
-            SyncProtocol.MODE_WATCH -> pushStateToPhone()
-            SyncProtocol.MODE_PHONE -> sendCommandToPhone(action, team)
-        }
+        gameEngine?.bumpRev()
+        pushStateToPhone()
         refreshOngoingActivity()
     }
 

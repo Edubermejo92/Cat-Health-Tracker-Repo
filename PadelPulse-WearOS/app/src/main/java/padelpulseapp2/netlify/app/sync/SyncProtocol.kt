@@ -30,6 +30,22 @@ object SyncProtocol {
     const val SRC_WATCH = "watch"
     const val SRC_PHONE = "phone"
 
+    /**
+     * Ya no hay modos: las dos apps van siempre a la vez y puntua quien
+     * quiera. Las constantes se quedan para entenderse con versiones
+     * anteriores, que siguen mandando su modo en cada mensaje.
+     */
+    const val MODE_SYNC = "SYNC"
+
+    /**
+     * Quien gana cuando los dos tocan a la vez. Cada cambio local sube el
+     * numero de revision; el que llegue con revision mas alta manda. Si
+     * empatan -dos toques en el mismo instante- gana el movil, por decidir
+     * algo estable: si cada uno eligiera distinto, los marcadores quedarian
+     * diferentes para siempre.
+     */
+    const val FIELD_REV = "rev"
+
     const val MODE_SOLO = "SOLO"
     const val MODE_PHONE = "PHONE"
     const val MODE_WATCH = "WATCH"
