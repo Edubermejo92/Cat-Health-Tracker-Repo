@@ -270,9 +270,20 @@ están dados de alta probando uno a uno.
 
 Para que salga el correo hace falta que `padelpulse://auth` y la dirección de
 la web estén en **Authentication › URL Configuration › Additional Redirect
-URLs** —las mismas que pide Google—. Y con el correo integrado de Supabase hay
-un **límite de unos pocos envíos por hora**; para producción conviene conectar
-un SMTP propio en *Authentication › Emails*.
+URLs** —las mismas que pide Google—.
+
+### El límite de correos es un problema real
+
+Comprobado contra el servidor: tras **un solo registro**, la siguiente
+petición de recuperación devolvió `429 over_email_send_rate_limit`. El correo
+integrado de Supabase deja muy pocos envíos por hora y está pensado solo para
+desarrollo.
+
+Con testers de verdad esto se nota enseguida: uno se registra, el siguiente
+pide recuperar la contraseña y **no le llega nada**. Antes de repartir la app,
+conecta un SMTP propio en **Authentication › Emails › SMTP Settings**
+(Resend, Brevo, SendGrid o el que prefieras; todos tienen plan gratuito
+suficiente para esto).
 
 ## Comprobado
 
