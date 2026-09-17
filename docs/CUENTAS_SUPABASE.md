@@ -219,3 +219,69 @@ va el token-.
 | Si el usuario cancela | ✅ mensaje, y no entra |
 | En la web redirige a Google y vuelve | ✅ con `redirect_to` correcto |
 | La web recoge la sesion y limpia la url | ✅ |
+
+---
+
+# El proyecto se pausa solo
+
+Supabase **pausa los proyectos del plan gratuito** tras unos días sin
+actividad. Mientras está pausado no funciona nada: ni entrar, ni registrarse,
+ni sincronizar. La app dirá "Sin conexion con el servidor", que es cierto pero
+despista, porque el móvil sí tiene internet.
+
+Se reactiva desde el panel: **Project Settings › General › Restore project**.
+Tarda un par de minutos.
+
+Si va a haber testers usándolo de verdad, conviene pasar al plan de pago para
+que no se pause; si no, hay que acordarse de entrar cada pocos días.
+
+---
+
+# Contraseñas
+
+## No se pueden ver. Ni tú, ni yo, ni Supabase
+
+Supabase guarda un **hash bcrypt**, no la contraseña. Es un cálculo de una sola
+dirección: sirve para comprobar si la que escribes coincide, pero no se puede
+deshacer para recuperar la original. Esto no es una limitación que convenga
+sortear —es lo que hace que una filtración de la base de datos no regale las
+contraseñas de nadie—, así que **no hay ninguna pantalla que muestre la
+contraseña de un usuario**, y no debe haberla.
+
+Lo que sí existe es ponerse una nueva.
+
+## He perdido la contraseña
+
+En la pantalla de entrar, debajo de "Crear una cuenta nueva".
+
+1. El usuario escribe su correo y pulsa el enlace.
+2. La app llama a `POST /auth/v1/recover` con la dirección de vuelta
+   (`padelpulse://auth` en la app, la del sitio en la web).
+3. Supabase manda el correo con un enlace **de un solo uso**.
+4. Al abrirlo, la app detecta que la sesión viene marcada como `recovery` y,
+   en vez de entrar sin más, pide la contraseña nueva dos veces.
+5. Se guarda con `PUT /auth/v1/user` y a partir de ahí la vieja no vale.
+
+**Un correo que no existe recibe la misma respuesta que uno que sí.** Es a
+propósito: si contestáramos distinto, cualquiera podría averiguar qué correos
+están dados de alta probando uno a uno.
+
+## Requisito en Supabase
+
+Para que salga el correo hace falta que `padelpulse://auth` y la dirección de
+la web estén en **Authentication › URL Configuration › Additional Redirect
+URLs** —las mismas que pide Google—. Y con el correo integrado de Supabase hay
+un **límite de unos pocos envíos por hora**; para producción conviene conectar
+un SMTP propio en *Authentication › Emails*.
+
+## Comprobado
+
+| Prueba | Resultado |
+|--------|-----------|
+| El enlace sale al entrar, no al crear cuenta | ✅ |
+| Sin correo escrito | ✅ avisa, no manda nada |
+| Con correo válido | ✅ se manda y sale "mira tu correo" |
+| Correo no registrado | ✅ misma pantalla, **no se manda nada** |
+| Abrir el enlace | ✅ pide contraseña nueva, no entra sin más |
+| Las dos no coinciden / muy corta | ✅ avisa |
+| Guardar la nueva | ✅ entra, y **la vieja deja de valer** |

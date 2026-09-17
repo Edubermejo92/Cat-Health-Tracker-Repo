@@ -632,7 +632,13 @@ fun SettingsScreen(
             SettingChip(ui.voice + ": " + engine.lang.uppercase(), accent) { showLangPicker = true }
         }
         item {
-            SettingChip(if (es) "HISTORIAL" else "HISTORY", accent) { engine.currentScreen = "history" }
+            // Con candado si no hay sesion: asi se ve antes de entrar por que
+            // no hay nada dentro.
+            SettingChip(
+                if (WatchAccount.signedIn) (if (es) "HISTORIAL" else "HISTORY")
+                else (if (es) "HISTORIAL 🔒" else "HISTORY 🔒"),
+                accent
+            ) { engine.currentScreen = "history" }
         }
 
         item {
@@ -927,6 +933,40 @@ fun HistoryScreen(
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val es = engine.lang == "es"
+
+    // El historial es de quien tiene cuenta, igual que en el movil. El reloj
+    // no registra a nadie -no se teclean contraseñas en la muñeca-, asi que
+    // la sesion tiene que llegar del movil.
+    if (!WatchAccount.signedIn) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(PP.Bg).padding(horizontal = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("🔒", fontSize = 22.sp)
+            Spacer(Modifier.height(6.dp))
+            PPLabel(if (es) "HACE FALTA CUENTA" else "ACCOUNT NEEDED", color = accent, size = PP.Label)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (es) "Inicia sesion en PadelPulse del movil y el historial aparece aqui solo."
+                else "Sign in on the phone app and your history shows up here on its own.",
+                color = PP.TextDim, fontSize = PP.Micro,
+                textAlign = TextAlign.Center, maxLines = 4
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onBack,
+                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
+                modifier = Modifier.height(34.dp).fillMaxWidth(0.8f).clip(RoundedCornerShape(17.dp))
+            ) {
+                Text(
+                    if (es) "VOLVER" else "BACK",
+                    color = accent, fontSize = PP.Micro, fontWeight = FontWeight.Black
+                )
+            }
+        }
+        return
+    }
 
     val matches = remember {
         val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)

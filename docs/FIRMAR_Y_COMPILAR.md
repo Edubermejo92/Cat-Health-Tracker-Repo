@@ -154,3 +154,82 @@ web/                  la misma app del móvil, lista para Netlify
 tools/                scripts de compilación de assets web
 docs/                 protocolo, firma y guía de Play Store
 ```
+
+---
+
+## 7. Receta rápida: generar los dos AAB
+
+Los pasos, de principio a fin, para sacar los dos artefactos que se suben a
+Play. **Hay que hacerlo con los dos: comparten ficha y el protocolo de
+sincronización cambia en ambos lados a la vez.**
+
+### Antes de empezar
+
+1. Descomprime los dos ZIP en carpetas **separadas**. No metas una dentro de la
+   otra: son dos proyectos Gradle independientes y Android Studio se lía.
+2. Copia tu `padelpulse.jks` donde lo tengas y crea un `keystore.properties` en
+   la raíz de **cada** proyecto (mira el punto 2 de este documento).
+3. Comprueba que los `versionCode` son mayores que los ya publicados. En esta
+   entrega: **móvil 509** y **reloj 5090**.
+
+### App del móvil
+
+1. **File → Open** → selecciona la carpeta `PadelPulse-Movil` (la que tiene
+   `settings.gradle.kts`).
+2. Espera a que termine el *Gradle sync* de abajo a la derecha. Si pide
+   actualizar el plugin de Android o Gradle, **di que no**: el proyecto está
+   probado con las versiones que trae.
+3. **Build → Generate Signed App Bundle / APK…**
+4. **Android App Bundle** → *Next*.
+5. *Key store path*: tu `padelpulse.jks`. Contraseña, alias `padelpulse` y su
+   contraseña. Marca *Remember passwords* si quieres.
+6. *Next* → variante **release** → **Create**.
+7. Al terminar, abajo a la derecha sale un aviso con enlace **locate**. El
+   fichero está en:
+
+   ```
+   PadelPulse-Movil/mobile/release/mobile-release.aab
+   ```
+
+### App del reloj
+
+Lo mismo, pero abriendo `PadelPulse-WearOS`, y el resultado es:
+
+```
+PadelPulse-WearOS/app/release/app-release.aab
+```
+
+**Usa el mismo keystore que en el móvil.** Si firmas con otro, Play rechaza el
+artefacto: las dos apps comparten `applicationId`.
+
+### En Play Console
+
+Los dos AAB van a la **misma versión**, no a dos versiones distintas:
+
+1. **Pruebas → Prueba interna** (o la pista que uses) → *Crear versión*.
+2. Sube **los dos ficheros** a esa misma versión.
+3. Play los coloca solo en su formato: el de `versionCode` 5090 como Wear OS y
+   el 509 como teléfono. Si solo subes uno, los testers se quedan con una app
+   nueva y otra vieja, y **la sincronización deja de funcionar**.
+4. Notas de la versión → *Guardar* → *Revisar versión* → *Lanzar*.
+
+### Si algo falla
+
+| Síntoma | Qué pasa |
+|---|---|
+| `INSTALL_FAILED_OLDER_SDK` | Estás instalando el AAB del móvil en el reloj, o al revés |
+| Play rechaza por firma | Los dos AAB no están firmados con el mismo keystore |
+| "Ya existe una versión con este código" | Sube el `versionCode` en `build.gradle.kts` |
+| El reloj no se sincroniza tras actualizar | Solo has subido un AAB; el protocolo tiene que ir a la par |
+| Compila sin firmar | Falta `keystore.properties` en la raíz de ese proyecto |
+
+### Por línea de comandos
+
+Si prefieres no usar el diálogo (lee la firma de `keystore.properties`):
+
+```bash
+cd PadelPulse-Movil  && ./gradlew bundleRelease
+cd PadelPulse-WearOS && ./gradlew bundleRelease
+```
+
+En Windows, `gradlew.bat bundleRelease`.
