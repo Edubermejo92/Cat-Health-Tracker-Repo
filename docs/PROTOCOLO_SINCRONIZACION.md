@@ -19,8 +19,8 @@ prefijo los mensajes no llegan cuando la app está en segundo plano.
 |---|---|---|
 | `/padel/hello` | ambos | Presencia y handshake de versión |
 | `/padel/pair` | ambos | Emparejamiento por código |
-| `/padel/state` | maestro → esclavo | Estado completo del partido |
-| `/padel/cmd` | esclavo → maestro | Acción del usuario (punto, deshacer…) |
+| `/padel/state` | ambos | Estado completo del partido, con su `rev` |
+| `/padel/cmd` | ambos | Acción suelta. Solo la mandan versiones antiguas |
 | `/padel/settings` | ambos | Ajustes (idioma, tema, reglas, nombres) |
 | `/padel/health` | reloj → móvil | Pulso, calorías, distancia |
 | `/padel/account` | móvil → reloj | Sesión de la cuenta (no se teclea en el reloj) |
@@ -29,28 +29,56 @@ Rutas heredadas que se siguen aceptando (v2) para que un reloj o un móvil sin
 actualizar no rompan del todo: `/padel/sync`, `/padel/point`, `/padel/bt`. Se traducen
 internamente a `state`, `cmd` y `pair`.
 
-## Modos
+## Sin modos: los dos a la vez
 
-Un solo campo, `mode`, con tres valores normalizados:
+Antes había que elegir quién mandaba —Solo, Móvil o Reloj— y era una pregunta
+que el usuario no tiene por qué responder: quiere puntuar desde donde tenga la
+mano libre. **Ya no hay modos.** Las dos apps van siempre sincronizadas y
+puntúa cualquiera de las dos.
 
-| Valor | Significado | Quién manda |
-|---|---|---|
-| `SOLO` | Cada dispositivo va por su cuenta | nadie |
-| `PHONE` | El móvil lleva el marcador | móvil |
-| `WATCH` | El reloj lleva el marcador | reloj |
+### Quién gana si los dos puntúan a la vez
 
-Equivalencias heredadas que ambos lados normalizan al recibir:
-`MOVIL_MANDA` → `PHONE`, `RELOJ_MANDA` → `WATCH`, `solo`/`mobile` → `SOLO`.
+Cada aparato lleva un número de **revisión** (`rev`) que sube en cada cambio
+hecho en él y viaja dentro del estado. Al recibir un estado:
+
+| Situación | Qué se hace |
+|---|---|
+| `rev` recibida **mayor** que la propia | Se aplica: el otro va por delante |
+| `rev` recibida **menor** | Se ignora el marcador, pero **la salud sí se aplica** |
+| `rev` **iguales** | Gana el móvil |
+
+El empate se resuelve siempre a favor del móvil, no por preferencia sino
+porque hace falta una regla estable: si cada aparato eligiera distinto, los
+dos marcadores quedarían diferentes para siempre.
+
+Tras aplicar un estado remoto, el aparato **adopta la revisión recibida**, de
+forma que los dos siguen contando desde el mismo número.
+
+### Por qué se manda el estado entero
+
+Se difunde el marcador completo y no la acción suelta. Por Bluetooth se
+pierden mensajes, y con acciones sueltas un punto perdido dejaría los
+marcadores descuadrados hasta el final del partido; con el estado completo, el
+siguiente mensaje vuelve a poner a los dos de acuerdo.
+
+`/padel/cmd` se sigue **aceptando** para no dejar tirada a una app sin
+actualizar, pero ninguna versión nueva lo manda.
+
+### El campo `mode`
+
+Se sigue enviando con el valor `SYNC` para que una versión antigua que aún lo
+espera no se quede colgada. Al recibirlo, se ignora.
 
 ## Reglas de flujo
 
-1. **Sólo el maestro emite `/padel/state`.** El esclavo lo aplica tal cual, sin recalcular.
-2. **El esclavo nunca emite estado**: manda `/padel/cmd`. El maestro aplica el comando y
-   difunde el nuevo `state`. Así no hay dos verdades.
-3. En `SOLO` no se intercambia ni `state` ni `cmd`. Sólo `hello` (para pintar el estado
-   de conexión) y `health`.
-4. `/padel/health` va siempre del reloj al móvil, en cualquier modo: los sensores están
-   en el reloj y el móvil nunca debe inventar esos números.
+1. **Los dos emiten `/padel/state`** en cuanto cambia algo en su lado, subiendo antes
+   su `rev`. El que recibe lo aplica tal cual, sin recalcular.
+2. **Quien recibe no reemite.** Mientras aplica un estado remoto pone un flag que
+   impide difundir; si no, las dos apps se mandarían el mismo estado sin parar.
+3. Un estado con `rev` menor que la propia se descarta —salvo la salud, que se aplica
+   igual porque viene de los sensores del reloj y nunca es "vieja".
+4. `/padel/health` va siempre del reloj al móvil: los sensores están en el reloj y el
+   móvil nunca debe inventar esos números.
 5. **Anti-eco**: cada emisor lleva un `seq` monotónico. El receptor descarta cualquier
    mensaje con `seq` menor o igual al último visto de ese origen, y mientras aplica un
    estado remoto pone un flag que impide reemitir. Sin esto las dos apps se
@@ -94,13 +122,13 @@ Detalles que importan (aquí es donde fallaba la v2):
 - `teams.X.sets` son sets ganados, no el historial. El historial es local de cada app.
 - `clock` es el cronómetro del partido en segundos.
 
-## `/padel/cmd` — acción del esclavo
+## `/padel/cmd` — acción suelta (solo versiones antiguas)
 
 ```json
 { "v": 3, "src": "watch", "seq": 7, "action": "point", "team": "A" }
 ```
 
-| `action` | `team` | Efecto en el maestro |
+| `action` | `team` | Efecto en quien lo recibe |
 |---|---|---|
 | `point` | `A`/`B` | Suma un punto |
 | `minus` | `A`/`B` | Resta un punto |

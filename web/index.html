@@ -286,15 +286,37 @@ const PPSync = {
 
     get bridge(){ return (typeof window!=='undefined' && window.AndroidBridge) ? window.AndroidBridge : null; },
 
-    /** SOLO | PHONE | WATCH a partir de S.syncMode (que conserva los nombres de la UI). */
-    mode(){
-        const m = (S && S.syncMode ? String(S.syncMode) : 'SOLO').toUpperCase();
-        if(m==='MOVIL_MANDA'||m==='PHONE'||m==='MOVIL') return 'PHONE';
-        if(m==='RELOJ_MANDA'||m==='WATCH'||m==='RELOJ') return 'WATCH';
-        return 'SOLO';
+    /**
+     * Ya no hay modos. Antes habia que elegir quien mandaba -Solo, Movil o
+     * Reloj- y era una pregunta que el usuario no tiene por que responder:
+     * quiere puntuar desde donde tenga la mano libre. Ahora los dos van
+     * siempre a la vez y puntua cualquiera.
+     *
+     * Se sigue mandando el modo en los mensajes para que una version antigua
+     * del reloj -que aun espera el campo- no se quede esperando.
+     */
+    mode(){ return 'SYNC'; },
+
+    /**
+     * Revision del marcador. Sube en cada cambio local y viaja con el estado:
+     * si los dos puntuan casi a la vez, gana el que traiga la revision mas
+     * alta. Ver acceptRemoteRev().
+     */
+    rev(){ return (S && S.syncRev) | 0; },
+    bumpRev(){ S.syncRev = this.rev() + 1; },
+
+    /**
+     * ¿Hacemos caso al estado que llega? Si viene con revision mas alta, si.
+     * Si empatan -los dos tocaron en el mismo instante- gana el movil, por
+     * decidir algo estable: si cada aparato eligiera distinto, los marcadores
+     * quedarian diferentes para siempre.
+     */
+    acceptRemoteRev(remoteRev){
+        if(remoteRev === undefined || remoteRev === null) return true;  // version antigua, sin revision
+        const r = remoteRev|0;
+        if(r > this.rev()) return true;
+        return false;
     },
-    isMaster(){ return this.mode()==='PHONE'; },
-    isRemoteControlled(){ return this.mode()==='WATCH'; },
 
     nextSeq(){
         const b=this.bridge;
@@ -385,7 +407,8 @@ const PPSync = {
                 n:S.tiebreakServCount|0
             },
             health:{ hr:S.heartRate|0, kcal:S.calories|0, km:+(S.distanceKm||0) },
-            clock:S.gameTime|0
+            clock:S.gameTime|0,
+            rev:this.rev()
         };
     },
 
@@ -429,6 +452,10 @@ const PPSync = {
             const wasOver = S.matchOver;
             S.matchOver = !!f.over;
             S.matchWinner = (f.winner && f.winner!=='null' && f.winner!=='') ? f.winner : null;
+
+            // Nos quedamos con la revision del otro: a partir de aqui los dos
+            // cuentan desde el mismo numero.
+            if(typeof st.rev === 'number') S.syncRev = st.rev|0;
 
             this.lastSync = Date.now();
             saveStateOnly();
@@ -478,11 +505,11 @@ const PPSync = {
      */
     push(){
         if(this._applyingRemote) return;
-        if(!this.paired || !this.isMaster()) return;
+        if(!this.paired) return;
         if(this._pushTimer) return;
         this._pushTimer = setTimeout(()=>{
             this._pushTimer = null;
-            if(this._applyingRemote || !this.paired || !this.isMaster()) return;
+            if(this._applyingRemote || !this.paired) return;
             const st = this.buildState();
             const json = JSON.stringify(st);
             if(json === this._lastPushed) return;
@@ -494,7 +521,7 @@ const PPSync = {
 
     /** Fuerza el envio inmediato saltandose la agrupacion (boton Sincronizar). */
     pushNow(){
-        if(!this.paired || !this.isMaster()) return;
+        if(!this.paired) return;
         if(this._pushTimer){ clearTimeout(this._pushTimer); this._pushTimer = null; }
         const st = this.buildState();
         this._lastPushed = JSON.stringify(st);
@@ -502,17 +529,19 @@ const PPSync = {
         this.lastSync = Date.now();
     },
 
-    /** Manda una accion cuando el maestro es el reloj. */
-    cmd(action, team){
-        if(this._applyingRemote) return;
-        if(!this.paired || !this.isRemoteControlled()) return;
-        this.send(PP_PATH.cmd, team ? {action:action, team:team} : {action:action});
-    },
-
-    /** Punto unico tras cualquier accion local sobre el marcador. */
+    /**
+     * Punto unico tras cualquier accion local sobre el marcador: sube la
+     * revision y difunde el estado entero.
+     *
+     * Se manda el estado completo y no la accion suelta a proposito: si un
+     * mensaje se pierde -y por Bluetooth se pierden-, el siguiente estado
+     * vuelve a poner a los dos de acuerdo. Con acciones sueltas, un punto
+     * perdido dejaria los marcadores descuadrados hasta el final del partido.
+     */
     onLocalAction(action, team){
-        if(this.isMaster()) this.push();
-        else if(this.isRemoteControlled()) this.cmd(action, team);
+        if(this._applyingRemote) return;
+        this.bumpRev();
+        this.push();
     },
 
     sendSettings(){
@@ -532,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.0.7', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.0.8', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -610,11 +639,14 @@ const PPSync = {
                 break;
 
             case PP_PATH.state:
-            case PP_PATH.legacySync:
-                // Solo obedecemos al reloj cuando el reloj es el maestro
-                if(this.mode()!=='WATCH') { if(obj.health) this.applyHealth(obj.health); break; }
-                this.applyState(obj.snapshot ? JSON.parse(obj.snapshot) : obj);
+            case PP_PATH.legacySync: {
+                const st = obj.snapshot ? JSON.parse(obj.snapshot) : obj;
+                // La salud viene de los sensores del reloj: se acepta siempre,
+                // aunque el marcador que acompañe sea viejo.
+                if(st.health) this.applyHealth(st.health);
+                if(this.acceptRemoteRev(st.rev)) this.applyState(st);
                 break;
+            }
 
             case PP_PATH.cmd:
             case PP_PATH.legacyPoint:
@@ -654,9 +686,12 @@ const PPSync = {
         render();
     },
 
+    /**
+     * Accion suelta del reloj. Ya no la usan las versiones nuevas -mandan el
+     * estado entero-, pero un reloj sin actualizar sigue mandandolas y hay que
+     * atenderlas para no dejarlo tirado.
+     */
     onCommand(obj){
-        // Un comando solo se obedece si el maestro somos nosotros
-        if(!this.isMaster()) return;
         const team = obj.team || (obj.action==='point_B' ? 'B' : 'A');
         switch(obj.action){
             case 'point': case 'point_A': case 'point_B': addPoint(team); break;
@@ -666,6 +701,7 @@ const PPSync = {
             case 'serve': S.serving = team; saveState(); render(); break;
             case 'reset': if(typeof newMatch==='function') newMatch(); break;
         }
+        this.bumpRev();
         this.push();
     },
 
@@ -678,12 +714,8 @@ const PPSync = {
         if(bo && [1,3,5].includes(+bo)){ S.bestOf=+bo; changed=true; }
         if(obj.nameA){ S.teamA.name=obj.nameA; changed=true; }
         if(obj.nameB){ S.teamB.name=obj.nameB; changed=true; }
-        if(obj.mode){
-            const m = String(obj.mode).toUpperCase();
-            const mapped = (m==='PHONE'||m==='MOVIL_MANDA') ? 'MOVIL_MANDA'
-                         : (m==='WATCH'||m==='RELOJ_MANDA') ? 'RELOJ_MANDA' : 'SOLO';
-            if(mapped!==S.syncMode){ S.syncMode=mapped; changed=true; }
-        }
+        // El campo "mode" lo siguen mandando los relojes sin actualizar. Se
+        // ignora: ya no hay modos, siempre se sincroniza.
         if(changed){ saveStateOnly(); render(); }
     },
 
@@ -719,17 +751,6 @@ const BT = {
     generateCode(){ return PPSync.generateCode(); },
     regenerate(){ PPSync.regenerateCode(); },
 
-    setMode(mode){
-        S.syncMode = mode;
-        saveState();
-        PPSync.sendSettings();
-        if(mode!=='SOLO' && !PPSync.connected){
-            showToast(i2('Abre PadelPulse en el reloj','Open PadelPulse on the watch'), 3000);
-        }
-        if(PPSync.isMaster()) PPSync.push();
-        render();
-    },
-
     toggleAutoPair(){
         PPSync.autoPair = !PPSync.autoPair;
         try{ localStorage.setItem('pp_auto_pair', PPSync.autoPair?'1':'0'); }catch(e){}
@@ -746,7 +767,8 @@ const BT = {
     resync(){
         PPSync.hello();
         PPSync.sendSettings();
-        if(PPSync.isMaster()) PPSync.pushNow(); else PPSync.requestHealth();
+        PPSync.pushNow();
+        PPSync.requestHealth();
         showToast(i2('Reenviando al reloj…','Resyncing…'), 1800);
     },
 
@@ -754,12 +776,6 @@ const BT = {
         const p = tc.primary(), mu = tc.muted(), su = tc.surf2();
         const st = PPSync.statusColor();
         const label = PPSync.statusLabel();
-        const mode = S.syncMode || 'SOLO';
-        const modes = [
-            {id:'SOLO',         ico:'link_off',    lbl:i2('Solo','Solo'),       sub:i2('Sin reloj','No watch')},
-            {id:'MOVIL_MANDA',  ico:'devices', lbl:i2('Movil','Phone'),  sub:i2('Manda el movil','Phone leads')},
-            {id:'RELOJ_MANDA',  ico:'watch',      lbl:i2('Reloj','Watch'),sub:i2('Manda el reloj','Watch leads')}
-        ];
         const since = PPSync.lastSync ? Math.round((Date.now()-PPSync.lastSync)/1000) : null;
 
         return `
@@ -788,25 +804,12 @@ const BT = {
                 </span>
             </div>`:''}
 
-            <!-- Modo de sincronizacion -->
-            <div class="grid grid-cols-3 gap-2 mb-3">
-                ${modes.map(m=>{
-                    const sel = mode===m.id;
-                    return `<button onclick="BT.setMode('${m.id}')"
-                        class="py-2.5 px-1 flex flex-col items-center justify-center gap-1 rounded-2xl border scale-press"
-                        style="background:${sel?p+'18':su};border-color:${sel?p+'55':'rgba(255,255,255,0.06)'};color:${sel?p:mu}">
-                        <span class="material-symbols-outlined text-[18px]">${m.ico}</span>
-                        <span class="text-[7px] font-black uppercase text-center leading-tight">${m.lbl}</span>
-                        <span class="text-[6px] uppercase text-center leading-tight opacity-60">${m.sub}</span>
-                    </button>`;
-                }).join('')}
+            <div class="text-[9px] leading-relaxed px-1 mb-3" style="color:${mu}">
+                ${i2('Puntua desde donde quieras: el movil y el reloj van siempre a la vez.',
+                      'Score from wherever you like: phone and watch always stay in step.')}
             </div>
 
-            ${mode==='SOLO' ? `
-            <div class="text-[9px] leading-relaxed px-1" style="color:${mu}">
-                ${i2('En modo Solo el movil y el reloj llevan marcadores independientes. Elige quien manda para sincronizarlos.',
-                      'In Solo mode phone and watch keep separate scores. Pick who leads to sync them.')}
-            </div>` : `
+            ${`
 
             <!-- Vinculacion -->
             <div class="rounded-2xl p-3 mb-2" style="background:${su};border:1px solid rgba(255,255,255,0.04)">
@@ -859,7 +862,7 @@ const BT = {
     /** Píldora compacta para la cabecera del marcador. */
     pill(){
         const st = PPSync.statusColor();
-        if((S.syncMode||'SOLO')==='SOLO' && !PPSync.connected) return '';
+        if(!PPSync.connected && !PPSync.paired) return '';
         return `<button onclick="S.currentView='settings';render();"
             class="flex items-center gap-1 px-2 py-1 rounded-full scale-press"
             style="background:${st}14;border:1px solid ${st}38">
@@ -880,7 +883,9 @@ const _resetMatch = resetMatch;
 resetMatch = function(){ _resetMatch(); PPSync.onLocalAction('reset'); };
 
 let S = loadState();
-if (!S.syncMode) S.syncMode = "SOLO";
+// syncMode desaparecio: ya no se elige quien manda, los dos van a la vez.
+delete S.syncMode;
+if (typeof S.syncRev !== 'number') S.syncRev = 0;
 
 
 // Normalizar campos que pueden estar corruptos de versiones anteriores
@@ -3161,8 +3166,12 @@ const SUPA_KEY = 'sb_publishable_Q7D-EMj-MW4df-VzAbSNmg_eumYPvtM';
 const Auth = {
     user: null,            // { id, email, display_name }
     session: null,         // { access_token, refresh_token, expires_at }
-    status: 'anon',        // 'anon' | 'in' | 'busy'
+    status: 'anon',        // 'anon' | 'in' | 'busy' | 'confirm'
     lastError: null,
+    errorHint: null,       // segunda linea, mas pequeña: que hacer al respecto
+    waitingGoogle: false,  // hemos mandado al usuario al navegador
+    pendingEmail: '',      // cuenta creada a la espera de confirmar el correo
+    _googleTimer: null,
     lastSync: 0,
     syncing: false,
 
@@ -3207,9 +3216,40 @@ const Auth = {
         return data;
     },
 
+    // ── Que admite el servidor ──
+
+    serverChecked: false,
+    googleEnabled: false,
+    signupDisabled: false,
+    needsEmailConfirm: true,
+
+    /**
+     * Pregunta al servidor que proveedores tiene activos.
+     *
+     * Sin esto el boton de Google se ofrece siempre, y si el proveedor no esta
+     * configurado el usuario se va al navegador, ve un error en ingles y
+     * vuelve sin saber que ha pasado. Preguntando, el boton solo aparece
+     * cuando de verdad funciona -y aparece solo, sin actualizar la app, en
+     * cuanto se active en Supabase-.
+     */
+    async loadServerSettings(){
+        try{
+            const cfg = await this.api('/auth/v1/settings', { auth:false });
+            this.googleEnabled   = !!(cfg && cfg.external && cfg.external.google);
+            this.signupDisabled  = !!(cfg && cfg.disable_signup);
+            this.needsEmailConfirm = !(cfg && cfg.mailer_autoconfirm);
+            this.serverChecked = true;
+            render();
+        }catch(e){
+            // Sin cobertura no sabemos nada del servidor; se deja el formulario
+            // de correo, que es lo que siempre funciona.
+            this.serverChecked = false;
+        }
+    },
+
     // ── Registro / entrada / salida ──
     async signUp(email, password, displayName){
-        this.status='busy'; this.lastError=null; render();
+        this.status='busy'; this.lastError=null; this.errorHint=null; render();
         try{
             const data = await this.api('/auth/v1/signup', {
                 method:'POST', auth:false,
@@ -3221,8 +3261,11 @@ const Auth = {
                 showToast(i2('Cuenta creada','Account created'), 2500);
                 await this.pushAll();
             } else {
-                this.status='anon';
-                showToast(i2('Revisa tu correo para confirmar la cuenta','Check your email to confirm'), 4000);
+                // Con la confirmacion de correo activada la cuenta existe pero
+                // aun no hay sesion. Un aviso que se va en 4 segundos no basta:
+                // el usuario cree que no funciono. Pantalla propia.
+                this.pendingEmail = email;
+                this.status = 'confirm';
             }
         }catch(e){
             this.status='anon'; this.lastError = this.human(e.message);
@@ -3231,7 +3274,7 @@ const Auth = {
     },
 
     async signIn(email, password){
-        this.status='busy'; this.lastError=null; render();
+        this.status='busy'; this.lastError=null; this.errorHint=null; render();
         try{
             const data = await this.api('/auth/v1/token?grant_type=password', {
                 method:'POST', auth:false, body:{ email, password }
@@ -3255,14 +3298,54 @@ const Auth = {
      */
     signInWithGoogle(){
         const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
-        this.status='busy'; this.lastError=null; render();
-        if(b && b.signInWithGoogle){ b.signInWithGoogle(); return; }
+        this.status='busy'; this.lastError=null; this.errorHint=null;
+
+        if(b && b.signInWithGoogle){
+            // El usuario se va al navegador. Puede no volver nunca -cancela,
+            // cierra la pestaña, o Supabase rechaza la vuelta-, asi que no
+            // podemos dejar la pantalla bloqueada esperando: se desbloquea al
+            // volver a la app (onReturnToApp) y, por si acaso, por tiempo.
+            this.waitingGoogle = true;
+            clearTimeout(this._googleTimer);
+            this._googleTimer = setTimeout(()=>this.giveUpOnGoogle(), 120000);
+            render();
+            b.signInWithGoogle();
+            return;
+        }
+
+        render();
         const vuelta = location.origin + location.pathname;
         location.href = SUPA_URL + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(vuelta);
     },
 
+    /**
+     * La app vuelve a primer plano. Si seguiamos esperando a Google y no ha
+     * entrado ninguna sesion, es que no salio bien: se desbloquea la pantalla.
+     * Se da un margen porque la sesion puede llegar justo despues.
+     */
+    onReturnToApp(){
+        if(!this.waitingGoogle) return;
+        setTimeout(()=>{ if(this.waitingGoogle && !this.isIn) this.giveUpOnGoogle(); }, 2500);
+    },
+
+    giveUpOnGoogle(){
+        clearTimeout(this._googleTimer); this._googleTimer = null;
+        if(!this.waitingGoogle) return;
+        this.waitingGoogle = false;
+        if(this.isIn){ this.status='in'; render(); return; }
+        this.status = 'anon';
+        if(!this.lastError){
+            this.lastError = i2('No se completo la entrada con Google','Google sign-in did not complete');
+            this.errorHint = i2('Si te salio un error en el navegador, avisa: falta activar Google en el servidor. Mientras tanto puedes entrar con tu correo.',
+                                 'If the browser showed an error, Google still needs enabling on the server. You can sign in with your email meanwhile.');
+        }
+        render();
+    },
+
     /** La capa nativa nos devuelve aqui la sesion -o el motivo del fallo-. */
     onGoogleSession(json){
+        clearTimeout(this._googleTimer); this._googleTimer = null;
+        this.waitingGoogle = false;
         let data = null;
         try{ data = (typeof json === 'string') ? JSON.parse(json) : json; }catch(e){}
         if(!data || data.error || !data.access_token){
@@ -3362,7 +3445,14 @@ const Auth = {
     },
 
     signOut(silent){
-        this.session=null; this.user=null; this.status='anon'; this.lastError=null;
+        this.session=null; this.user=null; this.status='anon';
+        this.lastError=null; this.errorHint=null;
+        this.waitingGoogle=false; this.pendingEmail='';
+        clearTimeout(this._googleTimer); this._googleTimer=null;
+        // Quien sale casi siempre quiere volver a entrar, no crear otra cuenta.
+        // Y la contraseña no se queda en memoria.
+        if(typeof _authMode!=='undefined') _authMode = 'in';
+        if(typeof _authForm!=='undefined') _authForm.pass = '';
         this.persist();
         // Que el siguiente que entre en este movil reciba SUS ajustes
         try{ localStorage.removeItem('pp_settings_synced'); }catch(e){}
@@ -3373,13 +3463,67 @@ const Auth = {
         render();
     },
 
+    /**
+     * Traduce lo que contesta el servidor a algo que se entienda, y cuando
+     * hace falta deja una pista en errorHint de que se puede hacer.
+     */
     human(msg){
         const m = (msg||'').toLowerCase();
-        if(m.includes('invalid login')) return i2('Correo o contraseña incorrectos','Wrong email or password');
-        if(m.includes('already registered')) return i2('Ese correo ya tiene cuenta','That email already has an account');
-        if(m.includes('password')) return i2('La contraseña debe tener al menos 6 caracteres','Password must be at least 6 characters');
-        if(m.includes('failed to fetch') || m.includes('networkerror')) return i2('Sin conexion. Puedes jugar igual.','No connection. You can still play.');
+        this.errorHint = null;
+
+        if(m.includes('invalid login') || m.includes('invalid_grant')){
+            this.errorHint = i2('Revisa que no haya un espacio de mas al final del correo.',
+                                 'Check there is no stray space at the end of the email.');
+            return i2('Correo o contraseña incorrectos','Wrong email or password');
+        }
+        if(m.includes('already registered') || m.includes('already been registered') || m.includes('user_already_exists')){
+            this.errorHint = i2('Entra con tu contraseña en vez de crear la cuenta.','Sign in with your password instead of creating the account.');
+            return i2('Ese correo ya tiene cuenta','That email already has an account');
+        }
+        if(m.includes('email not confirmed')){
+            this.errorHint = i2('Busca el correo de PadelPulse y abre el enlace.','Look for the PadelPulse email and open the link.');
+            return i2('Falta confirmar el correo','Email not confirmed yet');
+        }
+        // Google sin activar en el servidor: es el fallo mas probable al empezar
+        if(m.includes('provider is not enabled') || m.includes('unsupported provider') || m.includes('validation_failed')){
+            this.errorHint = i2('Hay que activar Google en Supabase (Authentication › Providers) y añadir padelpulse://auth a las direcciones de vuelta.',
+                                 'Google must be enabled in Supabase (Authentication › Providers) and padelpulse://auth added to the redirect URLs.');
+            return i2('Entrar con Google no esta activado todavia','Google sign-in is not enabled yet');
+        }
+        if(m.includes('redirect') && m.includes('invalid')){
+            this.errorHint = i2('Añade padelpulse://auth en Supabase, Authentication › URL Configuration.',
+                                 'Add padelpulse://auth in Supabase, Authentication › URL Configuration.');
+            return i2('El servidor rechazo la vuelta a la app','The server rejected the return to the app');
+        }
+        if(m.includes('rate limit') || m.includes('too many')){
+            return i2('Demasiados intentos. Prueba dentro de un minuto.','Too many attempts. Try again in a minute.');
+        }
+        if(m.includes('password')){
+            return i2('La contraseña necesita 6 caracteres como minimo','Password needs at least 6 characters');
+        }
+        if(m.includes('failed to fetch') || m.includes('networkerror') || m.includes('sin conexion') || m.includes('load failed')){
+            this.errorHint = i2('Puedes jugar igual; el historial se sube cuando vuelva la cobertura.',
+                                 'You can still play; your history uploads when you are back online.');
+            return i2('Sin conexion con el servidor','Cannot reach the server');
+        }
         return msg;
+    },
+
+    /** Vuelve al formulario desde la pantalla de confirmar correo. */
+    backToForm(){
+        this.status='anon'; this.lastError=null; this.errorHint=null; this.pendingEmail='';
+        render();
+    },
+
+    /** "Ya lo he confirmado": se reintenta la entrada con lo que ya tecleo. */
+    async retryAfterConfirm(){
+        if(!this.pendingEmail) { this.backToForm(); return; }
+        await this.signIn(this.pendingEmail, _authForm.pass || '');
+        if(!this.isIn && !this.lastError){
+            this.lastError = i2('Todavia no consta como confirmado','Still not confirmed');
+        }
+        if(!this.isIn) this.status = 'confirm';
+        render();
     },
 
     // ── Sincronizacion del historial ──
@@ -3784,16 +3928,54 @@ function callTo(name){
     window.location.href = url;
 }
 
-/** Pantalla de entrada: usuario/contraseña o cuenta nueva. */
-let _authMode = 'in';   // 'in' | 'up'
-function setAuthMode(m){ _authMode=m; Auth.lastError=null; render(); }
+/**
+ * Pantalla de entrada: usuario/contraseña, Google, o entrar sin cuenta.
+ *
+ * Lo que se teclea vive aqui y no en el DOM. Antes los campos no llevaban
+ * value, asi que cualquier render() -y hay uno en cada error- los dejaba en
+ * blanco y habia que reescribirlo todo. Ahora sobreviven al repintado.
+ */
+let _authMode = 'in';                       // 'in' | 'up'
+let _authForm = { email:'', pass:'', name:'' };
+let _authShowPass = false;
+
+function setAuthMode(m){
+    _authMode = m;
+    Auth.lastError = null;
+    if(Auth.status === 'busy') Auth.status = 'anon';
+    render();
+}
+
+function authField(k, v){ _authForm[k] = v; }
+
+function toggleAuthPass(){
+    _authShowPass = !_authShowPass;
+    render();
+    const i = document.getElementById('auth-pass');
+    if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+}
 
 function submitAuth(){
-    const email = (document.getElementById('auth-email')||{}).value || '';
-    const pass  = (document.getElementById('auth-pass')||{}).value || '';
-    const name  = (document.getElementById('auth-name')||{}).value || '';
-    if(!email.includes('@')){ Auth.lastError = i2('Pon un correo valido','Enter a valid email'); render(); return; }
-    if(pass.length < 6){ Auth.lastError = i2('La contraseña debe tener al menos 6 caracteres','Password must be at least 6 characters'); render(); return; }
+    // Se lee del campo y no solo de _authForm: el gestor de contraseñas y el
+    // autorrelleno del sistema escriben directamente en el input sin disparar
+    // el evento, y si no miraramos ahi pareceria que esta vacio.
+    const leer = (id, guardado) => {
+        const el = document.getElementById(id);
+        return (el && el.value) ? el.value : (guardado || '');
+    };
+    _authForm.email = leer('auth-email', _authForm.email);
+    _authForm.pass  = leer('auth-pass',  _authForm.pass);
+    _authForm.name  = leer('auth-name',  _authForm.name);
+
+    const email = _authForm.email.trim();
+    const pass  = _authForm.pass;
+    const name  = _authForm.name.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+        Auth.lastError = i2('Ese correo no parece valido','That email does not look valid'); render(); return;
+    }
+    if(pass.length < 6){
+        Auth.lastError = i2('La contraseña necesita 6 caracteres como minimo','Password needs at least 6 characters'); render(); return;
+    }
     if(_authMode==='up') Auth.signUp(email, pass, name);
     else Auth.signIn(email, pass);
 }
@@ -3830,6 +4012,7 @@ function saveMe(){
 function goToAuth(){
     try{ localStorage.removeItem('pp_auth_skipped'); }catch(e){}
     Auth.lastError = null;
+    Auth.errorHint = null;
     S.currentView = 'auth';
     render();
 }
@@ -3848,6 +4031,43 @@ const AuthView = () => {
     const p = tc.primary(), mu = tc.muted(), su = tc.surf2(), te = tc.text();
     const busy = Auth.status==='busy';
     const up = _authMode==='up';
+    const esc = (x)=>String(x||'').replace(/"/g,'&quot;');
+
+    // Pantalla aparte: la cuenta existe pero falta confirmar el correo.
+    if(Auth.status === 'confirm'){
+        return `
+<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+    <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
+        <div style="font-size:40px;line-height:1;margin-bottom:10px">📬</div>
+        <div class="text-base font-black mb-2" style="color:${te}">${i2('Confirma tu correo','Confirm your email')}</div>
+        <div class="text-[12px] leading-relaxed mb-1" style="color:${mu}">
+            ${i2('Te hemos enviado un enlace a','We sent a link to')}
+        </div>
+        <div class="text-[13px] font-bold mb-4" style="color:${p}">${esc(Auth.pendingEmail)}</div>
+        <div class="text-[11px] leading-relaxed mb-5" style="color:${mu}">
+            ${i2('Abrelo y vuelve aqui. Mientras tanto puedes jugar sin cuenta: no se pierde nada, el historial se sube en cuanto entres.',
+                  'Open it and come back. Meanwhile you can play without an account: nothing is lost, your history uploads once you sign in.')}
+        </div>
+        <button onclick="Auth.retryAfterConfirm()" ${busy?'disabled':''}
+            class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="background:${p};color:#04120B;opacity:${busy?.6:1}">
+            ${busy ? i2('Comprobando…','Checking…') : i2('Ya lo he confirmado','I confirmed it')}
+        </button>
+        ${Auth.lastError?`
+        <div class="mt-3 rounded-2xl p-3 text-[11px] leading-relaxed"
+             style="background:rgba(255,113,108,.1);border:1px solid rgba(255,113,108,.25);color:#ff716c">
+            ${Auth.lastError}
+        </div>`:''}
+        <button onclick="Auth.backToForm()" class="w-full mt-2 py-2 text-[11px] font-bold" style="color:${mu}">
+            ${i2('Usar otro correo','Use another email')}
+        </button>
+    </div>
+    <button onclick="skipAuth()" class="mt-5 text-[11px] font-bold underline" style="color:${mu}">
+        ${i2('Jugar sin cuenta','Play without an account')}
+    </button>
+</div>`;
+    }
+
     return `
 <div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
     <img src="${LOGO_BASE64}" alt="PadelPulse" class="h-24 mb-2" style="object-fit:contain;mix-blend-mode:screen">
@@ -3857,8 +4077,10 @@ const AuthView = () => {
 
     <div class="w-full rounded-3xl p-5" style="background:${su}">
 
+        ${Auth.googleEnabled ? `
         <!-- Google primero: es un toque, y la mayoria ya tiene la cuenta puesta
-             en el movil. Lo de teclear correo y contraseña queda debajo. -->
+             en el movil. Solo se ofrece si el servidor lo tiene activado: un
+             boton que no puede funcionar es peor que no tenerlo. -->
         <button onclick="Auth.signInWithGoogle()" ${busy?'disabled':''}
             class="w-full py-3.5 rounded-2xl text-[12px] font-black scale-press flex items-center justify-center gap-2.5"
             style="background:#fff;color:#1f1f1f;opacity:${busy?.6:1}">
@@ -3868,37 +4090,54 @@ const AuthView = () => {
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
                 <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
             </svg>
-            ${i2('Continuar con Google','Continue with Google')}
+            ${Auth.waitingGoogle ? i2('Esperando a Google…','Waiting for Google…') : i2('Continuar con Google','Continue with Google')}
         </button>
 
         <div class="flex items-center gap-3 my-4">
             <div class="flex-1 h-px" style="background:rgba(255,255,255,.08)"></div>
             <span class="text-[9px] font-bold uppercase tracking-widest" style="color:${mu}">${i2('o con tu correo','or with your email')}</span>
             <div class="flex-1 h-px" style="background:rgba(255,255,255,.08)"></div>
-        </div>
+        </div>` : ''}
 
         ${up?`
         <input id="auth-name" type="text" placeholder="${i2('Tu nombre','Your name')}" maxlength="24"
+            value="${esc(_authForm.name)}" oninput="authField('name',this.value)"
             class="w-full mb-2 rounded-2xl px-4 py-3 text-sm font-bold"
             style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">`:''}
 
         <input id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${i2('Correo','Email')}"
+            value="${esc(_authForm.email)}" oninput="authField('email',this.value)"
+            onkeydown="if(event.key==='Enter'){document.getElementById('auth-pass').focus()}"
             class="w-full mb-2 rounded-2xl px-4 py-3 text-sm font-bold"
             style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
 
-        <input id="auth-pass" type="password" autocomplete="${up?'new-password':'current-password'}" placeholder="${i2('Contraseña','Password')}"
-            class="w-full rounded-2xl px-4 py-3 text-sm font-bold"
-            style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
+        <div class="relative">
+            <input id="auth-pass" type="${_authShowPass?'text':'password'}" autocomplete="${up?'new-password':'current-password'}"
+                placeholder="${i2('Contraseña','Password')}"
+                value="${esc(_authForm.pass)}" oninput="authField('pass',this.value)"
+                onkeydown="if(event.key==='Enter'){submitAuth()}"
+                class="w-full rounded-2xl px-4 py-3 pr-12 text-sm font-bold"
+                style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:${te}">
+            <button onclick="toggleAuthPass()" tabindex="-1"
+                class="absolute right-1 top-1/2 p-2 rounded-xl" style="transform:translateY(-50%)">
+                <span class="material-symbols-outlined text-[17px]" style="color:${mu}">${_authShowPass?'visibility_off':'visibility'}</span>
+            </button>
+        </div>
+        ${up?`
+        <div class="text-[9px] mt-1.5 px-1" style="color:${mu};opacity:.75">
+            ${i2('Minimo 6 caracteres','At least 6 characters')}
+        </div>`:''}
 
         ${Auth.lastError?`
         <div class="mt-3 rounded-2xl p-3 text-[11px] leading-relaxed"
              style="background:rgba(255,113,108,.1);border:1px solid rgba(255,113,108,.25);color:#ff716c">
             ${Auth.lastError}
+            ${Auth.errorHint?`<div class="mt-1.5 text-[10px]" style="color:${mu}">${Auth.errorHint}</div>`:''}
         </div>`:''}
 
         <button onclick="submitAuth()" ${busy?'disabled':''}
             class="w-full mt-3 py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
-            style="background:${p};color:#000;opacity:${busy?.6:1}">
+            style="background:${p};color:#04120B;opacity:${busy?.6:1}">
             ${busy ? i2('Un momento…','One moment…') : (up ? i2('Crear cuenta','Create account') : i2('Entrar','Sign in'))}
         </button>
 
@@ -3909,7 +4148,7 @@ const AuthView = () => {
     </div>
 
     <button onclick="skipAuth()" class="mt-5 text-[11px] font-bold underline" style="color:${mu}">
-        ${i2('Entrar sin cuenta','Continue without an account')}
+        ${i2('Jugar sin cuenta','Play without an account')}
     </button>
     <div class="text-[9px] text-center mt-2 px-6 leading-relaxed" style="color:${mu};opacity:.7">
         ${i2('Sin cuenta se juega igual: la cuenta solo sirve para guardar el historial y verlo en otro movil.',
@@ -5705,6 +5944,7 @@ function showSplash(){
  */
 Auth.load();
 Contacts.load();
+setTimeout(()=>Auth.loadServerSettings(), 300);
 // Vuelta de Google en la version web: si trae sesion, entra sin preguntar
 const _vuelveDeGoogle = (typeof location!=='undefined') && (location.hash||'').indexOf('access_token=')>=0;
 if (_vuelveDeGoogle) setTimeout(()=>Auth.catchWebRedirect().catch(()=>{}), 50);
@@ -5722,6 +5962,11 @@ if(document.readyState==='loading'){
 } else {
     showSplash();
 }
+
+// En la version web no hay onResume: el equivalente es volver a la pestaña.
+document.addEventListener('visibilitychange', () => {
+    if(!document.hidden && typeof Auth!=='undefined') Auth.onReturnToApp();
+});
 
 // Arranque de la sincronizacion con el reloj
 window.addEventListener('load', () => {
