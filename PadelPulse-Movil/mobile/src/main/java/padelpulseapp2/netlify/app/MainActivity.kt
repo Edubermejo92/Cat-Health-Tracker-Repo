@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "5.1.3"
+        const val APP_VERSION = "5.1.4"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
