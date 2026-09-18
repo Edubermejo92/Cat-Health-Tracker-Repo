@@ -24,8 +24,8 @@ android {
         minSdk = 25
         targetSdk = 35
         // Serie propia del movil. Debe ser DISTINTO al del reloj (serie 1xxx).
-        versionCode = 516
-        versionName = "5.1.6"
+        versionCode = 517
+        versionName = "5.1.7"
     }
 
     signingConfigs {

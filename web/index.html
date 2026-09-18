@@ -258,6 +258,16 @@ function loadState(){
 // Si cambias un mensaje aqui, cambialo tambien en las dos apps Kotlin.
 // ═══════════════════════════════════════════════════════════════════
 const PP_PROTO = 3;
+
+/**
+ * Version de esta pagina.
+ *
+ * En la app la version buena la manda la capa nativa; esta se usa en la web,
+ * donde no hay capa nativa. Sin ella, la version desplegada en Netlify no se
+ * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
+ * arreglados.
+ */
+const WEB_VERSION = '5.1.7';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -561,7 +571,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.1.6', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:WEB_VERSION, proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -5259,6 +5269,7 @@ const INVITE_URL_PRUEBA = 'https://play.google.com/apps/testing/' + APP_ID;
 const INVITE_URL_TIENDA = 'https://play.google.com/store/apps/details?id=' + APP_ID;
 const INVITE_URL_POR_DEFECTO = INVITE_URL_PRUEBA;
 
+
 function inviteUrl(){
     try{ return localStorage.getItem('pp_invite_url') || INVITE_URL_POR_DEFECTO; }
     catch(e){ return INVITE_URL_POR_DEFECTO; }
@@ -6243,7 +6254,7 @@ const SettingsView=()=>`
          forma de saber si el movil tiene la compilacion nueva o una vieja, y
          se pierde mucho tiempo persiguiendo fallos ya arreglados. -->
     <div class="text-center pt-1 pb-2 text-[10px]" style="color:${tc.muted()};opacity:.6">
-        PadelPulse Live ${(typeof window!=='undefined' && window.AndroidBridge && window.AndroidBridge.appVersion) ? window.AndroidBridge.appVersion() : 'web'}
+        PadelPulse Live ${(typeof window!=='undefined' && window.AndroidBridge && window.AndroidBridge.appVersion) ? window.AndroidBridge.appVersion() : WEB_VERSION + ' · web'}
     </div>
 </div>
 
