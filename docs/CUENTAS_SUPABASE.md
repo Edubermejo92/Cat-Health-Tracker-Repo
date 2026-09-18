@@ -112,6 +112,43 @@ El mensaje se procesa aunque la app del reloj este cerrada: el
 `WearListenerService` lo guarda igual, para que la sesion ya este puesta
 cuando el usuario levante la muñeca.
 
+## El enlace del correo tiene que volver a la app
+
+Este es el fallo que se vio en pruebas: el usuario se registra, le llega el
+correo *"Confirm your email address"*, pulsa el enlace y **no pasa nada**.
+
+La causa es que Supabase, si no le dices otra cosa, manda al usuario a la
+**Site URL** del proyecto, que por defecto es `http://localhost:3000`. En un
+movil eso no existe.
+
+La app ya manda la direccion de vuelta correcta (`padelpulse://auth` desde la
+app, la del sitio desde la web) en el registro, en el reenvio y en la
+recuperacion de contraseña. Pero **Supabase rechaza cualquier direccion que no
+tenga dada de alta** y, cuando la rechaza, usa la de por defecto. Asi que hay
+que ponerla:
+
+**Authentication › URL Configuration**
+
+| Campo | Valor |
+|-------|-------|
+| Site URL | la direccion de la web, o `padelpulse://auth` si no hay web |
+| Additional Redirect URLs | `padelpulse://auth` (una por linea, y tambien la de la web) |
+
+### La alternativa: no pedir confirmacion
+
+Para un grupo de testers, lo mas comodo es quitar el paso entero:
+
+**Authentication › Providers › Email** → desactivar **Confirm email**.
+
+Asi el registro entra directo, sin correo, sin enlace y sin nada que pueda
+fallar. La app lo detecta sola: si el servidor devuelve sesion, entra; si
+devuelve que falta confirmar, enseña la pantalla del correo. No hay que tocar
+codigo ni volver a subir nada a Play.
+
+Tiene un coste: sin confirmar, cualquiera puede registrarse con un correo que
+no es suyo. Para un marcador de padel no es grave; para algo con datos
+sensibles, si.
+
 ## Confirmacion de correo
 
 Si en el panel de Supabase esta activada la confirmacion de correo, al
@@ -143,82 +180,30 @@ El analizador de seguridad de Supabase no da ningun aviso.
 
 ---
 
-# Entrar con Google
+# Por que no hay "entrar con Google"
 
-El boton "Continuar con Google" ya esta en las dos apps y en la web, pero
-**no funcionara hasta que actives el proveedor**. Eso hay que hacerlo a
-mano en dos paneles, porque las credenciales de Google son tuyas y solo
-las puedes crear tu.
+Se probo y se quito. Montarlo exige crear credenciales en Google Cloud,
+configurar una pantalla de consentimiento y dar de alta a cada tester a mano
+mientras la app no este verificada por Google. Para un grupo de gente que solo
+quiere apuntar el marcador de un partido, es mucho tramite a cambio de
+ahorrarse teclear una contraseña.
 
-## 1. Google Cloud Console
+Con correo y contraseña se entra igual de bien, y **sin cuenta tambien se
+juega**: solo se pierde el historial.
 
-<https://console.cloud.google.com/apis/credentials>
+Si algun dia interesa recuperarlo, lo que hacia falta era:
 
-- Crea un **ID de cliente de OAuth 2.0**, tipo **Aplicacion web**.
-- En **URI de redireccionamiento autorizados** pon exactamente esto:
+- Un ID de cliente de OAuth 2.0 de tipo *Aplicacion web* en Google Cloud, con
+  `https://fdlcdzlvvxqhzougcjwd.supabase.co/auth/v1/callback` como URI de
+  redireccionamiento.
+- Activar el proveedor en **Authentication › Providers › Google**.
+- Abrir la pantalla de Google **fuera del WebView**: Google rechaza el inicio
+  de sesion dentro de uno con `disallowed_useragent`.
 
-  ```
-  https://fdlcdzlvvxqhzougcjwd.supabase.co/auth/v1/callback
-  ```
+La maquinaria de volver a la app por `padelpulse://auth` sigue en su sitio,
+porque la usa la recuperacion de contraseña.
 
-- Guarda el **ID de cliente** y el **secreto**.
-
-Es tipo "Aplicacion web" aunque sea para una app de movil: el intercambio
-lo hace Supabase en su servidor, la app solo abre el navegador.
-
-La primera vez te pedira configurar la **pantalla de consentimiento**
-(nombre de la app, correo de contacto y logo). Mientras este en modo
-"Prueba" solo entraran los correos que apuntes ahi, que para los testers
-va bien; para abrirlo a todo el mundo hay que publicarla.
-
-## 2. Supabase
-
-**Authentication › Providers › Google**: activalo y pega el ID de cliente
-y el secreto.
-
-**Authentication › URL Configuration › Additional Redirect URLs**: añade
-las dos direcciones de vuelta, una por linea:
-
-```
-padelpulse://auth
-https://padelpulselive.netlify.app
-```
-
-La primera es la de las apps; la segunda, la de la web. Sin ellas Supabase
-rechaza la vuelta y el usuario se queda mirando el navegador.
-
-## Como funciona
-
-Google **no permite** iniciar sesion dentro de un WebView: devuelve
-`disallowed_useragent` y no hay manera. Por eso la app abre la pantalla de
-Google en el navegador del sistema y espera a que vuelva por su propio
-enlace, `padelpulse://auth`, declarado en el manifiesto.
-
-La vuelta usa **PKCE**: la app genera un secreto, manda solo su huella, y
-al volver canjea el codigo presentando el secreto. Aunque otra app
-interceptara el enlace de vuelta, sin ese secreto el codigo no le sirve.
-La huella se calcula en Kotlin con `MessageDigest` y no con
-`crypto.subtle`, porque en un WebView servido desde `file://` esa API del
-navegador no siempre esta disponible.
-
-El reloj no cambia: sigue recibiendo la sesion ya hecha desde el movil,
-venga de Google o del correo.
-
-En la web es mas simple: se redirige, se vuelve con la sesion detras de la
-almohadilla, y la app la recoge y limpia la barra de direcciones -que ahi
-va el token-.
-
-## Comprobado
-
-| Prueba | Resultado |
-|--------|-----------|
-| El boton sale en la pantalla de entrada | ✅ y el correo sigue debajo |
-| En la app usa el puente nativo, no redirige el WebView | ✅ |
-| La sesion de Google entra y se guarda | ✅ nombre y correo de Google |
-| Llega al reloj al vincular | ✅ como cualquier otra sesion |
-| Si el usuario cancela | ✅ mensaje, y no entra |
-| En la web redirige a Google y vuelve | ✅ con `redirect_to` correcto |
-| La web recoge la sesion y limpia la url | ✅ |
+---
 
 ---
 
@@ -270,7 +255,7 @@ están dados de alta probando uno a uno.
 
 Para que salga el correo hace falta que `padelpulse://auth` y la dirección de
 la web estén en **Authentication › URL Configuration › Additional Redirect
-URLs** —las mismas que pide Google—.
+URLs**. Sin eso el correo sale, pero el enlace no vuelve a la app.
 
 ### El límite de correos es un problema real
 

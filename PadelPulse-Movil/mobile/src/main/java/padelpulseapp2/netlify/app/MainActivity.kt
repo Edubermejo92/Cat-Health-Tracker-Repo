@@ -25,7 +25,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.MessageClient
 import org.json.JSONObject
-import padelpulseapp2.netlify.app.sync.GoogleAuth
+import padelpulseapp2.netlify.app.sync.AuthLink
 import padelpulseapp2.netlify.app.sync.PendingInbox
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.sync.WearLink
@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "5.0.9"
+        const val APP_VERSION = "5.1.0"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -45,8 +45,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         var instance: MainActivity? = null
     }
 
-    /** Sesion de Google llegada antes de que el WebView estuviera listo. */
-    private var sesionGooglePendiente: String? = null
+    /** Sesion del enlace del correo llegada antes de que el WebView estuviera listo. */
+    private var sesionPendiente: String? = null
 
     private var speechRecognizer: SpeechRecognizer? = null
     internal var tts: TextToSpeech? = null
@@ -106,11 +106,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         // Mensajes que llegaron con la app cerrada
                         val pending = PendingInbox.drain(this@MainActivity)
                         evalJs("if(window.PPSync) PPSync.drainNative(${JSONObject.quote(pending)});")
-                        // Si Google contesto antes de que la pagina estuviera
-                        // lista, la sesion espera aqui.
-                        sesionGooglePendiente?.let { json ->
-                            sesionGooglePendiente = null
-                            evalJs("if(window.Auth) Auth.onGoogleSession(${JSONObject.quote(json)});")
+                        // Si el enlace del correo abrio la app desde cero, la
+                        // sesion espera aqui a que la pagina este lista.
+                        sesionPendiente?.let { json ->
+                            sesionPendiente = null
+                            evalJs("if(window.Auth) Auth.onEmailLink(${JSONObject.quote(json)});")
                         }
                     }
                 }
@@ -128,8 +128,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             WearLink.announce(this)
 
-            // El enlace de vuelta puede haber arrancado la app desde cero
-            manejarVueltaDeGoogle(intent)
+            // El enlace del correo puede haber arrancado la app desde cero
+            manejarEnlaceDelCorreo(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Error en onCreate", e)
         }
@@ -138,28 +138,28 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        manejarVueltaDeGoogle(intent)
+        manejarEnlaceDelCorreo(intent)
     }
 
     /**
-     * Cierra el inicio de sesion con Google: canjea el codigo por una sesion
-     * -en segundo plano, que es red- y se la pasa a la capa JS, que es quien
-     * guarda la sesion y se la manda al reloj.
+     * El usuario ha abierto el enlace de "he perdido la contraseña". Se lee la
+     * sesion temporal que trae -en segundo plano, que hay una llamada de red-
+     * y se le pasa a la capa JS, que pedira la contraseña nueva.
      */
-    private fun manejarVueltaDeGoogle(intent: Intent?) {
+    private fun manejarEnlaceDelCorreo(intent: Intent?) {
         val uri = intent?.data ?: return
         if (uri.scheme != "padelpulse") return
         Thread {
-            val json = GoogleAuth.handleCallback(this, uri, SUPABASE_URL, SUPABASE_KEY)
+            val json = AuthLink.handleCallback(uri, SUPABASE_URL, SUPABASE_KEY)
             if (json == null) {
-                Log.w(TAG, "La vuelta de Google no traia nada aprovechable")
+                Log.w(TAG, "El enlace del correo no traia nada aprovechable")
                 return@Thread
             }
             runOnUiThread {
                 if (webReady && webView != null) {
-                    evalJs("if(window.Auth) Auth.onGoogleSession(${JSONObject.quote(json)});")
+                    evalJs("if(window.Auth) Auth.onEmailLink(${JSONObject.quote(json)});")
                 } else {
-                    sesionGooglePendiente = json
+                    sesionPendiente = json
                 }
             }
         }.start()
@@ -167,10 +167,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onResume() {
         super.onResume()
-        // Si mandamos al usuario al navegador para entrar con Google y vuelve
-        // sin sesion -cancelo, o Supabase rechazo la vuelta-, la pantalla se
-        // quedaria bloqueada esperando. Avisamos para que se desbloquee.
-        evalJs("if(window.Auth) Auth.onReturnToApp();")
         WearLink.addListeners(this, messageListener, capabilityListener)
         WearLink.refreshConnection(this)
         sendHello()
@@ -362,29 +358,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         as android.content.ClipboardManager
                     cm.setPrimaryClip(android.content.ClipData.newPlainText("PadelPulse", text))
                     Toast.makeText(activity, "Copiado", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        /**
-         * Abre la pantalla de Google en el navegador del sistema.
-         *
-         * Tiene que ser fuera del WebView: Google rechaza el inicio de sesion
-         * dentro de uno con "disallowed_useragent". Vuelve sola a la app por
-         * padelpulse://auth.
-         */
-        @JavascriptInterface
-        fun signInWithGoogle() {
-            activity.runOnUiThread {
-                runCatching {
-                    val url = GoogleAuth.authorizeUrl(activity, SUPABASE_URL)
-                    activity.startActivity(
-                        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                }.onFailure {
-                    Log.w(TAG, "No se pudo abrir el navegador para Google", it)
-                    activity.evalJs("if(window.Auth) Auth.onGoogleSession('{\"error\":\"no se pudo abrir el navegador\"}');")
                 }
             }
         }

@@ -25,8 +25,8 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="34">
 
-        <!-- singleTask para que la vuelta de Google reentre en la misma
-             pantalla en vez de abrir una segunda copia de la app. -->
+        <!-- singleTask para que la vuelta del enlace del correo reentre en la
+             misma pantalla en vez de abrir una segunda copia de la app. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -37,10 +37,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Vuelta del inicio de sesion con Google. Supabase redirige aqui
-                 con el codigo, y esta misma pantalla lo canjea. El esquema hay
-                 que darlo de alta en Supabase (Authentication > URL
-                 Configuration > Additional Redirect URLs). -->
+            <!-- Vuelta del enlace de "he perdido la contraseña". Supabase
+                 redirige aqui con la sesion temporal y esta pantalla pide la
+                 contraseña nueva. El esquema hay que darlo de alta en Supabase
+                 (Authentication > URL Configuration > Additional Redirect
+                 URLs) o el correo no vuelve a la app. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
