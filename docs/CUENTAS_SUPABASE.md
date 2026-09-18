@@ -281,3 +281,56 @@ suficiente para esto).
 | Abrir el enlace | ✅ pide contraseña nueva, no entra sin más |
 | Las dos no coinciden / muy corta | ✅ avisa |
 | Guardar la nueva | ✅ entra, y **la vieja deja de valer** |
+
+---
+
+# Los correos que recibe el usuario
+
+Supabase manda por defecto unos correos en inglés, firmados *"Supabase Auth"*
+y sin ninguna relación con PadelPulse. En `docs/emails/` hay dos plantillas
+listas para sustituirlos:
+
+| Fichero | Dónde va | Asunto sugerido |
+|---------|----------|-----------------|
+| `confirmar-cuenta.html` | Authentication › Emails › **Confirm signup** | `Confirma tu cuenta · PadelPulse Live` |
+| `recuperar-contrasena.html` | Authentication › Emails › **Reset password** | `Tu nueva contraseña · PadelPulse Live` |
+
+Se pegan tal cual en el cuadro de texto de la plantilla, sustituyendo lo que
+haya. El asunto se cambia en el campo de arriba.
+
+## Llaman al usuario por su nombre
+
+La app guarda el nombre al registrarse, y la plantilla lo usa:
+
+```
+{{ if .Data.display_name }}Hola, {{ .Data.display_name }}{{ else }}Hola{{ end }}
+```
+
+`.Data` es lo que se manda en `data` al registrarse —aquí, `display_name`— y
+queda en `auth.raw_user_meta_data`. El `if` está para quien se registró sin
+poner nombre: en vez de un "Hola," cojo, saluda sin más.
+
+## Por qué están hechas así
+
+Los clientes de correo no son navegadores. No entienden flex, ni grid, ni
+hojas de estilo externas, y muchos bloquean las imágenes. Por eso:
+
+- **Todo en tablas** y con los estilos escritos en línea.
+- **Ninguna imagen.** La cabecera es tipográfica, así que se ve igual aunque
+  el cliente bloquee la descarga de imágenes —que es lo normal la primera vez
+  que alguien te escribe—.
+- **Botón "a prueba de balas"**: una celda de tabla con `bgcolor`, no un `div`
+  con fondo, que Outlook no pinta.
+- **Texto de vista previa** oculto, para que en la bandeja se lea algo mejor
+  que el principio del correo.
+- **El enlace en texto** debajo del botón, por si el botón no funciona.
+
+Comprobado renderizando las dos, con nombre y sin él: 600 px de ancho, sin
+desbordes y sin ninguna petición externa.
+
+## Acuérdate del SMTP
+
+Con el correo integrado de Supabase estos correos salen con remitente de
+Supabase y **con el límite de envíos por hora**. Al conectar un SMTP propio
+(Authentication › Emails › SMTP Settings) puedes poner tu propio remitente,
+que es lo que hace que el correo no parezca de un tercero.
