@@ -7,6 +7,8 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -35,7 +37,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "5.1.5"
+        const val APP_VERSION = "5.1.6"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -47,6 +49,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     /** Sesion del enlace del correo llegada antes de que el WebView estuviera listo. */
     private var sesionPendiente: String? = null
+
+    /**
+     * Volumen de la voz de la app, de 0 a 1.
+     *
+     * En una pista hay viento, pelotazos y gente hablando: la voz por defecto
+     * del sistema se pierde. Este valor se aplica a cada frase, y con
+     * [subirVolumenDelMovil] se puede ademas poner el volumen multimedia del
+     * telefono al maximo mientras dura el partido.
+     */
+    internal var volumenVoz: Float = 1.0f
+
+    /** Escucha continua: el microfono se vuelve a abrir solo tras cada frase. */
+    internal var escuchaContinua = false
+    private var escuchando = false
 
     private var speechRecognizer: SpeechRecognizer? = null
     internal var tts: TextToSpeech? = null
@@ -228,32 +244,134 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     // ── Voz ──────────────────────────────────────────────────────────────
 
+    /** Idioma con el que se escucha. Lo pone la capa JS al cambiarlo. */
+    internal var idiomaVoz: String = "es-ES"
+
     internal fun startMic() {
+        if (escuchando) return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            // Sin esto se escucha en el idioma del telefono, que no tiene por
+            // que ser el de la app.
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, idiomaVoz)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            // Un punto se canta en dos palabras: no hace falta esperar mas.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
         }
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
+                escuchando = false
                 val txt = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()?.lowercase() ?: ""
                 evalJs("if(typeof processVoiceCommand==='function') processVoiceCommand(${JSONObject.quote(txt)});")
+                reabrirSiContinua()
+            }
+            override fun onPartialResults(p0: Bundle?) {
+                val txt = p0?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull() ?: return
+                // Se enseña lo que va oyendo: sin esto el usuario no sabe si el
+                // microfono le esta cogiendo o esta hablando a la nada.
+                evalJs("if(typeof onVoicePartial==='function') onVoicePartial(${JSONObject.quote(txt)});")
             }
             override fun onReadyForSpeech(p0: Bundle?) {
-                Toast.makeText(this@MainActivity, "Escuchando...", Toast.LENGTH_SHORT).show()
+                escuchando = true
+                evalJs("if(typeof onVoiceState==='function') onVoiceState('listening');")
             }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(p0: Float) {}
             override fun onBufferReceived(p0: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onError(p0: Int) { Log.e(TAG, "Error de voz: $p0") }
-            override fun onPartialResults(p0: Bundle?) {}
+            override fun onEndOfSpeech() {
+                evalJs("if(typeof onVoiceState==='function') onVoiceState('processing');")
+            }
+            override fun onError(code: Int) {
+                escuchando = false
+                Log.w(TAG, "Error de voz: $code")
+                // Que no se oyera nada es lo normal entre punto y punto: se
+                // vuelve a abrir sin molestar. Lo demas si se cuenta.
+                val silencio = code == SpeechRecognizer.ERROR_NO_MATCH ||
+                               code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                if (!silencio) {
+                    evalJs("if(typeof onVoiceError==='function') onVoiceError($code);")
+                }
+                reabrirSiContinua()
+            }
             override fun onEvent(p0: Int, p1: Bundle?) {}
         })
-        speechRecognizer?.startListening(intent)
+        runCatching { speechRecognizer?.startListening(intent) }
+            .onFailure { Log.w(TAG, "No se pudo abrir el microfono", it) }
+    }
+
+    /**
+     * En modo continuo el microfono se vuelve a abrir solo, con un respiro
+     * para que no se grabe a si misma la voz de la app cantando el punto.
+     */
+    private fun reabrirSiContinua() {
+        if (!escuchaContinua) {
+            evalJs("if(typeof onVoiceState==='function') onVoiceState('off');")
+            return
+        }
+        webView?.postDelayed({ if (escuchaContinua) startMic() }, 700)
+    }
+
+    internal fun pararMic() {
+        escuchaContinua = false
+        escuchando = false
+        runCatching { speechRecognizer?.cancel() }
+        evalJs("if(typeof onVoiceState==='function') onVoiceState('off');")
+    }
+
+    // ── Voz de la app ────────────────────────────────────────────────────
+
+    /**
+     * Habla. El volumen va por parametro en cada frase porque el TTS no
+     * guarda un volumen "de serie": si no se le dice nada, usa el del sistema
+     * y en una pista eso no se oye.
+     */
+    internal fun decir(texto: String) {
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumenVoz)
+        }
+        tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, params, "pp")
+    }
+
+    /**
+     * Sube el volumen multimedia del telefono al maximo. Es lo unico que hace
+     * que se oiga de verdad al otro lado de la pista: por muy alto que se pida
+     * el TTS, nunca pasa del volumen del sistema.
+     */
+    internal fun subirVolumenDelMovil(): Int {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return -1
+        return runCatching {
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, max, 0)
+            100
+        }.getOrDefault(-1)
+    }
+
+    /** Volumen multimedia del telefono, en porcentaje. */
+    internal fun volumenDelMovil(): Int {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return -1
+        return runCatching {
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            if (max <= 0) -1
+            else (am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max)
+        }.getOrDefault(-1)
     }
 
     override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) tts?.setLanguage(Locale("es", "ES"))
+        if (status != TextToSpeech.SUCCESS) return
+        tts?.setLanguage(Locale("es", "ES"))
+        // Por multimedia y no por notificaciones: es el canal que el usuario
+        // sube con los botones del lateral, y el que no se silencia solo.
+        runCatching {
+            tts?.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+        }
     }
 
     // ── Interfaz que ve el JavaScript ────────────────────────────────────
@@ -388,21 +506,53 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
         }
 
+        /** Escucha una sola frase. */
         @JavascriptInterface
-        fun startVoiceCommand() {
+        fun startVoiceCommand() = pedirMicro(false)
+
+        /** Modo arbitro: el microfono se queda abierto entre punto y punto. */
+        @JavascriptInterface
+        fun startVoiceContinuous() = pedirMicro(true)
+
+        @JavascriptInterface
+        fun stopVoice() {
+            activity.runOnUiThread { activity.pararMic() }
+        }
+
+        private fun pedirMicro(continuo: Boolean) {
             activity.runOnUiThread {
                 if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO)
-                    == PackageManager.PERMISSION_GRANTED) activity.startMic()
-                else activity.requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED) {
+                    activity.escuchaContinua = continuo
+                    activity.startMic()
+                } else {
+                    activity.requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
             }
         }
 
         @JavascriptInterface
         fun speak(text: String) {
-            activity.runOnUiThread {
-                activity.tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "bridge")
-            }
+            activity.runOnUiThread { activity.decir(text) }
         }
+
+        /** Volumen de la voz de la app, 0-100. */
+        @JavascriptInterface
+        fun setVoiceVolume(pct: Int) {
+            activity.volumenVoz = (pct.coerceIn(0, 100)) / 100f
+        }
+
+        /**
+         * Pone el volumen multimedia del telefono al maximo. Por muy alto que
+         * se pida el TTS nunca pasa del volumen del sistema, asi que sin esto
+         * no hay forma de que se oiga al otro lado de la pista.
+         */
+        @JavascriptInterface
+        fun maxDeviceVolume(): Int = activity.subirVolumenDelMovil()
+
+        /** Volumen multimedia actual del telefono, en porcentaje (-1 si no se sabe). */
+        @JavascriptInterface
+        fun deviceVolume(): Int = activity.volumenDelMovil()
 
         @JavascriptInterface
         fun setLanguage(langCode: String) {
@@ -413,6 +563,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         Locale(parts[0], parts[1])
                     } else Locale(langCode)
                     activity.tts?.setLanguage(locale)
+                    activity.idiomaVoz = if (langCode.contains("-")) langCode
+                                         else locale.language + "-" + locale.language.uppercase()
                 }.onFailure { Log.e(TAG, "Idioma TTS no valido", it) }
             }
         }
