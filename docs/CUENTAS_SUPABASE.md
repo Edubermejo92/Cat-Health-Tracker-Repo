@@ -112,6 +112,48 @@ El mensaje se procesa aunque la app del reloj este cerrada: el
 `WearListenerService` lo guarda igual, para que la sesion ya este puesta
 cuando el usuario levante la muñeca.
 
+## "No me llega el correo" casi nunca es que no llegue
+
+Dos casos vistos en pruebas reales, los dos con los registros del servidor
+delante:
+
+### El correo ya tiene cuenta
+
+Al registrarse con una direccion que ya existe, Supabase **contesta que si
+pero no manda nada**. Lo hace a proposito: si contestara distinto, cualquiera
+podria averiguar que correos estan dados de alta probando uno a uno. La
+respuesta viene "difuminada", con el usuario sin identidades.
+
+Se ve clarisimo en los registros: un registro de verdad tarda ~1000 ms y
+dispara un `mail.send`; uno de correo repetido tarda ~45 ms y no dispara
+nada.
+
+La app lo detecta y lo dice —*"Ese correo ya tiene cuenta"*— en vez de mandar
+a esperar un correo que no va a llegar.
+
+### El enlace se abrio dos veces
+
+El enlace del correo vale **una sola vez**. Al segundo clic, Supabase
+responde *"Email link is invalid or has expired"*, que asusta y parece que
+algo ha fallado cuando en realidad la cuenta ya esta confirmada.
+
+La app lo traduce: *"Ese enlace ya se ha usado o ha caducado. Si ya lo
+abriste, tu cuenta esta lista: entra con tu contraseña."*
+
+## Como mirar que ha pasado de verdad
+
+Cuando alguien diga que no le llega el correo, los registros lo cuentan:
+
+**Dashboard › Logs › Auth Logs**, o por SQL con el MCP:
+
+```sql
+select email, created_at, confirmation_sent_at, email_confirmed_at
+from auth.users order by created_at desc;
+```
+
+Si `email_confirmed_at` tiene fecha, la cuenta esta lista y solo hay que
+entrar con la contraseña.
+
 ## El enlace del correo tiene que volver a la app
 
 Este es el fallo que se vio en pruebas: el usuario se registra, le llega el

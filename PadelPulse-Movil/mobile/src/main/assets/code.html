@@ -561,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.1.1', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.1.2', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -3247,6 +3247,22 @@ const Auth = {
                 headers:{ 'redirect_to': this.returnUrl() },
                 body:{ email, password, data:{ display_name: displayName || email.split('@')[0] } }
             });
+            // Si el correo YA tiene cuenta, Supabase contesta que si -para no
+            // chivar que direcciones existen- pero no manda ningun correo y
+            // devuelve el usuario sin identidades. Sin detectarlo, la app
+            // mandaba a "mira tu correo" a esperar algo que no iba a llegar.
+            const yaExistia = data && data.user && Array.isArray(data.user.identities)
+                              && data.user.identities.length === 0;
+            if(yaExistia){
+                this.status = 'anon';
+                this.lastError = i2('Ese correo ya tiene cuenta','That email already has an account');
+                this.errorHint = i2('Entra con tu contraseña. Si no la recuerdas, usa "He perdido la contraseña".',
+                                     'Sign in with your password. If you forgot it, use "I forgot my password".');
+                _authMode = 'in';
+                render();
+                return;
+            }
+
             // Con confirmacion de correo activada no viene sesion todavia
             if(data.access_token){
                 this.applySession(data);
@@ -3293,8 +3309,12 @@ const Auth = {
         if(!data || data.error || !data.access_token){
             this.status = 'anon';
             this.lastError = this.human((data && (data.error_description || data.error)) || 'el enlace no vale');
-            this.errorHint = i2('Los enlaces caducan y valen una sola vez. Pide otro.',
-                                 'Links expire and work once. Ask for another one.');
+            // human() ya deja una pista para los casos que conoce; solo se
+            // pone la generica cuando no ha puesto ninguna.
+            if(!this.errorHint){
+                this.errorHint = i2('Los enlaces caducan y valen una sola vez. Pide otro.',
+                                     'Links expire and work once. Ask for another one.');
+            }
             render();
             return;
         }
@@ -3433,6 +3453,12 @@ const Auth = {
         if(m.includes('already registered') || m.includes('already been registered') || m.includes('user_already_exists')){
             this.errorHint = i2('Entra con tu contraseña en vez de crear la cuenta.','Sign in with your password instead of creating the account.');
             return i2('Ese correo ya tiene cuenta','That email already has an account');
+        }
+        if(m.includes('invalid or has expired') || m.includes('one-time token not found') ||
+           m.includes('otp_expired') || m.includes('access_denied')){
+            this.errorHint = i2('El enlace del correo vale una sola vez. Si ya lo abriste, tu cuenta esta lista: entra con tu contraseña.',
+                                 'The email link works once. If you already opened it, your account is ready: sign in with your password.');
+            return i2('Ese enlace ya se ha usado o ha caducado','That link was already used or has expired');
         }
         if(m.includes('email not confirmed')){
             this.errorHint = i2('Busca el correo de PadelPulse y abre el enlace.','Look for the PadelPulse email and open the link.');
