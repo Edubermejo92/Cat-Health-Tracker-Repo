@@ -26,7 +26,7 @@ android {
         targetSdk = 35
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
-        // serie (1xxx) y siempre por encima del movil.
+        // serie -el del movil x10- y siempre por encima: movil 517, reloj 5170.
         versionCode = 5170
         versionName = "5.1.7"
     }
