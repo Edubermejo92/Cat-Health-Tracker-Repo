@@ -561,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.1.3', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.1.4', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -4799,12 +4799,21 @@ const HistoryView=()=>{
 
     // ── Agenda de amigos ──
     const amigos = Contacts.ordered();
+    const botonInvitar = `
+        <button onclick="inviteFriends()"
+            class="w-full mb-3 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest scale-press flex items-center justify-center gap-2"
+            style="background:${p}18;color:${p};border:1px solid ${p}35">
+            <span class="material-symbols-outlined text-[16px]">person_add</span>
+            ${i2('Invitar a un amigo','Invite a friend')}
+        </button>`;
+
     const friendCards = amigos.length===0 ? `
-    <div class="flex flex-col items-center justify-center py-16 gap-3">
+    ${botonInvitar}
+    <div class="flex flex-col items-center justify-center py-12 gap-3">
         <span class="material-symbols-outlined text-[48px]" style="color:${mu}">contacts</span>
         <div class="text-sm font-bold" style="color:${mu}">${i2('Sin amigos todavia','No friends yet')}</div>
-        <div class="text-xs text-center px-8" style="color:${mu}">${i2('Se apuntan solos en cuanto juegan un partido contigo','They get added on their own as soon as they play a match with you')}</div>
-    </div>` : amigos.map(f=>`
+        <div class="text-xs text-center px-8" style="color:${mu}">${i2('Se apuntan solos en cuanto juegan un partido contigo. Y si todavia no la tienen, invitalos.','They get added on their own as soon as they play a match with you. And if they do not have the app yet, invite them.')}</div>
+    </div>` : botonInvitar + amigos.map(f=>`
         <div class="rounded-2xl p-3 mb-2 flex items-center gap-3" style="background:${su};${f.partner?`border:1px solid ${p}40`:''}">
             <div class="w-9 h-9 rounded-full flex items-center justify-center text-[14px] font-black flex-shrink-0"
                  style="background:${f.partner?p:'rgba(255,255,255,0.06)'};color:${f.partner?'#04120B':te}">
@@ -4822,6 +4831,10 @@ const HistoryView=()=>{
                 </div>
             </div>
             ${f.phone?`
+            <button onclick="event.stopPropagation();inviteTo('${esc(f.name)}')"
+                class="p-2 rounded-xl scale-press" style="background:${p}14" title="${i2('Invitar a la app','Invite to the app')}">
+                <span class="material-symbols-outlined text-[16px]" style="color:${p}">person_add</span>
+            </button>
             <button onclick="event.stopPropagation();whatsappTo('${esc(f.name)}', i2('Echamos un padel?','Fancy a padel game?'))"
                 class="p-2 rounded-xl scale-press" style="background:rgba(37,211,102,0.12)" title="WhatsApp">
                 <span class="material-symbols-outlined text-[16px]" style="color:#25D366">chat</span>
@@ -5161,6 +5174,56 @@ const LockedHistoryView = () => {
 </div>
 ${BottomNav('history')}`;
 };
+
+
+// ═══════════════════════════════════════════
+// INVITAR A AMIGOS
+// ═══════════════════════════════════════════
+
+/**
+ * Enlace de descarga por defecto: la ficha de Play, que se deduce del
+ * applicationId y por tanto no puede estar equivocada.
+ *
+ * Mientras la app este en pruebas cerradas ese enlace no le sirve a quien no
+ * sea tester: Play le dira que no esta disponible. Por eso se puede cambiar
+ * desde Ajustes y poner el enlace de invitacion a la prueba, que es el que de
+ * verdad funciona hasta que la app se publique.
+ */
+const INVITE_URL_POR_DEFECTO = 'https://play.google.com/store/apps/details?id=padelpulseapp2.netlify.app';
+
+function inviteUrl(){
+    try{ return localStorage.getItem('pp_invite_url') || INVITE_URL_POR_DEFECTO; }
+    catch(e){ return INVITE_URL_POR_DEFECTO; }
+}
+
+function setInviteUrl(v){
+    const u = (v||'').trim();
+    try{
+        if(u) localStorage.setItem('pp_invite_url', u);
+        else localStorage.removeItem('pp_invite_url');
+    }catch(e){}
+}
+
+/** El mensaje que se manda. Corto, que se lee en una notificacion. */
+function inviteText(nombre){
+    const yo = (Contacts.me.name||'').trim();
+    const saludo = nombre ? i2(`Hola ${nombre}! `,`Hi ${nombre}! `) : '';
+    const firma = yo ? i2(`\n\nNos vemos en la pista,\n${yo}`,`\n\nSee you on court,\n${yo}`) : '';
+    return saludo + i2(
+        'Llevo el marcador de nuestros partidos con PadelPulse Live: puntuas desde el movil o desde el reloj, guarda el historial y saca las estadisticas de cada uno.\n\nDescargatela y jugamos:\n',
+        'I keep score of our matches with PadelPulse Live: score from your phone or your watch, it saves the history and works out everyone\'s stats.\n\nGet it and let\'s play:\n'
+    ) + inviteUrl() + firma;
+}
+
+/** Invitacion general: se elige a quien mandarsela en la hoja de compartir. */
+function inviteFriends(){
+    shareResult(inviteText());
+}
+
+/** Invitacion a alguien concreto de la agenda, directa a su WhatsApp. */
+function inviteTo(nombre){
+    whatsappTo(nombre, inviteText(nombre));
+}
 
 const BottomNav=(active)=>`
 <nav class="bg-surface-container-lowest border-t border-white/5 flex justify-center w-full" style="position:fixed;bottom:0;left:0;right:0;z-index:100;padding-bottom:env(safe-area-inset-bottom,0)">
@@ -5811,6 +5874,26 @@ const SettingsView=()=>`
             ${i2('Elegir mi pareja de padel','Choose my padel partner')}
         </button>`}
     </div>`}
+
+    <!-- INVITAR -->
+    <div class="bg-surface-container rounded-3xl p-4">
+        <div class="flex items-center gap-3 mb-3">
+            <span class="material-symbols-outlined text-primary">person_add</span>
+            <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">${i2('Invitar amigos','Invite friends')}</div>
+        </div>
+        <button onclick="inviteFriends()"
+            class="w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest scale-press"
+            style="background:${tc.primary()};color:#04120B">
+            ${i2('Compartir la app','Share the app')}
+        </button>
+        <div class="text-[9px] mt-3 mb-1 leading-relaxed" style="color:${tc.muted()}">
+            ${i2('Enlace de descarga. Mientras la app este en pruebas, el de Play solo le vale a los testers: pega aqui el enlace de invitacion a la prueba.',
+                  'Download link. While the app is in testing, the Play link only works for testers: paste the testing invite link here.')}
+        </div>
+        <input type="url" id="invite-url" value="${inviteUrl().replace(/"/g,'&quot;')}"
+            placeholder="https://play.google.com/..." oninput="setInviteUrl(this.value)"
+            class="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[10px]">
+    </div>
 
     <!-- IDIOMA -->
     <div class="bg-surface-container rounded-3xl p-4">
