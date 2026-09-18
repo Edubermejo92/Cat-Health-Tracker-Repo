@@ -561,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.1.0', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.1.1', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -5971,6 +5971,13 @@ const SettingsView=()=>`
             style="background:rgba(255,80,80,0.06);border:1px solid rgba(255,80,80,0.15);color:rgba(255,80,80,0.7)">
             <span class="material-symbols-outlined text-[14px]">delete_sweep</span>Limpiar estado (si marcador bloqueado)
         </button>
+    </div>
+
+    <!-- Version instalada. Parece un detalle tonto y no lo es: sin esto no hay
+         forma de saber si el movil tiene la compilacion nueva o una vieja, y
+         se pierde mucho tiempo persiguiendo fallos ya arreglados. -->
+    <div class="text-center pt-1 pb-2 text-[10px]" style="color:${tc.muted()};opacity:.6">
+        PadelPulse Live ${(typeof window!=='undefined' && window.AndroidBridge && window.AndroidBridge.appVersion) ? window.AndroidBridge.appVersion() : 'web'}
     </div>
 </div>
 
