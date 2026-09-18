@@ -1,11 +1,5 @@
 # Compilar y firmar las dos apps en Android Studio
 
-> **Nota de esta rama.** Aquí solo está la app del reloj. Las rutas que
-> empiezan por `PadelPulse-Movil/`, `web/` o `tools/` son de la rama
-> `padelpulse-live-mobile`. Se mencionan porque las dos apps se publican en la
-> **misma ficha de Play** y hay que subirlas a la vez.
-
-
 Las dos carpetas son **proyectos Gradle independientes**. Se abren por separado:
 
 ```
@@ -170,7 +164,7 @@ sincronización cambia en ambos lados a la vez.**
 2. Copia tu `padelpulse.jks` donde lo tengas y crea un `keystore.properties` en
    la raíz de **cada** proyecto (mira el punto 2 de este documento).
 3. Comprueba que los `versionCode` son mayores que los ya publicados. En esta
-   entrega: **móvil 509** y **reloj 5090**.
+   entrega: **móvil 511** y **reloj 5110**.
 
 ### App del móvil
 
@@ -208,8 +202,8 @@ Los dos AAB van a la **misma versión**, no a dos versiones distintas:
 
 1. **Pruebas → Prueba interna** (o la pista que uses) → *Crear versión*.
 2. Sube **los dos ficheros** a esa misma versión.
-3. Play los coloca solo en su formato: el de `versionCode` 5090 como Wear OS y
-   el 509 como teléfono. Si solo subes uno, los testers se quedan con una app
+3. Play los coloca solo en su formato: el de `versionCode` 5110 como Wear OS y
+   el 511 como teléfono. Si solo subes uno, los testers se quedan con una app
    nueva y otra vieja, y **la sincronización deja de funcionar**.
 4. Notas de la versión → *Guardar* → *Revisar versión* → *Lanzar*.
 
