@@ -190,21 +190,31 @@ En **Historial › Amigos** hay un botón de *Invitar a un amigo*, y en la ficha
 de cada amigo con teléfono guardado, uno que le manda la invitación
 directamente por WhatsApp con su nombre.
 
-El mensaje lleva un enlace de descarga. Por defecto es la ficha de Play,
-deducida del `applicationId`:
-
-```
-https://play.google.com/store/apps/details?id=padelpulseapp2.netlify.app
-```
-
-**Mientras la app esté en pruebas cerradas, ese enlace no le sirve a quien no
-sea tester**: Play le dirá que no está disponible. El que funciona es el
-enlace de invitación a la prueba, que Play Console da en la pista de pruebas:
+El mensaje lleva un enlace de descarga, y **por defecto es el de la prueba**,
+que es el que funciona ahora mismo:
 
 ```
 https://play.google.com/apps/testing/padelpulseapp2.netlify.app
 ```
 
-Se pega en **Ajustes › Invitar amigos**, y desde ese momento todas las
-invitaciones lo usan. Cuando la app se publique, se borra el campo y vuelve a
-usar el de Play.
+En **Ajustes › Invitar amigos** hay dos botones para cambiar entre los dos sin
+teclear nada:
+
+| Botón | Enlace | Cuándo |
+|-------|--------|--------|
+| **En pruebas** | `.../apps/testing/...` | ahora, mientras la app esté en pruebas cerradas |
+| **Publicada** | `.../store/apps/details?id=...` | cuando la app salga a producción |
+
+Los dos se construyen a partir del `applicationId`, así que no pueden estar
+mal escritos. El campo de texto de debajo admite cualquier otro enlace, por si
+alguna vez hace falta.
+
+### Que el enlace funcione no basta
+
+Aunque uses el enlace de la prueba, **quien lo abra tiene que estar en tu
+lista de testers** de Play Console: el enlace le deja aceptar la prueba, pero
+Play solo le entrega la app si su correo está dado de alta en la pista. Antes
+de invitar a alguien nuevo, añade su correo.
+
+La app lo avisa debajo del campo, para no mandar invitaciones que no van a
+llevar a ninguna parte.

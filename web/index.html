@@ -561,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.1.4', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.1.5', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -5181,15 +5181,20 @@ ${BottomNav('history')}`;
 // ═══════════════════════════════════════════
 
 /**
- * Enlace de descarga por defecto: la ficha de Play, que se deduce del
- * applicationId y por tanto no puede estar equivocada.
+ * Enlace de descarga.
  *
- * Mientras la app este en pruebas cerradas ese enlace no le sirve a quien no
- * sea tester: Play le dira que no esta disponible. Por eso se puede cambiar
- * desde Ajustes y poner el enlace de invitacion a la prueba, que es el que de
- * verdad funciona hasta que la app se publique.
+ * Por defecto va el de **invitacion a la prueba**, porque es el que funciona
+ * mientras la app este en pruebas cerradas: la ficha normal de Play le dice a
+ * quien no sea tester que no esta disponible.
+ *
+ * Los dos se deducen del applicationId, asi que no pueden estar mal escritos.
+ * Cuando la app se publique, se cambia desde Ajustes por el de la ficha (o se
+ * vacia el campo de Ajustes y se cambia aqui).
  */
-const INVITE_URL_POR_DEFECTO = 'https://play.google.com/store/apps/details?id=padelpulseapp2.netlify.app';
+const APP_ID = 'padelpulseapp2.netlify.app';
+const INVITE_URL_PRUEBA = 'https://play.google.com/apps/testing/' + APP_ID;
+const INVITE_URL_TIENDA = 'https://play.google.com/store/apps/details?id=' + APP_ID;
+const INVITE_URL_POR_DEFECTO = INVITE_URL_PRUEBA;
 
 function inviteUrl(){
     try{ return localStorage.getItem('pp_invite_url') || INVITE_URL_POR_DEFECTO; }
@@ -5886,13 +5891,27 @@ const SettingsView=()=>`
             style="background:${tc.primary()};color:#04120B">
             ${i2('Compartir la app','Share the app')}
         </button>
-        <div class="text-[9px] mt-3 mb-1 leading-relaxed" style="color:${tc.muted()}">
-            ${i2('Enlace de descarga. Mientras la app este en pruebas, el de Play solo le vale a los testers: pega aqui el enlace de invitacion a la prueba.',
-                  'Download link. While the app is in testing, the Play link only works for testers: paste the testing invite link here.')}
+        <div class="text-[9px] mt-3 mb-2 leading-relaxed" style="color:${tc.muted()}">
+            ${i2('Enlace que se manda en la invitacion. Mientras la app este en pruebas tiene que ser el de la prueba: la ficha de Play le dice a quien no sea tester que no esta disponible.',
+                  'The link sent with the invite. While the app is in testing it has to be the testing one: the Play listing tells non-testers it is unavailable.')}
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+            ${[[i2('En pruebas','Testing'), INVITE_URL_PRUEBA],
+               [i2('Publicada','Published'), INVITE_URL_TIENDA]].map(([lbl,url])=>{
+                const sel = inviteUrl()===url;
+                return `<button onclick="setInviteUrl('${url}');render();"
+                    class="py-2 rounded-xl text-[9px] font-black uppercase tracking-widest scale-press"
+                    style="background:${sel?tc.primary()+'20':'rgba(255,255,255,0.04)'};color:${sel?tc.primary():tc.muted()};border:1px solid ${sel?tc.primary()+'45':'rgba(255,255,255,0.06)'}">
+                    ${lbl}</button>`;
+            }).join('')}
         </div>
         <input type="url" id="invite-url" value="${inviteUrl().replace(/"/g,'&quot;')}"
             placeholder="https://play.google.com/..." oninput="setInviteUrl(this.value)"
             class="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[10px]">
+        <div class="text-[9px] mt-2 leading-relaxed" style="color:${tc.muted()};opacity:.75">
+            ${i2('Aunque uses el enlace de la prueba, quien lo abra tiene que estar en tu lista de testers de Play Console o no podra descargarla.',
+                  'Even with the testing link, whoever opens it must be on your Play Console tester list or they will not be able to install it.')}
+        </div>
     </div>
 
     <!-- IDIOMA -->
