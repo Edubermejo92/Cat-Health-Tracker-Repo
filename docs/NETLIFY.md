@@ -52,3 +52,36 @@ el nombre del sitio, cambia tambien ahi. Ver `CUENTAS_SUPABASE.md`.
 
 Si cambias de sitio o de nombre, acuerdate tambien de esto o el login con
 Google dejara de volver a la app.
+
+---
+
+## Cómo saber si lo desplegado está al día
+
+La web enseña su versión abajo del todo en **Ajustes**, con el sufijo `· web`:
+
+```
+PadelPulse Live 5.1.7 · web
+```
+
+Si la que ves ahí no coincide con la del repositorio, **lo desplegado es
+viejo** y estás mirando cambios de hace varias versiones. Ha pasado: se
+reportó que la web seguía enseñando el botón de Google cuando el código no lo
+tiene desde la 5.1.0.
+
+Recuerda además que el navegador cachea: tras desplegar, recarga forzando
+(mantener pulsado el botón de recargar, o abrir en una pestaña de incógnito).
+
+## Antes de desplegar, sincroniza
+
+`web/index.html` es una copia de `code.html`. Si tocaste la app, regenera:
+
+```sh
+./tools/build-web-assets.sh   # obligatorio si cambiaron clases de Tailwind
+./tools/sync-web.sh           # copia code.html y los recursos a web/
+```
+
+Los dos ficheros tienen que quedar idénticos:
+
+```sh
+diff <(md5sum < web/index.html) <(md5sum < PadelPulse-Movil/mobile/src/main/assets/code.html)
+```
