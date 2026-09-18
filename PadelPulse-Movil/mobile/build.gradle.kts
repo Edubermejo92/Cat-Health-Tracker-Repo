@@ -23,7 +23,8 @@ android {
         applicationId = "padelpulseapp2.netlify.app"
         minSdk = 25
         targetSdk = 35
-        // Serie propia del movil. Debe ser DISTINTO al del reloj (serie 1xxx).
+        // Serie propia del movil. Debe ser DISTINTO al del reloj, que va en la
+        // misma serie x10: movil 517, reloj 5170.
         versionCode = 517
         versionName = "5.1.7"
     }
