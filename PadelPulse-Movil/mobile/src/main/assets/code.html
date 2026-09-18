@@ -561,7 +561,7 @@ const PPSync = {
     },
 
     hello(){
-        this.send(PP_PATH.hello, {app:'5.1.5', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
+        this.send(PP_PATH.hello, {app:'5.1.6', proto:PP_PROTO, mode:this.mode(), paired:this.paired});
     },
 
     /**
@@ -2494,12 +2494,17 @@ function startVoice(){
     recognition.start(); S.voiceActive=true; render(); showToast('🎙️ Escuchando...',2000);
 }
 function stopVoice(){ if(recognition){ try{recognition.stop();}catch(e){} recognition=null; } S.voiceActive=false; render(); }
+/**
+ * Boton de voz de la cabecera.
+ *
+ * Antes escuchaba UNA sola frase y no marcaba estado, asi que el indicador
+ * "en vivo" no se encendia nunca y habia que pulsarlo antes de cada punto.
+ * Ahora enciende el modo arbitro: el microfono se queda abierto.
+ */
 function toggleVoice(){
-    if(typeof window !== "undefined" && window.AndroidBridge && window.AndroidBridge.startVoiceCommand) {
-        window.AndroidBridge.startVoiceCommand();
-    } else {
-        if(S.voiceActive) stopVoice(); else startVoice();
-    }
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(b && b.startVoiceContinuous){ toggleReferee(); return; }
+    if(S.voiceActive) stopVoice(); else startVoice();
 }
 function toggleAI(){
     if(!aiKey){
@@ -2707,20 +2712,75 @@ async function testAI(){
     }
 }
 
+/** Volumen de la voz de la app, 0-100. */
+function voiceVolume(){
+    const v = parseInt(S.voiceVolume, 10);
+    return isNaN(v) ? 100 : Math.max(0, Math.min(100, v));
+}
+
+function setVoiceVolume(v){
+    S.voiceVolume = Math.max(0, Math.min(100, parseInt(v,10)||0));
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(b && b.setVoiceVolume) b.setVoiceVolume(S.voiceVolume);
+    saveStateOnly();
+}
+
+/**
+ * Sube el volumen multimedia del movil al maximo.
+ *
+ * Hace falta porque el volumen del TTS es relativo al del sistema: por muy
+ * alto que se pida, si el movil esta a la mitad se oye a la mitad. Es lo que
+ * de verdad se nota al otro lado de la pista.
+ */
+function boostVolume(){
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(!(b && b.maxDeviceVolume)){
+        showToast(i2('Solo en la app de Android','Android app only'), 2000);
+        return;
+    }
+    const r = b.maxDeviceVolume();
+    showToast(r >= 0 ? i2('Volumen del movil al maximo','Phone volume maxed')
+                     : i2('No se pudo cambiar el volumen','Could not change the volume'), 2200);
+    render();
+}
+
+/** Prueba de sonido, para ajustarlo antes de salir a la pista. */
+function testVoice(){
+    speak(i2('Treinta iguales. Saca la pareja A.','Thirty all. Team A serves.'));
+}
+
+/**
+ * La voz de la app.
+ *
+ * Va por el motor nativo de Android siempre que se pueda: dentro de un
+ * WebView, speechSynthesis del navegador es irregular -a veces no hay voces
+ * cargadas, a veces no suena- y ademas no deja controlar el volumen. El
+ * camino del navegador se queda solo para la version web.
+ */
 function speak(text){
-    if(!S.soundEnabled||!text||!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang=currentLang().voice; utt.rate=0.92; utt.pitch=1.0; utt.volume=1.0;
-    const voices = window.speechSynthesis.getVoices();
-    const langVoice = voices.find(v=>v.lang.startsWith(currentLang().voice.split('-')[0]));
-    if(langVoice) utt.voice=langVoice;
-    // Bloquear mic durante el habla estimada + 1.5s de margen post-habla
+    if(!S.soundEnabled || !text) return;
+
+    // El microfono no debe oir a la propia app cantando el punto
     const estimatedMs = Math.max(2000, text.length * 90);
     _speakingUntil = Date.now() + estimatedMs;
     _cmdLock = _speakingUntil;
+
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(b && b.speak){
+        if(b.setVoiceVolume) b.setVoiceVolume(voiceVolume());
+        b.speak(text);
+        return;
+    }
+
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang=currentLang().voice; utt.rate=0.92; utt.pitch=1.0;
+    utt.volume = voiceVolume()/100;
+    const voices = window.speechSynthesis.getVoices();
+    const langVoice = voices.find(v=>v.lang.startsWith(currentLang().voice.split('-')[0]));
+    if(langVoice) utt.voice=langVoice;
     utt.onend = () => {
-        // Tras terminar de hablar, bloquear 1.2s más por si el mic recogió el eco
         const extra = Date.now() + 1200;
         _speakingUntil = extra;
         _cmdLock = extra;
@@ -5062,9 +5122,12 @@ const Header=()=>`
         <img src="${LOGO_BASE64}" alt="PadelPulse" class="h-14 sm:h-16 md:h-16 lg:h-24 xl:h-32" style="object-fit:contain; mix-blend-mode:screen;">
     <div class="flex items-center gap-1.5">
         ${BT.pill()}
-        ${S.voiceActive?`<div class="flex items-center gap-1 px-2 py-0.5 rounded-full mic-active" style="background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.25)"><span class="material-symbols-outlined filled" style="font-size:10px;color:#ff5050">mic</span><span style="font-size:8px;font-weight:800;color:#ff5050;letter-spacing:0.5px">EN VIVO</span></div>`:''}
+        ${S.voiceActive?`<div class="flex items-center gap-1 px-2 py-0.5 rounded-full mic-active" style="background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.25)">
+            <span class="material-symbols-outlined filled ${_voiceState==='listening'?'animate-pulse-slow':''}" style="font-size:10px;color:#ff5050">${_voiceState==='processing'?'graphic_eq':'mic'}</span>
+            <span id="voice-heard" style="font-size:8px;font-weight:800;color:#ff5050;letter-spacing:0.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_voiceHeard || (_voiceState==='processing' ? i2('UN MOMENTO','ONE MOMENT') : i2('ESCUCHANDO','LISTENING'))}</span>
+        </div>`:''}
         <!-- Botón VOZ: activa micrófono -->
-        <button onclick="toggleVoice()" title="${S.voiceActive?'Desactivar voz':'Activar árbitro por voz'}"
+        <button onclick="toggleVoice()" title="${S.voiceActive?i2('Apagar el arbitro por voz','Turn voice referee off'):i2('Arbitro por voz: canta los puntos','Voice referee: call the points')}"
             class="p-2 rounded-xl scale-press ${S.voiceActive?'bg-error/10 border border-error/30':'bg-surface-container border border-outline-variant/30'}">
             <span class="material-symbols-outlined text-[20px] ${S.voiceActive?'text-error filled':'text-on-surface-variant'}">${S.voiceActive?'mic':'mic_off'}</span>
         </button>
@@ -5781,13 +5844,75 @@ ${BottomNav('activity')}`;
 // ═══════════════════════════════════════════
 function forzarSincronizacion(){ BT.resync(); }
 
-function pedirVoz() {
-    if (window.AndroidBridge && window.AndroidBridge.startVoiceCommand) {
-        window.AndroidBridge.startVoiceCommand();
-    } else {
-        showToast('🎙️ Solo disponible en App Android', 2000);
+// ═══════════════════════════════════════════
+// MODO ARBITRO: el microfono abierto todo el partido
+// ═══════════════════════════════════════════
+
+/**
+ * Antes habia que pulsar el boton antes de cada punto, lo cual en un partido
+ * no vale para nada: nadie va a sacar el movil del bolsillo cada vez. En modo
+ * arbitro el microfono se queda abierto y se vuelve a abrir solo despues de
+ * cada frase, tambien despues de que hable la propia app.
+ */
+let _voiceState = 'off';        // off | listening | processing
+let _voiceHeard = '';           // lo ultimo que se ha oido, para enseñarlo
+
+function voiceOn(){ return _voiceState !== 'off'; }
+
+function toggleReferee(){
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(!(b && b.startVoiceContinuous)){
+        showToast(i2('Solo en la app de Android','Android app only'), 2000);
+        return;
+    }
+    if(voiceOn()){
+        b.stopVoice();
+        // Se apaga aqui mismo y no se espera al aviso del nativo: si ese aviso
+        // no llegara, el indicador se quedaria encendido para siempre.
+        onVoiceState('off');
+        showToast(i2('Modo arbitro apagado','Referee mode off'), 1800);
+    }else{
+        b.startVoiceContinuous();
+        onVoiceState('listening');
+        showToast(i2('Modo arbitro: canta los puntos','Referee mode: call the points'), 2600);
     }
 }
+
+/** Una sola frase, para probar o para un comando suelto. */
+function pedirVoz() {
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if (b && b.startVoiceCommand) b.startVoiceCommand();
+    else showToast(i2('Solo en la app de Android','Android app only'), 2000);
+}
+
+/** La capa nativa avisa de en que punto esta el microfono. */
+function onVoiceState(estado){
+    _voiceState = estado;
+    if(estado === 'off') _voiceHeard = '';
+    // El indicador "en vivo" de la cabecera ya existia pero nadie lo encendia
+    S.voiceActive = (estado !== 'off');
+    render();
+}
+
+/** Lo que va oyendo, aunque todavia no haya terminado la frase. */
+function onVoicePartial(txt){
+    _voiceHeard = String(txt||'').slice(0, 40);
+    const el = document.getElementById('voice-heard');
+    if(el) el.textContent = _voiceHeard;   // sin render(), que va por frase
+}
+
+/** Un fallo del microfono que si merece contarse. */
+function onVoiceError(code){
+    // 9 = permiso denegado; 7 = no se entendio; 6 = silencio. Los dos ultimos
+    // no llegan aqui, los filtra la capa nativa.
+    const msg = (code === 9)
+        ? i2('Falta el permiso de microfono','Microphone permission missing')
+        : i2('El microfono ha fallado, vuelve a intentarlo','The microphone failed, try again');
+    onVoiceState('off');
+    showToast('🎙️ ' + msg, 3000, true);
+}
+
+
 
 const SettingsView=()=>`
 <header class="px-4 pt-0 pb-3 flex items-center gap-3 flex-shrink-0 w-full max-w-3xl mx-auto">
@@ -5974,6 +6099,37 @@ const SettingsView=()=>`
             <div class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px] text-on-surface-variant filled">${S.soundEnabled?'volume_up':'volume_off'}</span><span class="text-sm font-bold text-on-surface">${i('sound')}</span></div>
             <button onclick="S.soundEnabled=!S.soundEnabled;saveState();render();" class="scale-press"><span class="material-symbols-outlined text-[28px] ${S.soundEnabled?'text-primary filled':'text-outline'}">${S.soundEnabled?'toggle_on':'toggle_off'}</span></button>
         </div>
+
+        ${S.soundEnabled?`
+        <div class="pt-3 mt-1" style="border-top:1px solid rgba(255,255,255,0.05)">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-bold uppercase tracking-widest" style="color:${tc.muted()}">${i2('Volumen de la voz','Voice volume')}</span>
+                <span class="text-[12px] font-black" style="color:${tc.primary()}">${voiceVolume()}%</span>
+            </div>
+            <input type="range" min="0" max="100" step="5" value="${voiceVolume()}"
+                oninput="setVoiceVolume(this.value); this.previousElementSibling.querySelector('span:last-child').textContent=this.value+'%'"
+                onchange="testVoice()"
+                class="w-full" style="accent-color:${tc.primary()}">
+
+            <div class="grid grid-cols-2 gap-2 mt-3">
+                <button onclick="testVoice()"
+                    class="py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest scale-press"
+                    style="background:rgba(255,255,255,0.05);color:${tc.text()};border:1px solid rgba(255,255,255,0.08)">
+                    <span class="material-symbols-outlined text-[14px] align-middle">play_arrow</span> ${i2('Probar','Test')}
+                </button>
+                <button onclick="boostVolume()"
+                    class="py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest scale-press"
+                    style="background:${tc.primary()}18;color:${tc.primary()};border:1px solid ${tc.primary()}35">
+                    <span class="material-symbols-outlined text-[14px] align-middle">volume_up</span> ${i2('Movil al maximo','Max phone')}
+                </button>
+            </div>
+
+            <div class="text-[9px] mt-2 leading-relaxed" style="color:${tc.muted()}">
+                ${i2('En pista hay viento y pelotazos. Este mando sube la voz de la app, pero nunca pasa del volumen del movil: si aun asi se oye bajo, pulsa "Movil al maximo".',
+                      'Courts are windy and noisy. This raises the app voice, but never above the phone volume: if it is still quiet, tap "Max phone".')}
+            </div>
+        </div>`:''}
+
         <div class="py-2">
             <div class="flex items-center justify-between mb-2"><div class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px] text-on-surface-variant">brightness_6</span><span class="text-sm font-bold text-on-surface">${i('brightness')}</span></div><span class="text-[10px] text-on-surface-variant">${S.brightness}%</span></div>
             <input type="range" min="20" max="100" value="${S.brightness}" class="w-full" oninput="S.brightness=parseInt(this.value);document.documentElement.style.filter='brightness('+S.brightness/100+')';saveState();">
