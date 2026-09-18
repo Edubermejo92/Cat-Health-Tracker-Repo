@@ -1,0 +1,110 @@
+<!-- PadelPulse Live · Confirmar la cuenta
+     Asunto sugerido:  Confirma tu cuenta · PadelPulse Live
+
+     Se pega tal cual en Supabase: Authentication › Emails › Confirm signup.
+     {{ .Data.display_name }} es el nombre que la app guarda al registrarse.
+     Va todo en tablas y con estilos en linea porque los clientes de correo no
+     entienden flex, grid ni hojas de estilo externas. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:#06100c;margin:0;padding:0;width:100%">
+  <tr>
+    <td align="center" style="padding:32px 16px">
+
+      <!-- Texto de vista previa: lo que se lee en la bandeja sin abrir -->
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0">
+        Te queda un toque para empezar a puntuar tus partidos.
+      </div>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:520px;background:#0e1513;border:1px solid rgba(255,255,255,.08);border-radius:20px">
+
+        <!-- Cabecera -->
+        <tr>
+          <td align="center" style="padding:36px 32px 8px">
+            <div style="font-family:'Trebuchet MS',Helvetica,Arial,sans-serif;font-size:11px;font-weight:bold;
+                        letter-spacing:3px;text-transform:uppercase;color:#00FD87">
+              PadelPulse&nbsp;Live
+            </div>
+            <div style="width:34px;height:3px;background:#00FD87;border-radius:2px;margin:14px auto 0"></div>
+          </td>
+        </tr>
+
+        <!-- Saludo -->
+        <tr>
+          <td style="padding:26px 32px 0;font-family:'Trebuchet MS',Helvetica,Arial,sans-serif">
+            <div style="font-size:23px;font-weight:bold;color:#ffffff;line-height:1.25">
+              {{ if .Data.display_name }}Hola, {{ .Data.display_name }}{{ else }}Hola{{ end }}
+            </div>
+            <div style="font-size:15px;color:#9aa5a1;line-height:1.65;margin-top:14px">
+              Gracias por registrarte en <strong style="color:#ffffff">PadelPulse&nbsp;Live</strong>.
+              Solo queda confirmar que este correo es tuyo y ya podras guardar
+              tus partidos.
+            </div>
+          </td>
+        </tr>
+
+        <!-- Boton -->
+        <tr>
+          <td align="center" style="padding:28px 32px 6px">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="#00FD87" style="border-radius:14px">
+                  <a href="{{ .ConfirmationURL }}"
+                     style="display:inline-block;padding:15px 34px;font-family:'Trebuchet MS',Helvetica,Arial,sans-serif;
+                            font-size:14px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;
+                            color:#04120b;text-decoration:none;border-radius:14px">
+                    Confirmar mi cuenta
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Que se lleva con la cuenta -->
+        <tr>
+          <td style="padding:26px 32px 0">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#131b19;border-radius:14px">
+              <tr>
+                <td style="padding:18px 20px;font-family:'Trebuchet MS',Helvetica,Arial,sans-serif;
+                           font-size:13px;color:#9aa5a1;line-height:1.9">
+                  <strong style="color:#ffffff;font-size:12px;letter-spacing:1.5px;text-transform:uppercase">
+                    Con tu cuenta
+                  </strong><br>
+                  Historial de todos tus partidos<br>
+                  Estadisticas de cada jugador y de tus parejas<br>
+                  Tu agenda, con la pareja habitual<br>
+                  Todo tuyo en cualquier movil
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Enlace de repuesto -->
+        <tr>
+          <td style="padding:24px 32px 0;font-family:'Trebuchet MS',Helvetica,Arial,sans-serif;
+                     font-size:12px;color:#5f6b67;line-height:1.7">
+            Si el boton no te funciona, copia esta direccion en el navegador:
+            <br>
+            <a href="{{ .ConfirmationURL }}" style="color:#00FD87;word-break:break-all">{{ .ConfirmationURL }}</a>
+          </td>
+        </tr>
+
+        <!-- Pie -->
+        <tr>
+          <td style="padding:26px 32px 34px;font-family:'Trebuchet MS',Helvetica,Arial,sans-serif;
+                     font-size:11px;color:#5f6b67;line-height:1.7;border-top:1px solid rgba(255,255,255,.06)">
+            <div style="padding-top:20px">
+              Si no has sido tu, ignora este correo: sin confirmar, la cuenta no se activa.
+              <br><br>
+              PadelPulse Live · el marcador de padel para el movil y el reloj
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
