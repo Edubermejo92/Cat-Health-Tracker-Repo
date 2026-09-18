@@ -5,6 +5,10 @@ proyectos. Está escrito para que entienda el contexto **antes** de tocar
 nada, porque este proyecto tiene varias trampas que no se ven leyendo un
 fichero suelto.
 
+> Si prefieres que Gemini tenga además **el código delante**, usa los prompts
+> por app, que son éste mismo más el fuente completo incrustado:
+> `docs/PROMPT_MOVIL.md` y `docs/PROMPT_WEAROS.md`.
+
 ---
 
 ## El encargo
