@@ -2775,6 +2775,30 @@ const REPETIDO_MS = 3500;
 let _ultimaFrase = '';
 let _ultimaFraseAt = 0;
 
+/*
+ * Lo ultimo que ha cantado la app, para no obedecerse a si misma.
+ *
+ * Desde que se canta el marcador en cada punto, el microfono oye "quince,
+ * cero" dicho por la propia app. Y "quince cero" es un comando de verdad
+ * -matchScoreVoice() fija el marcador con el-, asi que se metia solo un 15 a
+ * cada pareja y volvia a cantar: un bucle. El candado por tiempo no basta,
+ * porque el reconocedor puede tardar en soltar la frase mas de lo que dura el
+ * anuncio. Esto no depende de cuando llegue: depende de QUE llegue.
+ */
+const ECO_PROPIO_MS = 6000;
+let _ultimoCanto = '';
+let _ultimoCantoAt = 0;
+
+/** True si lo que se acaba de oir es la app oyendose a si misma. */
+function esEcoDeLaApp(frase){
+    if(!_ultimoCanto) return false;
+    if(Date.now() - _ultimoCantoAt > ECO_PROPIO_MS) return false;
+    if(frase.length < 3) return false;
+    return frase === _ultimoCanto ||
+           _ultimoCanto.includes(frase) ||
+           frase.includes(_ultimoCanto);
+}
+
 function normalizarVoz(txt){
     return String(txt||'').toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // sin tildes
@@ -2789,6 +2813,9 @@ function vozAceptada(txt){
     const frase = normalizarVoz(txt);
     if(!frase) return false;
 
+    // La app oyendose a si misma cantar el punto.
+    if(esEcoDeLaApp(frase)) return false;
+
     // Misma frase, demasiado pronto: es un eco, no un punto nuevo.
     if(frase === _ultimaFrase && (ahora - _ultimaFraseAt) < REPETIDO_MS){
         return false;
@@ -2799,7 +2826,10 @@ function vozAceptada(txt){
 }
 
 /** Al encender o apagar el microfono se olvida lo ultimo oido. */
-function olvidarUltimaFrase(){ _ultimaFrase = ''; _ultimaFraseAt = 0; }
+function olvidarUltimaFrase(){
+    _ultimaFrase = ''; _ultimaFraseAt = 0;
+    _ultimoCanto = ''; _ultimoCantoAt = 0;
+}
 
 function startVoice(){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -3171,6 +3201,10 @@ function cantarMarcador(){
 function speak(text){
     if(!S.soundEnabled || !text) return;
 
+    // Se apunta lo que vamos a decir para no obedecerlo si el microfono lo oye.
+    _ultimoCanto = normalizarVoz(text);
+    _ultimoCantoAt = Date.now();
+
     // El microfono no debe oir a la propia app cantando el punto
     const estimatedMs = Math.max(2000, text.length * 90);
     _speakingUntil = Date.now() + estimatedMs;
@@ -3194,11 +3228,22 @@ function speak(text){
     const voices = window.speechSynthesis.getVoices();
     const langVoice = voices.find(v=>v.lang.startsWith(currentLang().voice.split('-')[0]));
     if(langVoice) utt.voice=langVoice;
-    utt.onend = () => {
-        const extra = Date.now() + 1200;
+    /* La estimacion por longitud se queda corta a menudo y el reconocedor
+       suelta la frase cuando ya se ha levantado el candado. Atarse al
+       principio y al final de verdad es lo unico fiable. */
+    utt.onstart = () => {
+        const largo = Date.now() + 15000;   // se corrige en onend
+        _speakingUntil = largo;
+        _cmdLock = largo;
+    };
+    const soltar = () => {
+        const extra = Date.now() + 1500;
         _speakingUntil = extra;
         _cmdLock = extra;
+        _ultimoCantoAt = Date.now();        // la ventana del eco cuenta desde aqui
     };
+    utt.onend = soltar;
+    utt.onerror = soltar;                   // si falla, que no deje el micro mudo
     window.speechSynthesis.speak(utt);
 }
 
