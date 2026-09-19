@@ -51,6 +51,53 @@ keyPassword=padelpulse123
 
 ---
 
+## 2 bis. Antes de compilar, comprueba la copia de trabajo
+
+**Este paso no es opcional.** Dos entregas seguidas salieron con el Kotlin nuevo
+y los assets viejos, y el fallo no se ve: compila perfectamente y la app arranca
+bien. Te enteras cuando un tester te dice que sigue saliendo "entrar con
+Google".
+
+```bash
+./tools/antes-de-compilar.sh
+```
+
+Si hay algún fallo, **no compiles**. El script mira:
+
+- Que `code.html` es el actual, por marcas que sólo tiene la versión nueva
+  (`syncRev`, `showWheel`, `marcadorCantado`, `APP_EN_PRUEBAS`) y por lo que ya
+  no puede tener (entrar con Google, árbitro IA).
+- Que en `assets/` no sobra nada. `index.html`, `netlify.toml`, `_headers` o
+  `watch_code.html` ahí son restos de un montaje antiguo, y su presencia
+  significa que la carpeta no se limpió.
+- Que las versiones cuadran: `versionCode` del reloj = el del móvil por diez,
+  mismo `versionName` en las dos, y `WEB_VERSION` y los dos `APP_VERSION` a
+  juego.
+- Que el protocolo es el mismo en las dos apps, que está el `pathPrefix`, que
+  `standalone` sigue en `false` y que `MatchOngoingService` está declarado.
+- Si `tailwind.css` se ha quedado atrás y si falta el `keystore.properties`.
+
+### Si sale que los assets son viejos
+
+Descomprimir un ZIP encima de una carpeta **reemplaza lo que coincide pero nunca
+borra lo que sobra**. Por eso hay que vaciarla primero:
+
+```bash
+rm -rf PadelPulse-Movil/mobile/src/main/assets
+rm -rf PadelPulse-WearOS/app/src/main/assets
+```
+
+Y luego descomprimir el ZIP o hacer `git checkout` de la carpeta. Al acabar,
+`assets/` del móvil tiene que tener exactamente esto y nada más:
+
+```
+code.html  fonts/  logo.png  tailwind.css
+```
+
+El proyecto del reloj **no tiene carpeta `assets`**.
+
+---
+
 ## 3. Generar los AAB firmados
 
 Para cada proyecto, por separado:
@@ -71,11 +118,14 @@ PadelPulse-WearOS/app/release/app-release.aab
 También vale por línea de comandos:
 
 ```bash
-cd PadelPulse-Movil  && ./gradlew bundleRelease
-cd PadelPulse-WearOS && ./gradlew bundleRelease
+cd PadelPulse-Movil  && ./gradlew clean bundleRelease
+cd PadelPulse-WearOS && ./gradlew clean bundleRelease
 ```
 
-(En Windows: `gradlew.bat bundleRelease`.)
+(En Windows: `gradlew.bat clean bundleRelease`.)
+
+El `clean` **no sobra**: sin él Gradle puede reutilizar los assets mezclados de
+una compilación anterior, y ahí es por donde se cuela el `code.html` viejo.
 
 ---
 
@@ -222,8 +272,8 @@ Los dos AAB van a la **misma versión**, no a dos versiones distintas:
 Si prefieres no usar el diálogo (lee la firma de `keystore.properties`):
 
 ```bash
-cd PadelPulse-Movil  && ./gradlew bundleRelease
-cd PadelPulse-WearOS && ./gradlew bundleRelease
+cd PadelPulse-Movil  && ./gradlew clean bundleRelease
+cd PadelPulse-WearOS && ./gradlew clean bundleRelease
 ```
 
 En Windows, `gradlew.bat bundleRelease`.
