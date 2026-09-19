@@ -121,6 +121,23 @@ quedarían diferentes para siempre.
 **Anti-eco**: mientras se aplica un estado remoto hay un flag que impide
 reemitir. Sin él las dos apps se mandan el mismo estado sin parar.
 
+### La pareja A eres tú
+
+Invariante del producto, no una convención suelta. De ella cuelgan los comandos
+de voz (`nosotros` → A, `ellos` → B), a quién se le apuntan las estadísticas y
+quién sale como jugador principal en el historial. Si la A fuese unas veces
+tuya y otras del rival, nada de eso cuadraría.
+
+Se aplica en `initTeamNames()`: la pareja A coge tu nombre en cuanto lo tienes
+en el perfil. Un nombre que hayas escrito a mano **no se pisa nunca** —
+`esNombreGenerico()` distingue un nombre propio del "Pareja A" por defecto, en
+los 13 idiomas.
+
+Ojo con el orden de arranque: `initTeamNames()` corre antes de que exista
+`Contacts`, así que lee el nombre con guardas y se vuelve a llamar después de
+`Contacts.load()`. Es el mismo tropiezo que ya costó una pantalla en blanco
+con `Auth`.
+
 ### Cuentas (Supabase)
 
 Proyecto `fdlcdzlvvxqhzougcjwd`. Cuatro tablas con RLS contra `auth.uid()`.

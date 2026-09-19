@@ -56,6 +56,16 @@ body{margin:0;padding:0;background:#000;height:100vh;height:100dvh;width:100vw;o
 .mic-active{animation:pulse 0.8s ease infinite;box-shadow:0 0 20px rgba(255,113,108,0.5);}
 .scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .scrollable::-webkit-scrollbar{display:none;}
+/* Rueda para corregir sets y juegos tocando el numero del marcador */
+.pp-rueda{height:210px;overflow-y:auto;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;
+  padding:70px 0;mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent);
+  -webkit-mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent);}
+.pp-rueda::-webkit-scrollbar{display:none;}
+.pp-rueda>button{scroll-snap-align:center;display:block;width:100%;height:70px;line-height:70px;
+  font-size:40px;font-weight:900;background:none;border:0;transition:opacity .15s,transform .15s;}
+.pp-rueda>button:disabled{opacity:.18;text-decoration:line-through;}
+.pp-marcable{cursor:pointer;border-radius:14px;transition:background .15s;}
+.pp-marcable:active{background:rgba(255,255,255,0.08);}
 input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:#262626;border-radius:2px;outline:none;}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;background:#00fd87;border-radius:50%;cursor:pointer;}
 input[type=text]{-webkit-user-select:text;user-select:text;}
@@ -975,10 +985,45 @@ if(typeof S.playingExtraSet === 'undefined') S.playingExtraSet = false;
     }
 })();
 
+/*
+ * La pareja A eres tu. Siempre.
+ *
+ * No es una convencion suelta: de ahi cuelgan los comandos de voz
+ * ("nosotros" / "ellos"), a quien se le apuntan las estadisticas y quien
+ * aparece como jugador principal en el historial. Si la A fuese unas veces
+ * tuya y otras del rival, nada de eso cuadraria.
+ */
+function esNombreGenerico(nombre){
+    const v = String(nombre||'').trim().toUpperCase();
+    if(!v) return true;
+    return Object.values(LANGS).some(L => v === String(L.t.teamA).toUpperCase());
+}
+
+/**
+ * Tu nombre, si ya lo hay.
+ *
+ * Con guardas porque esto se llama al arrancar y `Contacts` se define mucho
+ * mas abajo en el fichero: leerlo antes de tiempo revienta la carga entera.
+ */
+function miNombre(){
+    try{
+        if(typeof Contacts === 'undefined' || !Contacts.me) return '';
+        return (Contacts.me.name||'').trim();
+    }catch(e){ return ''; }
+}
+
+/** Como se llama tu pareja: tu nombre, o el generico si aun no lo has puesto. */
+function miNombreDePareja(){
+    const yo = miNombre();
+    return yo ? yo.toUpperCase() : i('teamA').toUpperCase();
+}
+
 // Set default team names from current language (called after LANGS is defined)
 function initTeamNames(){
-    if(!S.teamA.name) S.teamA.name = i('teamA').toUpperCase();
+    if(esNombreGenerico(S.teamA.name)) S.teamA.name = miNombreDePareja();
     if(!S.teamB.name) S.teamB.name = i('teamB').toUpperCase();
+    // Tu eres el jugador principal de la A mientras no digas otra cosa.
+    if(!S.teamA.playerA && miNombre()) S.teamA.playerA = miNombre();
 }
 function saveState(){
     try{
@@ -1494,7 +1539,7 @@ function setLang(code){
     const oldA = (LANGS[oldLang]||LANGS.es).t.teamA.toUpperCase();
     const oldB = (LANGS[oldLang]||LANGS.es).t.teamB.toUpperCase();
     S.lang = code;
-    if(!S.teamA.name || S.teamA.name===oldA) S.teamA.name = i('teamA').toUpperCase();
+    if(!S.teamA.name || S.teamA.name===oldA) S.teamA.name = miNombreDePareja();
     if(!S.teamB.name || S.teamB.name===oldB) S.teamB.name = i('teamB').toUpperCase();
     if(recognition){ stopVoice(); }
     saveState(); render();
@@ -2463,6 +2508,93 @@ function closeScoreEditor(){
     _scoreDraft = null;
 }
 
+/*
+ * RUEDA: se toca el numero en el marcador y se elige el valor.
+ *
+ * Es la via rapida, la de en mitad de un partido. El boton "Corregir" sigue
+ * estando para cuadrar juegos y sets de las dos parejas de una vez.
+ *
+ * Combinaciones imposibles: 7-7 en juegos (de 6-6 se sale por tie-break, no
+ * se llega a 7-7) y mas sets jugados de los que tiene el partido. Salen
+ * tachadas y no se pueden elegir, en vez de esconderlas: asi se ve por que.
+ */
+function aplicarSets(team, objetivo){
+    const hist = S.setsHistory || (S.setsHistory = []);
+    while(setsGanados(team) < objetivo){
+        hist.push({winner:team, a: team==='A'?6:0, b: team==='A'?0:6, tiebreak:false, tbA:0, tbB:0});
+    }
+    while(setsGanados(team) > objetivo){
+        for(let k=hist.length-1; k>=0; k--){
+            if(hist[k].winner===team){ hist.splice(k,1); break; }
+        }
+    }
+}
+
+function showWheel(tipo, team){
+    // En tie-break ese hueco enseña los puntos del tie-break, no los juegos.
+    if(tipo==='games' && (S.tiebreak||S.superTiebreak)){
+        showToast(i2('En tie-break los juegos no se tocan','Games are locked during a tie-break'), 2400);
+        return;
+    }
+    const otro    = team==='A' ? 'B' : 'A';
+    const bo      = S.bestOf || 3;
+    const max     = tipo==='sets' ? bo : 7;
+    const actual  = tipo==='sets' ? setsGanados(team) : (S['team'+team].games|0);
+    const delOtro = tipo==='sets' ? setsGanados(otro)  : (S['team'+otro].games|0);
+    const nombre  = S['team'+team].name;
+    const titulo  = tipo==='sets' ? i2('Sets de','Sets for') : i2('Juegos de','Games for');
+
+    // Un valor es imposible si, puesto ahi, deja un marcador que no existe.
+    const imposible = (v) => tipo==='games'
+        ? (v===7 && delOtro===7)
+        : (v + delOtro > bo);
+
+    const el = document.createElement('div');
+    el.id = 'pp-wheel';
+    el.style.cssText = 'position:fixed;inset:0;z-index:210;display:flex;align-items:flex-end;background:rgba(0,0,0,0.72);';
+    el.onclick = (ev) => { if(ev.target === el) closeWheel(); };
+    el.innerHTML = `<div class="slide-up w-full max-w-md mx-auto rounded-t-3xl md:rounded-3xl md:mb-10 p-6" style="background:${tc.surf2()}">
+        <div class="text-center mb-1">
+            <div class="text-[9px] font-bold uppercase tracking-widest" style="color:${tc.muted()}">${titulo}</div>
+            <div class="font-black text-base truncate" style="color:${tc.text()}">${String(nombre||'').replace(/</g,'&lt;')}</div>
+        </div>
+        <div class="pp-rueda" id="pp-rueda">
+            ${Array.from({length:max+1}, (_,v)=>{
+                const no  = imposible(v);
+                const sel = v===actual;
+                return `<button ${no?'disabled':''} data-v="${v}"
+                    onclick="${no?'':`pickWheel('${tipo}','${team}',${v})`}"
+                    style="color:${sel?tc.primary():tc.text()};${sel?'':'opacity:.45'}">${v}</button>`;
+            }).join('')}
+        </div>
+        <button onclick="closeWheel()" class="w-full mt-2 py-3 rounded-2xl text-[12px] font-black uppercase scale-press"
+            style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5)">${i('cancel')}</button>
+    </div>`;
+    document.body.appendChild(el);
+
+    // Dejar el valor actual centrado al abrir.
+    const r = document.getElementById('pp-rueda');
+    const btn = r && r.querySelector(`button[data-v="${actual}"]`);
+    if(r && btn) r.scrollTop = btn.offsetTop - r.clientHeight/2 + btn.offsetHeight/2;
+}
+
+function closeWheel(){
+    const el = document.getElementById('pp-wheel');
+    if(el) el.remove();
+}
+
+function pickWheel(tipo, team, valor){
+    snapshot();                        // tambien se deshace como un punto
+    if(tipo==='sets') aplicarSets(team, valor);
+    else              S['team'+team].games = valor;
+    S.currentSet = (S.setsHistory||[]).length + 1;
+    closeWheel();
+    saveState();                       // guarda y lo manda al reloj
+    render();
+    const q = tipo==='sets' ? i2('Sets','Sets') : i2('Juegos','Games');
+    showToast('✅ ' + q + ' ' + S['team'+team].name + ': ' + valor, 1800);
+}
+
 function applyScoreEditor(){
     if(!_scoreDraft){ closeScoreEditor(); return; }
     const d = _scoreDraft;
@@ -2474,18 +2606,8 @@ function applyScoreEditor(){
     /* Los sets se cuadran anadiendo o quitando entradas del historial, no
        reconstruyendolo entero: asi no se pierde el 7-5 real de un set que ya
        estaba jugado. */
-    ['A','B'].forEach(team=>{
-        const objetivo = team==='A' ? d.sA : d.sB;
-        let hist = S.setsHistory || (S.setsHistory = []);
-        while(setsGanados(team) < objetivo){
-            hist.push({winner:team, a: team==='A'?6:0, b: team==='A'?0:6, tiebreak:false, tbA:0, tbB:0});
-        }
-        while(setsGanados(team) > objetivo){
-            for(let k=hist.length-1; k>=0; k--){
-                if(hist[k].winner===team){ hist.splice(k,1); break; }
-            }
-        }
-    });
+    aplicarSets('A', d.sA);
+    aplicarSets('B', d.sB);
     S.currentSet = (S.setsHistory||[]).length + 1;
 
     closeScoreEditor();
@@ -4341,6 +4463,13 @@ function saveMe(){
     Contacts.me.phone = g('me-phone').trim();
     Contacts.me.club  = g('me-club').trim();
     Contacts.persist();
+    /* La pareja A eres tu: si todavia se llamaba "Pareja A", pasa a llevar tu
+       nombre. Si le habias puesto uno a mano, no se toca. */
+    if(esNombreGenerico(S.teamA.name)){
+        S.teamA.name = miNombreDePareja();
+        if(!S.teamA.playerA) S.teamA.playerA = miNombre();
+        saveState();
+    }
     if(Auth.isIn){
         clearTimeout(_meSyncTimer);
         _meSyncTimer = setTimeout(()=>Contacts.push().catch(()=>{}), 1500);
@@ -5672,21 +5801,21 @@ const HomeView=()=>{
                 <span class="dk-stats-label text-[9px] md:text-sm lg:text-lg font-black uppercase tracking-widest text-on-surface-variant">${S.superTiebreak?i('superTiebreak'):S.tiebreak?i('tiebreak'):(i('set')+' '+S.currentSet+(S.bestOf&&S.bestOf>1?' / '+S.bestOf:'')+' · '+i('games'))}</span>
             </div>
             <div class="dk-stats-row flex justify-between items-center mb-2 md:mb-6 px-1">
-                <div class="text-center flex-1">
+                <div class="text-center flex-1 pp-marcable" onclick="showWheel('sets','A')" title="${i2('Tocar para corregir los sets','Tap to fix the sets')}">
                     <div class="dk-stats-score text-xl md:text-4xl lg:text-6xl font-black text-primary">${sA}</div>
                     <div class="dk-stats-name text-[8px] md:text-sm lg:text-xl font-bold text-on-surface-variant uppercase truncate">${S.teamA.name}</div>
                     ${(S.teamA.playerA||S.teamA.playerB)?`<div class="text-[7px] md:text-xs lg:text-sm text-on-surface-variant/50 truncate">${[S.teamA.playerA,S.teamA.playerB].filter(Boolean).join('/')}</div>`:''}
                 </div>
                 <div class="text-on-surface-variant/30 text-lg md:text-4xl lg:text-6xl font-thin px-1 md:px-4">·</div>
-                <div class="text-center flex-1">
+                <div class="text-center flex-1 pp-marcable" onclick="showWheel('sets','B')" title="${i2('Tocar para corregir los sets','Tap to fix the sets')}">
                     <div class="dk-stats-score text-xl md:text-4xl lg:text-6xl font-black text-on-surface">${sB}</div>
                     <div class="dk-stats-name text-[8px] md:text-sm lg:text-xl font-bold text-on-surface-variant uppercase truncate">${S.teamB.name}</div>
                     ${(S.teamB.playerA||S.teamB.playerB)?`<div class="text-[7px] md:text-xs lg:text-sm text-on-surface-variant/50 truncate">${[S.teamB.playerA,S.teamB.playerB].filter(Boolean).join('/')}</div>`:''}
                 </div>
                 <div class="dk-stats-divider w-px bg-outline-variant/30 mx-2 md:mx-6 lg:mx-10 h-8 md:h-16 lg:h-16"></div>
-                <div class="text-center flex-1"><div class="dk-stats-score text-xl md:text-4xl lg:text-6xl font-black ${S.serving==='A'?'text-primary':'text-on-surface'}">${(S.superTiebreak||S.tiebreak)?S.tiebreakPoints.A:S.teamA.games}</div></div>
+                <div class="text-center flex-1 pp-marcable" onclick="showWheel('games','A')" title="${i2('Tocar para corregir los juegos','Tap to fix the games')}"><div class="dk-stats-score text-xl md:text-4xl lg:text-6xl font-black ${S.serving==='A'?'text-primary':'text-on-surface'}">${(S.superTiebreak||S.tiebreak)?S.tiebreakPoints.A:S.teamA.games}</div></div>
                 <div class="text-on-surface-variant/30 text-lg md:text-4xl lg:text-6xl font-thin px-1 md:px-4">-</div>
-                <div class="text-center flex-1"><div class="dk-stats-score text-xl md:text-4xl lg:text-6xl font-black ${S.serving==='B'?'text-primary':'text-on-surface'}">${(S.superTiebreak||S.tiebreak)?S.tiebreakPoints.B:S.teamB.games}</div></div>
+                <div class="text-center flex-1 pp-marcable" onclick="showWheel('games','B')" title="${i2('Tocar para corregir los juegos','Tap to fix the games')}"><div class="dk-stats-score text-xl md:text-4xl lg:text-6xl font-black ${S.serving==='B'?'text-primary':'text-on-surface'}">${(S.superTiebreak||S.tiebreak)?S.tiebreakPoints.B:S.teamB.games}</div></div>
             </div>
 
             <!-- LIVE HEALTH DATA WIDGET -->
@@ -6577,6 +6706,9 @@ function showSplash(){
  */
 Auth.load();
 Contacts.load();
+// initTeamNames() ya corrio arriba, cuando Contacts todavia no existia. Ahora
+// que tu perfil esta cargado, la pareja A puede coger tu nombre.
+initTeamNames();
 // Version web: vuelta del enlace de "he perdido la contraseña"
 const _vuelveDelCorreo = (typeof location!=='undefined') && (location.hash||'').indexOf('access_token=')>=0;
 if (_vuelveDelCorreo) setTimeout(()=>Auth.catchWebRedirect().catch(()=>{}), 50);
