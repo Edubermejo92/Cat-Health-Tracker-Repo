@@ -5424,7 +5424,7 @@ async function generateAICoach(match){
 
 MATCH DATA:
 - ${match.teamA} vs ${match.teamB}
-- Result: Sets ${match.setsA}-${match.setsB} (${match.setsHistory.map(s=>s.a+'-'+s.b).join(', ')})
+- Result: Sets ${match.setsA}-${match.setsB} (${(match.setsHistory||[]).map(s=>s.a+'-'+s.b).join(', ')})
 - Winner: ${winner}
 - Points won: ${match.teamA} ${st.pA} (${st.pctA}%) vs ${match.teamB} ${st.pB} (${st.pctB}%)
 - Service hold: ${match.teamA} ${st.srvHoldA}% vs ${match.teamB} ${st.srvHoldB}%
@@ -5486,7 +5486,7 @@ const HistoryView=()=>{
                 const won=match.winner==='A';
                 const d=new Date(match.date);
                 const dateStr=d.getDate()+'/'+(d.getMonth()+1);
-                const sets=match.setsHistory.map(s=>s.a+'-'+s.b).join(' · ');
+                const sets=(match.setsHistory||[]).map(s=>s.a+'-'+s.b).join(' · ');
                 return `<div class="rounded-2xl p-3 mb-2 border" style="background:${su};border-color:${won?p+'20':bo}" onclick="showMatchDetail(${match.id})">
                     <div class="flex items-center justify-between mb-1.5">
                         <div class="flex items-center gap-2">
@@ -5689,7 +5689,7 @@ function showMatchDetail(id){
                 </div>
                 <div class="flex flex-col items-center px-4">
                     <div class="font-black text-3xl" style="color:${te}">${match.setsA}<span style="color:${mu}"> - </span>${match.setsB}</div>
-                    <div class="text-[9px]" style="color:${mu}">${match.setsHistory.map(s=>s.a+'-'+s.b).join(' · ')}</div>
+                    <div class="text-[9px]" style="color:${mu}">${(match.setsHistory||[]).map(s=>s.a+'-'+s.b).join(' · ')}</div>
                     <div class="text-[9px] mt-1" style="color:${mu}">⏱ ${formatTime(match.duration)}</div>
                 </div>
                 <div class="flex-1 text-center">
