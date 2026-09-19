@@ -944,9 +944,10 @@ const _addPoint = addPoint;
    dos veces. */
 let _sinCanto = false;
 addPoint = function(t){
+    const antes = fotoDelMarcador();
     _addPoint(t);
     PPSync.onLocalAction('point', t);
-    if(!_sinCanto) cantarMarcador();
+    if(!_sinCanto) cantarLoQuePaso(antes);
 };
 const _removePoint = removePoint;
 removePoint = function(t){ _removePoint(t); PPSync.onLocalAction('minus', t); };
@@ -976,6 +977,16 @@ if(typeof S.playingExtraSet === 'undefined') S.playingExtraSet = false;
     const sB=(S.setsHistory||[]).filter(s=>s.winner==='B').length;
     const totalSets = sA+sB;
     const setsToWin = Math.ceil((S.bestOf||3)/2);
+
+    /* Reparacion: hubo una temporada en que iniciar sesion bajaba super_tb
+       como si fuera un ajuste y dejaba S.superTiebreak encendido en mitad de
+       un partido normal. A quien le pasara se le quedo pegado en el estado
+       guardado, asi que se limpia aqui. Un super tie-break nunca empieza en el
+       primer set ni sin sets jugados. */
+    if(S.superTiebreak && totalSets===0 && (S.currentSet||1)<=1
+       && !((S.tiebreakPoints?.A|0) || (S.tiebreakPoints?.B|0))){
+        S.superTiebreak = false;
+    }
 
     // Si hay juegos activos en el set actual, el partido no debería estar terminado
     const activeGames = (S.teamA?.games||0)+(S.teamB?.games||0);
@@ -2401,7 +2412,7 @@ function showMatchOver(team){
         </div>
     </div>`;
     document.body.appendChild(el);
-    speak('¡'+wName+' gana el partido! '+wSets+' a '+lSets);
+    speak(`${wName} ${voz().gana}. ${wSets} - ${lSets}.`);
 }
 
 
@@ -3146,19 +3157,19 @@ function testVoice(){
  *   set      se acabo el set
  */
 const VOZ = {
-    es:{ p:['Cero','Quince','Treinta','Cuarenta'], ambos:'iguales', iguales:'Iguales',     ventaja:'Ventaja',     juego:'Juego', set:'Set' },
-    en:{ p:['Zero','Fifteen','Thirty','Forty'],    ambos:'all',     iguales:'Deuce',       ventaja:'Advantage',   juego:'Game',  set:'Set' },
-    it:{ p:['Zero','Quindici','Trenta','Quaranta'],ambos:'pari',    iguales:'Parità',      ventaja:'Vantaggio',   juego:'Gioco', set:'Set' },
-    fr:{ p:['Zéro','Quinze','Trente','Quarante'],  ambos:'partout', iguales:'Égalité',     ventaja:'Avantage',    juego:'Jeu',   set:'Set' },
-    de:{ p:['Null','Fünfzehn','Dreißig','Vierzig'],ambos:'beide',   iguales:'Einstand',    ventaja:'Vorteil',     juego:'Spiel', set:'Satz' },
-    fi:{ p:['Nolla','Viisitoista','Kolmekymmentä','Neljäkymmentä'], ambos:'tasan', iguales:'Tasapeli', ventaja:'Etu', juego:'Peli', set:'Erä' },
-    zh:{ p:['零','十五','三十','四十'],              ambos:'平',      iguales:'平分',        ventaja:'占先',        juego:'局',    set:'盘' },
-    ja:{ p:['ゼロ','フィフティーン','サーティ','フォーティ'], ambos:'オール', iguales:'デュース', ventaja:'アドバンテージ', juego:'ゲーム', set:'セット' },
-    ar:{ p:['صفر','خمسة عشر','ثلاثون','أربعون'],   ambos:'تعادل',   iguales:'تعادل',       ventaja:'أفضلية',      juego:'شوط',   set:'مجموعة' },
-    pt:{ p:['Zero','Quinze','Trinta','Quarenta'],  ambos:'iguais',  iguales:'Iguais',      ventaja:'Vantagem',    juego:'Jogo',  set:'Set' },
-    nl:{ p:['Nul','Vijftien','Dertig','Veertig'],  ambos:'gelijk',  iguales:'Deuce',       ventaja:'Voordeel',    juego:'Game',  set:'Set' },
-    sv:{ p:['Noll','Femton','Trettio','Fyrtio'],   ambos:'lika',    iguales:'Lika',        ventaja:'Fördel',      juego:'Game',  set:'Set' },
-    ru:{ p:['Ноль','Пятнадцать','Тридцать','Сорок'],ambos:'ровно',  iguales:'Ровно',       ventaja:'Больше',      juego:'Гейм',  set:'Сет' }
+    es:{ p:['Cero','Quince','Treinta','Cuarenta'], ambos:'iguales', iguales:'Iguales',     ventaja:'Ventaja',     juego:'Juego', set:'Set',     gana:'gana el partido' },
+    en:{ p:['Zero','Fifteen','Thirty','Forty'],    ambos:'all',     iguales:'Deuce',       ventaja:'Advantage',   juego:'Game',  set:'Set',     gana:'wins the match' },
+    it:{ p:['Zero','Quindici','Trenta','Quaranta'],ambos:'pari',    iguales:'Parità',      ventaja:'Vantaggio',   juego:'Gioco', set:'Set',     gana:'vince la partita' },
+    fr:{ p:['Zéro','Quinze','Trente','Quarante'],  ambos:'partout', iguales:'Égalité',     ventaja:'Avantage',    juego:'Jeu',   set:'Set',     gana:'gagne le match' },
+    de:{ p:['Null','Fünfzehn','Dreißig','Vierzig'],ambos:'beide',   iguales:'Einstand',    ventaja:'Vorteil',     juego:'Spiel', set:'Satz',    gana:'gewinnt das Spiel' },
+    fi:{ p:['Nolla','Viisitoista','Kolmekymmentä','Neljäkymmentä'], ambos:'tasan', iguales:'Tasapeli', ventaja:'Etu', juego:'Peli', set:'Erä',   gana:'voittaa ottelun' },
+    zh:{ p:['零','十五','三十','四十'],              ambos:'平',      iguales:'平分',        ventaja:'占先',        juego:'局',    set:'盘',      gana:'赢得比赛' },
+    ja:{ p:['ゼロ','フィフティーン','サーティ','フォーティ'], ambos:'オール', iguales:'デュース', ventaja:'アドバンテージ', juego:'ゲーム', set:'セット', gana:'の試合勝利' },
+    ar:{ p:['صفر','خمسة عشر','ثلاثون','أربعون'],   ambos:'تعادل',   iguales:'تعادل',       ventaja:'أفضلية',      juego:'شوط',   set:'مجموعة', gana:'يفوز بالمباراة' },
+    pt:{ p:['Zero','Quinze','Trinta','Quarenta'],  ambos:'iguais',  iguales:'Iguais',      ventaja:'Vantagem',    juego:'Jogo',  set:'Set',     gana:'ganha o jogo' },
+    nl:{ p:['Nul','Vijftien','Dertig','Veertig'],  ambos:'gelijk',  iguales:'Deuce',       ventaja:'Voordeel',    juego:'Game',  set:'Set',     gana:'wint de wedstrijd' },
+    sv:{ p:['Noll','Femton','Trettio','Fyrtio'],   ambos:'lika',    iguales:'Lika',        ventaja:'Fördel',      juego:'Game',  set:'Set',     gana:'vinner matchen' },
+    ru:{ p:['Ноль','Пятнадцать','Тридцать','Сорок'],ambos:'ровно',  iguales:'Ровно',       ventaja:'Больше',      juego:'Гейм',  set:'Сет',    gana:'выигрывает матч' }
 };
 
 function voz(){ return VOZ[S.lang] || VOZ.es; }
@@ -3196,6 +3207,61 @@ function marcadorCantado(){
 function cantarMarcador(){
     const txt = marcadorCantado();
     if(txt) speak(txt);
+}
+
+/** Foto del marcador, para comparar antes y despues de un punto. */
+function fotoDelMarcador(){
+    return {
+        gA: S.teamA.games|0,
+        gB: S.teamB.games|0,
+        sets: (S.setsHistory||[]).length,
+        tb: !!(S.tiebreak || S.superTiebreak),
+        fin: !!S.matchOver
+    };
+}
+
+/**
+ * Canta lo que ha pasado con este punto.
+ *
+ * No vale con cantar el marcador tal cual: cuando un punto cierra un juego o
+ * un set, los puntos y los juegos ya se han puesto a cero, asi que cantar el
+ * estado decia "cero iguales" justo en el momento mas importante del partido.
+ * Hay que mirar QUE ha cambiado, no solo como ha quedado.
+ *
+ * El orden importa: cerrar un set tambien pone los juegos a cero, asi que se
+ * mira primero el set.
+ */
+function cantarLoQuePaso(antes){
+    const v = voz();
+    const ahora = fotoDelMarcador();
+
+    // 1. Se acabo el partido: lo canta el cartel de final, no repetimos.
+    if(ahora.fin && !antes.fin) return;
+
+    // 2. Se acabo un set. Se canta con el ganador delante, como en pista.
+    if(ahora.sets > antes.sets){
+        const s = S.setsHistory[ahora.sets - 1];
+        const quien = S['team' + s.winner].name;
+        let gan = s.winner === 'A' ? s.a : s.b;
+        let per = s.winner === 'A' ? s.b : s.a;
+        /* Un set de tie-break se guarda como 6-6 con los puntos del desempate
+           aparte, pero nadie gana un set "seis a seis": se canta 7-6. El super
+           tie-break guarda sus propios puntos (10-8) y ese si va tal cual. */
+        if(gan === per) gan = gan + 1;
+        speak(`${v.set} ${quien}. ${gan} - ${per}.`);
+        return;
+    }
+
+    // 3. Se acabo un juego. Si ademas se entra en tie-break, se avisa.
+    if(ahora.gA !== antes.gA || ahora.gB !== antes.gB){
+        const quien = S['team' + (ahora.gA > antes.gA ? 'A' : 'B')].name;
+        const entraTb = ahora.tb && !antes.tb;
+        speak(`${v.juego} ${quien}. ${ahora.gA} - ${ahora.gB}.` + (entraTb ? ` ${i('tiebreak')}.` : ''));
+        return;
+    }
+
+    // 4. Un punto normal.
+    cantarMarcador();
 }
 
 function speak(text){
@@ -3261,11 +3327,11 @@ function executeAIAction(result){
             if(!S.soundEnabled) setTimeout(()=>showScoreAnnounce(msg||'',null),100);
             break;
         }
-        case 'fault_A':        speak(msg||'Falta.'); showToast('🎙️ '+(msg||'Falta'),2500); setTimeout(()=>addFault('A','footFault'),50); break;
-        case 'fault_B':        speak(msg||'Falta.'); showToast('🎙️ '+(msg||'Falta'),2500); setTimeout(()=>addFault('B','footFault'),50); break;
-        case 'double_fault_A': speak(msg||'Doble falta.'); showToast('🎙️ '+(msg||'Doble falta'),2500); setTimeout(()=>addFault('A','doubleFault'),50); break;
-        case 'double_fault_B': speak(msg||'Doble falta.'); showToast('🎙️ '+(msg||'Doble falta'),2500); setTimeout(()=>addFault('B','doubleFault'),50); break;
-        case 'undo':           undoPoint(); speak(msg||'Anulado.'); showToast('🎙️ Deshecho',2000); break;
+        case 'fault_A':        speak(msg||i('fault')+'.'); showToast('🎙️ '+(msg||i('fault')),2500); setTimeout(()=>addFault('A','footFault'),50); break;
+        case 'fault_B':        speak(msg||i('fault')+'.'); showToast('🎙️ '+(msg||i('fault')),2500); setTimeout(()=>addFault('B','footFault'),50); break;
+        case 'double_fault_A': speak(msg||i('doubleFault')+'.'); showToast('🎙️ '+(msg||i('doubleFault')),2500); setTimeout(()=>addFault('A','doubleFault'),50); break;
+        case 'double_fault_B': speak(msg||i('doubleFault')+'.'); showToast('🎙️ '+(msg||i('doubleFault')),2500); setTimeout(()=>addFault('B','doubleFault'),50); break;
+        case 'undo':           undoPoint(); speak(msg||i('undo')+'.'); showToast('🎙️ '+i('undo'),2000); break;
         case 'new_match':      newMatch(); break;
         case 'end_match':      endMatch(); break;
         case 'chat':           speak(msg); showToast('🤖 '+msg,5000); break;
@@ -3323,7 +3389,7 @@ function processVoiceLocal(txt){
 
     // ── DESHACER ──
     if(/\b(deshacer|error|anula|anular|volver|atrás|cancela|repetir|repite|undo|annul|annulla|annuler|rückgängig|peruuta)\b/.test(t)){
-        speak('Anulado.'); showToast('↩️ Deshecho');
+        speak(i('undo')+'.'); showToast('↩️ '+i('undo'));
         setTimeout(()=>undoPoint(), 50);
         return true;
     }
@@ -3354,7 +3420,7 @@ function processVoiceLocal(txt){
                     : (esB && !esA) ? 'B' : null;
         if(quien){
             const nombre = S['team'+quien].name;
-            winGame(quien); speak('Juego '+nombre+'.'); showToast('🏆 Juego '+nombre);
+            winGame(quien); speak(voz().juego+' '+nombre+'.'); showToast('🏆 '+voz().juego+' '+nombre);
         }else{
             speak(i2('De quien es el juego?','Whose game?'));
             showToast('🎙️ ' + i2('Di "juego A" o "juego B"','Say "game A" or "game B"'), 3000);
@@ -3370,7 +3436,7 @@ function processVoiceLocal(txt){
         if(quien){
             const nombre = S['team'+quien].name;
             winSet(quien, S.teamA.games, S.teamB.games, false);
-            speak('Set '+nombre+'.'); showToast('🏆 Set '+nombre);
+            speak(voz().set+' '+nombre+'.'); showToast('🏆 '+voz().set+' '+nombre);
         }else{
             speak(i2('De quien es el set?','Whose set?'));
             showToast('🎙️ ' + i2('Di "set A" o "set B"','Say "set A" or "set B"'), 3000);
@@ -3383,8 +3449,8 @@ function processVoiceLocal(txt){
         const f = (nB.length>=3&&t.includes(nB))||/\b(equipo b|pareja b|segundo|team b|ellos)\b/.test(t)?'B':
                   (nA.length>=3&&t.includes(nA))||/\b(equipo a|pareja a|primero|team a|nosotros)\b/.test(t)?'A':srv;
         // Hablar PRIMERO para bloquear el micrófono antes de que addFault procese
-        speak('Doble falta.');
-        showToast('🎙️ Doble falta');
+        speak(i('doubleFault')+'.');
+        showToast('🎙️ '+i('doubleFault'));
         // Pequeño delay para asegurar que _speakingUntil está activo
         setTimeout(()=>addFault(f,'doubleFault'), 50);
         return true;
@@ -3394,7 +3460,7 @@ function processVoiceLocal(txt){
     if(/\b(falta de pie|foot fault|pie|falta pie|footfault|red|net|en la red|toca la red)\b/.test(t)&&!/doble/.test(t)){
         const f = (nB.length>=3&&t.includes(nB))||/\b(equipo b|pareja b|segundo)\b/.test(t)?'B':
                   (nA.length>=3&&t.includes(nA))||/\b(equipo a|pareja a|primero)\b/.test(t)?'A':srv;
-        speak('Falta de pie.'); showToast('🎙️ Falta de pie');
+        speak(i('footFault')+'.'); showToast('🎙️ '+i('footFault'));
         setTimeout(()=>addFault(f,'footFault'), 50);
         return true;
     }
@@ -3403,7 +3469,7 @@ function processVoiceLocal(txt){
     if(/^falta$|^fault$|^fallo$/.test(t)){
         const f = (nB.length>=3&&t.includes(nB))||/\b(equipo b|pareja b|segundo)\b/.test(t)?'B':
                   (nA.length>=3&&t.includes(nA))||/\b(equipo a|pareja a|primero)\b/.test(t)?'A':srv;
-        speak('Falta.'); showToast('🎙️ Falta');
+        speak(i('fault')+'.'); showToast('🎙️ '+i('fault'));
         setTimeout(()=>addFault(f,'footFault'), 50);
         return true;
     }
@@ -4229,7 +4295,11 @@ const Auth = {
                 lang: S.lang||'es',
                 theme: S.theme||'neon',
                 golden_point: !!S.goldenPoint,
-                super_tb: !!S.superTiebreak,
+                /* super_tb NO se sube. S.superTiebreak no es un ajuste: es la
+                   bandera de "ahora mismo se esta jugando un super tie-break".
+                   Subirla como preferencia hacia que al entrar en otro sitio se
+                   bajase encendida en mitad de un partido. La columna se queda
+                   en la tabla sin usar. */
                 best_of: S.bestOf||3,
                 updated_at: new Date().toISOString()
             }]
@@ -4251,7 +4321,9 @@ const Auth = {
         S.lang = r.lang || S.lang;
         S.theme = r.theme || S.theme;
         S.goldenPoint = !!r.golden_point;
-        S.superTiebreak = !!r.super_tb;
+        /* super_tb no se aplica: era el fallo por el que, al iniciar sesion,
+           la app se creia en un super tie-break y empezaba a contar los puntos
+           de uno en uno en vez de 15/30/40. */
         S.bestOf = r.best_of || S.bestOf;
         saveStateOnly();
         return true;
