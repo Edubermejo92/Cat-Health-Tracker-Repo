@@ -2750,6 +2750,50 @@ let _speakingUntil = 0;
 let _cmdLock = 0;
 const CMD_LOCK_MS = 1800; // ms mínimos entre comandos de voz
 
+/*
+ * Puerta unica de la voz.
+ *
+ * El candado existia desde hacia tiempo, pero solo lo miraba el camino de la
+ * web. El microfono continuo de Android llamaba a processVoiceCommand() desde
+ * onResults() sin mirar nada, asi que si el reconocedor devolvia dos veces la
+ * misma frase -algo que pasa cuando se reabre el microfono, y pasaba seguro
+ * porque se reabria mientras la app cantaba el punto- el comando se ejecutaba
+ * dos veces y el punto se sumaba dos veces.
+ *
+ * Ahora ademas de por tiempo se filtra por contenido: la misma frase repetida
+ * dentro de la ventana se ignora. Entre punto y punto de un partido pasan
+ * muchos mas de 3,5 segundos, asi que no estorba a nadie que este arbitrando.
+ */
+const REPETIDO_MS = 3500;
+let _ultimaFrase = '';
+let _ultimaFraseAt = 0;
+
+function normalizarVoz(txt){
+    return String(txt||'').toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // sin tildes
+        .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+/** False si hay que ignorar lo que se acaba de oir. */
+function vozAceptada(txt){
+    const ahora = Date.now();
+    if(ahora < _cmdLock || ahora < _speakingUntil) return false;
+
+    const frase = normalizarVoz(txt);
+    if(!frase) return false;
+
+    // Misma frase, demasiado pronto: es un eco, no un punto nuevo.
+    if(frase === _ultimaFrase && (ahora - _ultimaFraseAt) < REPETIDO_MS){
+        return false;
+    }
+    _ultimaFrase = frase;
+    _ultimaFraseAt = ahora;
+    return true;
+}
+
+/** Al encender o apagar el microfono se olvida lo ultimo oido. */
+function olvidarUltimaFrase(){ _ultimaFrase = ''; _ultimaFraseAt = 0; }
+
 function startVoice(){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){ showToast('⚠️ Voz no disponible'); return; }
@@ -2760,12 +2804,12 @@ function startVoice(){
     recognition.interimResults=false;
     recognition.maxAlternatives=5;
     recognition.onresult=(e)=>{
-        const now = Date.now();
-        // Ignorar si el árbitro está hablando O si hay lock de comando activo
-        if(now < _speakingUntil || now < _cmdLock) return;
         for(let i=e.resultIndex;i<e.results.length;i++){
             if(e.results[i].isFinal){
-                // Bloquear inmediatamente antes de procesar (evita doble disparo)
+                const best = e.results[i][0].transcript.toLowerCase().trim();
+                // La misma puerta que el microfono nativo: candado y eco.
+                if(!vozAceptada(best)) return;
+                const now = Date.now();
                 _cmdLock = now + CMD_LOCK_MS;
                 _speakingUntil = now + CMD_LOCK_MS;
 
@@ -2775,16 +2819,14 @@ function startVoice(){
                     handled=processVoiceLocal(txt);
                     if(handled) break;
                 }
-                if(!handled){
-                    const best=e.results[i][0].transcript.toLowerCase().trim();
-                    processVoiceCommand(best);
-                }
+                if(!handled) processVoiceCommand(best);
                 break; // solo procesar el primer resultado final por ciclo
             }
         }
     };
     recognition.onerror=(e)=>{ if(e.error!=='no-speech'){ showToast('Voz: '+e.error); stopVoice(); } };
     recognition.onend=()=>{ if(S.voiceActive) try{recognition.start();}catch(e){} };
+    olvidarUltimaFrase();
     recognition.start(); S.voiceActive=true; render(); showToast('🎙️ Escuchando...',2000);
 }
 function stopVoice(){ if(recognition){ try{recognition.stop();}catch(e){} recognition=null; } S.voiceActive=false; render(); }
@@ -3105,6 +3147,10 @@ function executeAIAction(result){
 // Entiende cualquier frase de pádel en todos los idiomas
 // ═══════════════════════════════════════════
 async function processVoiceCommand(txt){
+    // 0. Filtrar ecos y repeticiones. Vale para los dos caminos: el microfono
+    //    continuo de Android y el del navegador.
+    if(!vozAceptada(txt)) return;
+
     // 1. Intentar reglas locales primero (instantáneo, sin red)
     const handled = processVoiceLocal(txt);
     if(handled){
@@ -6213,6 +6259,7 @@ function pedirVoz() {
 
 /** La capa nativa avisa de en que punto esta el microfono. */
 function onVoiceState(estado){
+    if(estado !== _voiceState && (estado === 'off' || _voiceState === 'off')) olvidarUltimaFrase();
     _voiceState = estado;
     if(estado === 'off') _voiceHeard = '';
     // El indicador "en vivo" de la cabecera ya existia pero nadie lo encendia
