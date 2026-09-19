@@ -940,7 +940,14 @@ const BT = {
 
 // Toda accion local sobre el marcador avisa al reloj por un unico camino.
 const _addPoint = addPoint;
-addPoint = function(t){ _addPoint(t); PPSync.onLocalAction('point', t); };
+/* Cuando quien llama ya canta su propio mensaje -el arbitro IA- no se canta
+   dos veces. */
+let _sinCanto = false;
+addPoint = function(t){
+    _addPoint(t);
+    PPSync.onLocalAction('point', t);
+    if(!_sinCanto) cantarMarcador();
+};
 const _removePoint = removePoint;
 removePoint = function(t){ _removePoint(t); PPSync.onLocalAction('minus', t); };
 const _undoPoint = undoPoint;
@@ -3093,6 +3100,74 @@ function testVoice(){
  * cargadas, a veces no suena- y ademas no deja controlar el volumen. El
  * camino del navegador se queda solo para la version web.
  */
+/*
+ * Como se canta un punto en cada idioma.
+ *
+ * Lo que se ve en pantalla ya estaba traducido, pero lo que se dice en voz
+ * alta no: se cantaba en español siempre, y ademas el TTS del movil estaba
+ * clavado en es-ES. Aqui estan las palabras que hacen falta para cantar un
+ * marcador de padel, y nada mas.
+ *
+ *   p        los cuatro puntos: 0, 15, 30, 40
+ *   ambos    "treinta IGUALES" (mismo punto, por debajo de 40)
+ *   iguales  40-40
+ *   ventaja  ventaja de alguien
+ *   juego    se acabo el juego
+ *   set      se acabo el set
+ */
+const VOZ = {
+    es:{ p:['Cero','Quince','Treinta','Cuarenta'], ambos:'iguales', iguales:'Iguales',     ventaja:'Ventaja',     juego:'Juego', set:'Set' },
+    en:{ p:['Zero','Fifteen','Thirty','Forty'],    ambos:'all',     iguales:'Deuce',       ventaja:'Advantage',   juego:'Game',  set:'Set' },
+    it:{ p:['Zero','Quindici','Trenta','Quaranta'],ambos:'pari',    iguales:'Parità',      ventaja:'Vantaggio',   juego:'Gioco', set:'Set' },
+    fr:{ p:['Zéro','Quinze','Trente','Quarante'],  ambos:'partout', iguales:'Égalité',     ventaja:'Avantage',    juego:'Jeu',   set:'Set' },
+    de:{ p:['Null','Fünfzehn','Dreißig','Vierzig'],ambos:'beide',   iguales:'Einstand',    ventaja:'Vorteil',     juego:'Spiel', set:'Satz' },
+    fi:{ p:['Nolla','Viisitoista','Kolmekymmentä','Neljäkymmentä'], ambos:'tasan', iguales:'Tasapeli', ventaja:'Etu', juego:'Peli', set:'Erä' },
+    zh:{ p:['零','十五','三十','四十'],              ambos:'平',      iguales:'平分',        ventaja:'占先',        juego:'局',    set:'盘' },
+    ja:{ p:['ゼロ','フィフティーン','サーティ','フォーティ'], ambos:'オール', iguales:'デュース', ventaja:'アドバンテージ', juego:'ゲーム', set:'セット' },
+    ar:{ p:['صفر','خمسة عشر','ثلاثون','أربعون'],   ambos:'تعادل',   iguales:'تعادل',       ventaja:'أفضلية',      juego:'شوط',   set:'مجموعة' },
+    pt:{ p:['Zero','Quinze','Trinta','Quarenta'],  ambos:'iguais',  iguales:'Iguais',      ventaja:'Vantagem',    juego:'Jogo',  set:'Set' },
+    nl:{ p:['Nul','Vijftien','Dertig','Veertig'],  ambos:'gelijk',  iguales:'Deuce',       ventaja:'Voordeel',    juego:'Game',  set:'Set' },
+    sv:{ p:['Noll','Femton','Trettio','Fyrtio'],   ambos:'lika',    iguales:'Lika',        ventaja:'Fördel',      juego:'Game',  set:'Set' },
+    ru:{ p:['Ноль','Пятнадцать','Тридцать','Сорок'],ambos:'ровно',  iguales:'Ровно',       ventaja:'Больше',      juego:'Гейм',  set:'Сет' }
+};
+
+function voz(){ return VOZ[S.lang] || VOZ.es; }
+
+/**
+ * El marcador cantado tal y como esta ahora mismo.
+ *
+ * Se canta primero el punto de quien saca, que es como se canta en pista.
+ * Devuelve '' cuando no hay nada que cantar.
+ */
+function marcadorCantado(){
+    const v = voz();
+
+    if(S.superTiebreak || S.tiebreak){
+        const a = S.tiebreakPoints.A|0, b = S.tiebreakPoints.B|0;
+        const saca = S.serving==='A' ? a : b;
+        const resto = S.serving==='A' ? b : a;
+        return saca + ' - ' + resto;
+    }
+
+    const pa = S.teamA.points|0, pb = S.teamB.points|0;
+
+    if(S.advantage) return v.ventaja + ' ' + S['team'+S.advantage].name + '.';
+    if(S.deuce)     return v.iguales + '.';
+
+    // Mismo punto por debajo de 40: "treinta iguales"
+    if(pa === pb && pa < 3) return v.p[pa] + ' ' + v.ambos + '.';
+
+    const saca  = S.serving==='A' ? pa : pb;
+    const resto = S.serving==='A' ? pb : pa;
+    return v.p[Math.min(3, saca)] + ', ' + v.p[Math.min(3, resto)] + '.';
+}
+
+/** Canta el marcador. Se llama al sumar un punto, se pulse o se diga. */
+function cantarMarcador(){
+    const txt = marcadorCantado();
+    if(txt) speak(txt);
+}
+
 function speak(text){
     if(!S.soundEnabled || !text) return;
 
@@ -3104,7 +3179,10 @@ function speak(text){
     const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
     if(b && b.speak){
         if(b.setVoiceVolume) b.setVoiceVolume(voiceVolume());
-        b.speak(text);
+        // speakIn canta en el idioma de la app; speak es el de las versiones
+        // viejas del puente, que hablaba siempre en español.
+        if(b.speakIn) b.speakIn(text, currentLang().voice);
+        else b.speak(text);
         return;
     }
 
@@ -3128,8 +3206,16 @@ function executeAIAction(result){
     const {action, announce, reason} = result;
     const msg = announce||reason||'';
     switch(action){
-        case 'point_A':        addPoint('A'); if(msg){speak(msg); showToast('🎙️ '+msg,3500);} if(!S.soundEnabled) setTimeout(()=>showScoreAnnounce(msg||'',null),100); break;
-        case 'point_B':        addPoint('B'); if(msg){speak(msg); showToast('🎙️ '+msg,3500);} if(!S.soundEnabled) setTimeout(()=>showScoreAnnounce(msg||'',null),100); break;
+        case 'point_A': case 'point_B': {
+            const eq = action==='point_A' ? 'A' : 'B';
+            // La IA ya trae cantado el punto: se calla el canto automatico.
+            _sinCanto = !!msg;
+            addPoint(eq);
+            _sinCanto = false;
+            if(msg){ speak(msg); showToast('🎙️ '+msg,3500); }
+            if(!S.soundEnabled) setTimeout(()=>showScoreAnnounce(msg||'',null),100);
+            break;
+        }
         case 'fault_A':        speak(msg||'Falta.'); showToast('🎙️ '+(msg||'Falta'),2500); setTimeout(()=>addFault('A','footFault'),50); break;
         case 'fault_B':        speak(msg||'Falta.'); showToast('🎙️ '+(msg||'Falta'),2500); setTimeout(()=>addFault('B','footFault'),50); break;
         case 'double_fault_A': speak(msg||'Doble falta.'); showToast('🎙️ '+(msg||'Doble falta'),2500); setTimeout(()=>addFault('A','doubleFault'),50); break;

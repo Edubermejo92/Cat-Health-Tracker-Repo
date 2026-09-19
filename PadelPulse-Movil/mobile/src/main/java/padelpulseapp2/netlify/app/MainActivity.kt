@@ -339,7 +339,29 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
      * guarda un volumen "de serie": si no se le dice nada, usa el del sistema
      * y en una pista eso no se oye.
      */
-    internal fun decir(texto: String) {
+    /** Idioma que tiene puesto el TTS ahora mismo, para no recargarlo en cada punto. */
+    private var idiomaTts = ""
+
+    /**
+     * Canta un texto en el idioma de la app.
+     *
+     * Antes el TTS se fijaba en español al arrancar y no se volvia a tocar, asi
+     * que jugando en ingles o en italiano el movil cantaba los puntos con
+     * fonetica española. El idioma llega ya resuelto desde el JS (es-ES, en-GB,
+     * ...) y solo se cambia cuando cambia de verdad.
+     *
+     * Si el telefono no tiene voz para ese idioma se sigue con la que haya: mas
+     * vale cantar el punto con acento raro que quedarse callado.
+     */
+    internal fun decir(texto: String, idioma: String = "") {
+        val tag = idioma.ifBlank { "es-ES" }
+        if (tag != idiomaTts) {
+            val res = runCatching { tts?.setLanguage(Locale.forLanguageTag(tag)) }.getOrNull()
+            if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "Sin voz instalada para $tag; se canta con la que haya")
+            }
+            idiomaTts = tag
+        }
         val params = Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumenVoz)
         }
@@ -373,7 +395,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) return
-        tts?.setLanguage(Locale("es", "ES"))
+        // El idioma lo pone decir() en cada frase, segun el que tenga la app.
         /*
          * Saber cuando la app esta cantando el punto es lo que evita que el
          * microfono se oiga a si misma. Sin esto se reabria a los 700 ms, en
@@ -559,6 +581,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         @JavascriptInterface
         fun speak(text: String) {
             activity.runOnUiThread { activity.decir(text) }
+        }
+
+        /** Canta en el idioma de la app: "es-ES", "en-GB", "it-IT"... */
+        @JavascriptInterface
+        fun speakIn(text: String, lang: String) {
+            activity.runOnUiThread { activity.decir(text, lang) }
         }
 
         /** Volumen de la voz de la app, 0-100. */
