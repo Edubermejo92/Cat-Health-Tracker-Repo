@@ -15,6 +15,21 @@ class GameEngine(context: Context? = null) {
     companion object {
         /** Tope de partidos guardados en el reloj. */
         const val MAX_HISTORY = 50
+
+        /**
+         * La pareja A eres tu. Siempre, igual que en el movil.
+         *
+         * De esa regla cuelgan las estadisticas y quien sale como jugador
+         * principal en el historial, asi que el reloj no puede decidirlo de
+         * otra forma que el movil.
+         */
+        const val NOMBRE_A_POR_DEFECTO = "YO Y PAREJA"
+
+        /** True si ese nombre es el generico y no uno que haya puesto nadie. */
+        fun esNombreGenerico(nombre: String): Boolean {
+            val v = nombre.trim().uppercase()
+            return v.isEmpty() || v == NOMBRE_A_POR_DEFECTO || v == "PAREJA A" || v == "TEAM A"
+        }
     }
 
     private val prefs: SharedPreferences? = context?.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
@@ -26,7 +41,7 @@ class GameEngine(context: Context? = null) {
     var pairingCode by mutableStateOf("----")
     var isConnected by mutableStateOf(false)
     
-    var nameA by mutableStateOf("YO Y PAREJA")
+    var nameA by mutableStateOf(NOMBRE_A_POR_DEFECTO)
     var nameB by mutableStateOf("PAREJA B")
 
     // SOLO / PHONE / WATCH — ver docs/PROTOCOLO_SINCRONIZACION.md
@@ -619,7 +634,8 @@ class GameEngine(context: Context? = null) {
     }
 
     private fun saveTeamNameToHistory(name: String) {
-        if (name.isBlank() || name == "YO Y PAREJA" || name == "PAREJA B" || name == "LOCAL" || name == "VISITA") return
+        // Los genericos no se guardan en la agenda de nombres: no son de nadie.
+        if (esNombreGenerico(name) || name == "PAREJA B" || name == "LOCAL" || name == "VISITA") return
         try {
             val namesJson = prefs?.getString("names_history", "[]") ?: "[]"
             val array = org.json.JSONArray(namesJson)
@@ -708,8 +724,26 @@ class GameEngine(context: Context? = null) {
             superTb = obj.optBoolean("superTb", false)
             brightness = obj.optDouble("brightness", 150.0).toFloat()
             voiceEnabled = obj.optBoolean("voiceEnabled", true)
-            nameA = obj.optString("nameA", "YO Y PAREJA")
+            nameA = obj.optString("nameA", NOMBRE_A_POR_DEFECTO)
             nameB = obj.optString("nameB", "PAREJA B")
         } catch (e: Exception) {}
+    }
+
+    /**
+     * Pone tu nombre en la pareja A, igual que hace el movil.
+     *
+     * Solo si todavia se llama como el generico: un nombre que hayas puesto
+     * tu -en el reloj o llegado desde el movil- no se pisa nunca.
+     *
+     * @return true si ha cambiado algo, para saber si hay que guardar.
+     */
+    fun adoptarMiNombre(miNombre: String): Boolean {
+        val yo = miNombre.trim()
+        if (yo.isEmpty()) return false
+        if (!esNombreGenerico(nameA)) return false
+        val nuevo = yo.uppercase()
+        if (nameA == nuevo) return false
+        nameA = nuevo
+        return true
     }
 }

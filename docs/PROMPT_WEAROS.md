@@ -123,6 +123,18 @@ quedarían diferentes para siempre.
 **Anti-eco**: mientras se aplica un estado remoto hay un flag que impide
 reemitir. Sin él las dos apps se mandan el mismo estado sin parar.
 
+### La pareja A eres tú
+
+Invariante del producto, igual que en el móvil. De ella cuelgan a quién se le
+apuntan las estadísticas y quién sale como jugador principal en el historial,
+así que el reloj no puede decidirlo de otra forma que el móvil.
+
+`GameEngine.adoptarMiNombre()` pone tu nombre en la pareja A en cuanto la
+sesión lo trae, al arrancar y al llegar la cuenta desde el móvil. Un nombre
+que hayas puesto tú no se pisa nunca: `esNombreGenerico()` distingue el
+"YO Y PAREJA" por defecto de un nombre propio. Elegir "YO" a mano en la
+pantalla de nombres **sí** cuenta como decisión tuya y se respeta.
+
 ---
 
 ## Qué mejorar en esta app
@@ -290,6 +302,21 @@ class GameEngine(context: Context? = null) {
     companion object {
         /** Tope de partidos guardados en el reloj. */
         const val MAX_HISTORY = 50
+
+        /**
+         * La pareja A eres tu. Siempre, igual que en el movil.
+         *
+         * De esa regla cuelgan las estadisticas y quien sale como jugador
+         * principal en el historial, asi que el reloj no puede decidirlo de
+         * otra forma que el movil.
+         */
+        const val NOMBRE_A_POR_DEFECTO = "YO Y PAREJA"
+
+        /** True si ese nombre es el generico y no uno que haya puesto nadie. */
+        fun esNombreGenerico(nombre: String): Boolean {
+            val v = nombre.trim().uppercase()
+            return v.isEmpty() || v == NOMBRE_A_POR_DEFECTO || v == "PAREJA A" || v == "TEAM A"
+        }
     }
 
     private val prefs: SharedPreferences? = context?.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
@@ -301,7 +328,7 @@ class GameEngine(context: Context? = null) {
     var pairingCode by mutableStateOf("----")
     var isConnected by mutableStateOf(false)
     
-    var nameA by mutableStateOf("YO Y PAREJA")
+    var nameA by mutableStateOf(NOMBRE_A_POR_DEFECTO)
     var nameB by mutableStateOf("PAREJA B")
 
     // SOLO / PHONE / WATCH — ver docs/PROTOCOLO_SINCRONIZACION.md
@@ -894,7 +921,8 @@ class GameEngine(context: Context? = null) {
     }
 
     private fun saveTeamNameToHistory(name: String) {
-        if (name.isBlank() || name == "YO Y PAREJA" || name == "PAREJA B" || name == "LOCAL" || name == "VISITA") return
+        // Los genericos no se guardan en la agenda de nombres: no son de nadie.
+        if (esNombreGenerico(name) || name == "PAREJA B" || name == "LOCAL" || name == "VISITA") return
         try {
             val namesJson = prefs?.getString("names_history", "[]") ?: "[]"
             val array = org.json.JSONArray(namesJson)
@@ -983,9 +1011,27 @@ class GameEngine(context: Context? = null) {
             superTb = obj.optBoolean("superTb", false)
             brightness = obj.optDouble("brightness", 150.0).toFloat()
             voiceEnabled = obj.optBoolean("voiceEnabled", true)
-            nameA = obj.optString("nameA", "YO Y PAREJA")
+            nameA = obj.optString("nameA", NOMBRE_A_POR_DEFECTO)
             nameB = obj.optString("nameB", "PAREJA B")
         } catch (e: Exception) {}
+    }
+
+    /**
+     * Pone tu nombre en la pareja A, igual que hace el movil.
+     *
+     * Solo si todavia se llama como el generico: un nombre que hayas puesto
+     * tu -en el reloj o llegado desde el movil- no se pisa nunca.
+     *
+     * @return true si ha cambiado algo, para saber si hay que guardar.
+     */
+    fun adoptarMiNombre(miNombre: String): Boolean {
+        val yo = miNombre.trim()
+        if (yo.isEmpty()) return false
+        if (!esNombreGenerico(nameA)) return false
+        val nuevo = yo.uppercase()
+        if (nameA == nuevo) return false
+        nameA = nuevo
+        return true
     }
 }
 ```
@@ -1091,6 +1137,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
      */
     fun onAccountChanged() {
         val engine = gameEngine ?: return
+        // La sesion trae tu nombre: la pareja A pasa a ser tuya.
+        if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped &&
             engine.currentScreen == "splash" && !engine.hasSavedMatch()) {
             engine.currentScreen = "account"
@@ -1330,6 +1378,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         // La app arranca por la cuenta: o llega la sesion del movil, o el
         // usuario elige jugar sin ella. Solo se pregunta una vez.
         WatchAccount.load(this)
+        // La pareja A eres tu, igual que en el movil.
+        if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped) {
             engine.currentScreen = "account"
         }
@@ -2556,6 +2606,7 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
+import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
 import padelpulseapp2.netlify.app.ui.PPLabel
@@ -2931,7 +2982,11 @@ fun NameEditorScreen(
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val es = engine.lang == "es"
-    val presets = listOf("YO", "RIVAL", "LOCAL", "VISITA", "PAREJA A", "PAREJA B")
+    // El primer atajo es tu nombre si la sesion ya lo trajo: la pareja A eres tu.
+    val presets = listOf(
+        WatchAccount.name.trim().uppercase().ifEmpty { "YO" },
+        "RIVAL", "LOCAL", "VISITA", "PAREJA A", "PAREJA B"
+    )
 
     val namesHistory = remember {
         val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
