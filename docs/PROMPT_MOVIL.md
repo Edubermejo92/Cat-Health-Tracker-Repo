@@ -23,7 +23,7 @@ tienen que ir a la par**. Ésta es la del móvil.
 | Módulo | `:mobile` | `:app` |
 | Interfaz | WebView que carga `assets/code.html` | Jetpack Compose for Wear OS |
 | minSdk | 25 | 30 |
-| versionCode | 517 | 5170 |
+| versionCode | 518 | 5180 |
 
 Las dos comparten `applicationId` (`padelpulseapp2.netlify.app`): son **una
 sola ficha de Google Play con dos formatos**. compileSdk 35, Gradle 9.5.0.
@@ -318,7 +318,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "5.1.7"
+        const val APP_VERSION = "5.1.8"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -1282,9 +1282,9 @@ android {
         minSdk = 25
         targetSdk = 35
         // Serie propia del movil. Debe ser DISTINTO al del reloj, que va en la
-        // misma serie x10: movil 517, reloj 5170.
-        versionCode = 517
-        versionName = "5.1.7"
+        // misma serie x10: movil 518, reloj 5180.
+        versionCode = 518
+        versionName = "5.1.8"
     }
 
     signingConfigs {

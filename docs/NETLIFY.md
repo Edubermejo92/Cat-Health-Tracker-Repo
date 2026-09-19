@@ -60,7 +60,7 @@ Google dejara de volver a la app.
 La web enseña su versión abajo del todo en **Ajustes**, con el sufijo `· web`:
 
 ```
-PadelPulse Live 5.1.7 · web
+PadelPulse Live 5.1.8 · web
 ```
 
 Si la que ves ahí no coincide con la del repositorio, **lo desplegado es

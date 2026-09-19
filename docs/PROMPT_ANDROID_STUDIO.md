@@ -22,7 +22,7 @@ Android que tienen que ir a la par**:
 | Módulo | `:mobile` | `:app` |
 | Interfaz | WebView que carga `assets/code.html` | Jetpack Compose for Wear OS |
 | minSdk | 25 | 30 |
-| versionCode | 517 | 5170 |
+| versionCode | 518 | 5180 |
 
 Las dos comparten `applicationId` (`padelpulseapp2.netlify.app`): son **una
 sola ficha de Google Play con dos formatos**. compileSdk 35, Gradle 9.5.0.
