@@ -96,6 +96,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
      */
     fun onAccountChanged() {
         val engine = gameEngine ?: return
+        // La sesion trae tu nombre: la pareja A pasa a ser tuya.
+        if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped &&
             engine.currentScreen == "splash" && !engine.hasSavedMatch()) {
             engine.currentScreen = "account"
@@ -335,6 +337,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         // La app arranca por la cuenta: o llega la sesion del movil, o el
         // usuario elige jugar sin ella. Solo se pregunta una vez.
         WatchAccount.load(this)
+        // La pareja A eres tu, igual que en el movil.
+        if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped) {
             engine.currentScreen = "account"
         }

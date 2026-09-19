@@ -24,6 +24,7 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
+import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
 import padelpulseapp2.netlify.app.ui.PPLabel
@@ -399,7 +400,11 @@ fun NameEditorScreen(
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val es = engine.lang == "es"
-    val presets = listOf("YO", "RIVAL", "LOCAL", "VISITA", "PAREJA A", "PAREJA B")
+    // El primer atajo es tu nombre si la sesion ya lo trajo: la pareja A eres tu.
+    val presets = listOf(
+        WatchAccount.name.trim().uppercase().ifEmpty { "YO" },
+        "RIVAL", "LOCAL", "VISITA", "PAREJA A", "PAREJA B"
+    )
 
     val namesHistory = remember {
         val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
