@@ -754,6 +754,11 @@ window.PPSync = PPSync;
 // habla Web Bluetooth: el transporte es Wearable MessageClient via PPSync.
 // ═══════════════════════════════════════════════════════════════════
 const BT = {
+    /* El codigo manual es solo la salida de emergencia: el reloj se vincula
+       solo en cuanto conecta (manda "AUTO"). Por eso arranca plegado. */
+    showCode: false,
+    toggleCode(){ this.showCode = !this.showCode; render(); },
+
     get pairingCode(){ return PPSync.code; },
     set pairingCode(v){ PPSync.code = v; },
     get connected(){ return PPSync.connected && PPSync.paired; },
@@ -784,6 +789,30 @@ const BT = {
 
     panel(){
         const p = tc.primary(), mu = tc.muted(), su = tc.surf2(), te = tc.text();
+
+        /* En el navegador no existe el Wearable Data Layer, asi que no hay
+           reloj con el que hablar. Ensenar aqui un codigo de vinculacion y un
+           boton de "sincronizar ahora" es mentirle al usuario: no pueden hacer
+           nada y el estado se queda en "SIN RELOJ" para siempre. */
+        if(!PPSync.bridge){
+            return `
+            <div class="bg-surface-container rounded-3xl p-4 mb-3">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined" style="color:${mu}">watch_off</span>
+                    <span class="text-[9px] font-bold uppercase tracking-widest" style="color:${mu}">${i2('Sincronizacion con reloj','Watch sync')}</span>
+                </div>
+                <div class="text-[9px] leading-relaxed" style="color:${mu}">
+                    ${i2('Puntuar desde el reloj funciona en la app de Android. Esta version web es el marcador, y guarda tus partidos igual.',
+                          'Scoring from the watch works in the Android app. This web version is the scoreboard, and it saves your matches just the same.')}
+                </div>
+                <a href="${inviteUrl()}" target="_blank" rel="noopener"
+                   class="block w-full mt-3 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center scale-press"
+                   style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:${te}">
+                    ${i2('Conseguir la app','Get the app')}
+                </a>
+            </div>`;
+        }
+
         const st = PPSync.statusColor();
         const label = PPSync.statusLabel();
         const since = PPSync.lastSync ? Math.round((Date.now()-PPSync.lastSync)/1000) : null;
@@ -821,31 +850,43 @@ const BT = {
 
             ${`
 
-            <!-- Vinculacion -->
+            <!-- Vinculacion. El reloj se vincula solo en cuanto conecta, asi
+                 que lo normal es que aqui no haya nada que hacer. El codigo
+                 manual queda plegado como salida de emergencia. -->
+            ${PPSync.paired ? '' : `
             <div class="rounded-2xl p-3 mb-2" style="background:${su};border:1px solid rgba(255,255,255,0.04)">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[8px] uppercase font-bold" style="color:${mu}">${i2('Codigo de vinculacion','Pairing code')}</span>
-                    <button onclick="BT.regenerate()" class="text-[8px] uppercase font-bold flex items-center gap-1 scale-press" style="color:${mu}">
-                        <span class="material-symbols-outlined text-[11px]">refresh</span>${i2('Nuevo','New')}
-                    </button>
+                <div class="text-[9px] leading-relaxed" style="color:${mu}">
+                    ${i2('Abre PadelPulse en el reloj y se vincula solo. No hay que teclear nada.',
+                          'Open PadelPulse on the watch and it links by itself. Nothing to type.')}
                 </div>
-                <div class="flex items-center gap-2 mb-2">
-                    ${String(PPSync.code).padEnd(4,'-').split('').slice(0,4).map(d=>`
-                        <div class="flex-1 py-2 rounded-xl text-center text-[22px] font-black tracking-widest"
-                             style="background:rgba(0,0,0,0.45);border:1px solid ${p}35;color:${p}">${d}</div>`).join('')}
-                </div>
-                <div class="text-[9px] leading-relaxed mb-2" style="color:${mu}">
-                    ${PPSync.paired
-                        ? i2('Reloj vinculado. Puntua desde donde quieras: van siempre a la vez, aunque la app del reloj este cerrada.',
-                              'Watch linked. Score from either one: they stay in step, even with the watch app closed.')
-                        : i2('Abre PadelPulse en el reloj, entra en Vincular y teclea este codigo.','Open PadelPulse on the watch, go to Link and type this code.')}
-                </div>
-                <label class="flex items-center justify-between py-1.5 cursor-pointer">
-                    <span class="text-[9px] font-bold uppercase tracking-wide" style="color:${mu}">${i2('Vincular sin codigo','Link without code')}</span>
-                    <span class="material-symbols-outlined text-[26px]" style="color:${PPSync.autoPair?p:'#555'}"
-                          onclick="BT.toggleAutoPair()">${PPSync.autoPair?'toggle_on':'toggle_off'}</span>
-                </label>
-            </div>
+                <button onclick="BT.toggleCode()" class="mt-2 text-[9px] font-bold uppercase tracking-wide flex items-center gap-1 scale-press" style="color:${p}">
+                    <span class="material-symbols-outlined text-[13px]">${BT.showCode?'expand_less':'expand_more'}</span>
+                    ${i2('No se vincula?','Not linking?')}
+                </button>
+
+                ${BT.showCode?`
+                <div class="mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,0.06)">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[8px] uppercase font-bold" style="color:${mu}">${i2('Codigo de vinculacion','Pairing code')}</span>
+                        <button onclick="BT.regenerate()" class="text-[8px] uppercase font-bold flex items-center gap-1 scale-press" style="color:${mu}">
+                            <span class="material-symbols-outlined text-[11px]">refresh</span>${i2('Nuevo','New')}
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        ${String(PPSync.code).padEnd(4,'-').split('').slice(0,4).map(d=>`
+                            <div class="flex-1 py-2 rounded-xl text-center text-[22px] font-black tracking-widest"
+                                 style="background:rgba(0,0,0,0.45);border:1px solid ${p}35;color:${p}">${d}</div>`).join('')}
+                    </div>
+                    <div class="text-[9px] leading-relaxed mb-2" style="color:${mu}">
+                        ${i2('En el reloj, entra en Vincular y teclea este codigo.','On the watch, go to Link and type this code.')}
+                    </div>
+                    <label class="flex items-center justify-between py-1.5 cursor-pointer">
+                        <span class="text-[9px] font-bold uppercase tracking-wide" style="color:${mu}">${i2('Vincular sin codigo','Link without code')}</span>
+                        <span class="material-symbols-outlined text-[26px]" style="color:${PPSync.autoPair?p:'#555'}"
+                              onclick="BT.toggleAutoPair()">${PPSync.autoPair?'toggle_on':'toggle_off'}</span>
+                    </label>
+                </div>`:''}
+            </div>`}
 
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="BT.resync()" class="py-2.5 rounded-2xl text-[10px] font-black uppercase scale-press flex items-center justify-center gap-2"
@@ -5267,21 +5308,20 @@ ${BottomNav('history')}`;
 const APP_ID = 'padelpulseapp2.netlify.app';
 const INVITE_URL_PRUEBA = 'https://play.google.com/apps/testing/' + APP_ID;
 const INVITE_URL_TIENDA = 'https://play.google.com/store/apps/details?id=' + APP_ID;
-const INVITE_URL_POR_DEFECTO = INVITE_URL_PRUEBA;
 
+/**
+ * Fase de la app en Google Play. Es el UNICO sitio donde se decide que enlace
+ * se manda al invitar, y no se pregunta al usuario: elegirlo no es cosa suya.
+ *
+ *   true  -> pruebas cerradas. Va el enlace de la prueba, porque la ficha
+ *            normal le dice a quien no sea tester que no esta disponible.
+ *   false -> publicada. Va la ficha de Play.
+ *
+ * El dia que se publique, se pone a false y se sube version. Nada mas.
+ */
+const APP_EN_PRUEBAS = true;
 
-function inviteUrl(){
-    try{ return localStorage.getItem('pp_invite_url') || INVITE_URL_POR_DEFECTO; }
-    catch(e){ return INVITE_URL_POR_DEFECTO; }
-}
-
-function setInviteUrl(v){
-    const u = (v||'').trim();
-    try{
-        if(u) localStorage.setItem('pp_invite_url', u);
-        else localStorage.removeItem('pp_invite_url');
-    }catch(e){}
-}
+function inviteUrl(){ return APP_EN_PRUEBAS ? INVITE_URL_PRUEBA : INVITE_URL_TIENDA; }
 
 /** El mensaje que se manda. Corto, que se lee en una notificacion. */
 function inviteText(nombre){
@@ -6027,26 +6067,11 @@ const SettingsView=()=>`
             style="background:${tc.primary()};color:#04120B">
             ${i2('Compartir la app','Share the app')}
         </button>
-        <div class="text-[9px] mt-3 mb-2 leading-relaxed" style="color:${tc.muted()}">
-            ${i2('Enlace que se manda en la invitacion. Mientras la app este en pruebas tiene que ser el de la prueba: la ficha de Play le dice a quien no sea tester que no esta disponible.',
-                  'The link sent with the invite. While the app is in testing it has to be the testing one: the Play listing tells non-testers it is unavailable.')}
-        </div>
-        <div class="grid grid-cols-2 gap-2 mb-2">
-            ${[[i2('En pruebas','Testing'), INVITE_URL_PRUEBA],
-               [i2('Publicada','Published'), INVITE_URL_TIENDA]].map(([lbl,url])=>{
-                const sel = inviteUrl()===url;
-                return `<button onclick="setInviteUrl('${url}');render();"
-                    class="py-2 rounded-xl text-[9px] font-black uppercase tracking-widest scale-press"
-                    style="background:${sel?tc.primary()+'20':'rgba(255,255,255,0.04)'};color:${sel?tc.primary():tc.muted()};border:1px solid ${sel?tc.primary()+'45':'rgba(255,255,255,0.06)'}">
-                    ${lbl}</button>`;
-            }).join('')}
-        </div>
-        <input type="url" id="invite-url" value="${inviteUrl().replace(/"/g,'&quot;')}"
-            placeholder="https://play.google.com/..." oninput="setInviteUrl(this.value)"
-            class="w-full bg-surface-container-high border border-outline-variant/20 rounded-xl px-3 py-2 text-on-surface-variant text-[10px]">
-        <div class="text-[9px] mt-2 leading-relaxed" style="color:${tc.muted()};opacity:.75">
-            ${i2('Aunque uses el enlace de la prueba, quien lo abra tiene que estar en tu lista de testers de Play Console o no podra descargarla.',
-                  'Even with the testing link, whoever opens it must be on your Play Console tester list or they will not be able to install it.')}
+        <div class="text-[9px] mt-3 leading-relaxed" style="color:${tc.muted()}">
+            ${APP_EN_PRUEBAS
+                ? i2('La app esta en pruebas cerradas, asi que se manda el enlace de la prueba. Quien lo abra tiene que estar en tu lista de testers de Play Console o no podra instalarla.',
+                      'The app is in closed testing, so the testing link is sent. Whoever opens it must be on your Play Console tester list or they will not be able to install it.')
+                : i2('Se manda el enlace de la ficha de Play.','The Play listing link is sent.')}
         </div>
     </div>
 
