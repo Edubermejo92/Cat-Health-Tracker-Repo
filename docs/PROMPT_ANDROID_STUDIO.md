@@ -159,6 +159,10 @@ Sin `supabase-js`: llamadas REST a mano desde `code.html`.
   (`AuthLink.kt` + intent-filter en el manifiesto). El de confirmar cuenta
   entra directo; el de contraseña perdida pide una nueva.
 
+**No hay árbitro IA.** Se quitó entero: exigía que el usuario pegase su propia
+API Key, rompía el offline-first y podía inventarse la acción. La voz funciona
+con reglas locales, al instante y sin red.
+
 Detalle: las contraseñas **no se pueden ver**, ni el usuario ni nadie.
 Supabase guarda un hash bcrypt. No añadas ninguna pantalla que las muestre.
 
