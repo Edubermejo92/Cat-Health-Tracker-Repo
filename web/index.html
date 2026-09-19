@@ -3180,26 +3180,35 @@ function voz(){ return VOZ[S.lang] || VOZ.es; }
  * Se canta primero el punto de quien saca, que es como se canta en pista.
  * Devuelve '' cuando no hay nada que cantar.
  */
-function marcadorCantado(){
-    const v = voz();
+function marcadorCantado(est, idioma){
+    const v = idioma ? (VOZ[idioma] || VOZ.es) : voz();
 
-    if(S.superTiebreak || S.tiebreak){
-        const a = S.tiebreakPoints.A|0, b = S.tiebreakPoints.B|0;
-        const saca = S.serving==='A' ? a : b;
-        const resto = S.serving==='A' ? b : a;
+    /* Sin argumentos lee el partido de verdad. Con uno, cualquier situacion
+       inventada: asi la ficha de Ajustes puede enseñar ejemplos salidos de
+       esta misma funcion, y no se pueden desfasar de lo que se oye. */
+    const e = est || {
+        tb: !!(S.superTiebreak || S.tiebreak),
+        tbA: S.tiebreakPoints.A|0, tbB: S.tiebreakPoints.B|0,
+        pa: S.teamA.points|0, pb: S.teamB.points|0,
+        saca: S.serving,
+        ventaja: S.advantage ? S['team'+S.advantage].name : '',
+        deuce: !!S.deuce
+    };
+
+    if(e.tb){
+        const saca  = e.saca==='A' ? e.tbA : e.tbB;
+        const resto = e.saca==='A' ? e.tbB : e.tbA;
         return saca + ' - ' + resto;
     }
 
-    const pa = S.teamA.points|0, pb = S.teamB.points|0;
-
-    if(S.advantage) return v.ventaja + ' ' + S['team'+S.advantage].name + '.';
-    if(S.deuce)     return v.iguales + '.';
+    if(e.ventaja) return v.ventaja + ' ' + e.ventaja + '.';
+    if(e.deuce)   return v.iguales + '.';
 
     // Mismo punto por debajo de 40: "treinta iguales"
-    if(pa === pb && pa < 3) return v.p[pa] + ' ' + v.ambos + '.';
+    if(e.pa === e.pb && e.pa < 3) return v.p[e.pa] + ' ' + v.ambos + '.';
 
-    const saca  = S.serving==='A' ? pa : pb;
-    const resto = S.serving==='A' ? pb : pa;
+    const saca  = e.saca==='A' ? e.pa : e.pb;
+    const resto = e.saca==='A' ? e.pb : e.pa;
     return v.p[Math.min(3, saca)] + ', ' + v.p[Math.min(3, resto)] + '.';
 }
 
@@ -3207,6 +3216,109 @@ function marcadorCantado(){
 function cantarMarcador(){
     const txt = marcadorCantado();
     if(txt) speak(txt);
+}
+
+/*
+ * Ficha de Ajustes: como se cantan los puntos.
+ *
+ * Todo lo que se enseña aqui sale de la tabla VOZ y de marcadorCantado(), o
+ * sea de lo mismo que se oye en pista. No hay ni un texto de ejemplo escrito a
+ * mano: si algun dia se cambia una palabra, esta ficha cambia con ella y no se
+ * puede quedar mintiendo.
+ */
+let _verTodosLosIdiomas = false;
+
+function ejemplosDeCanto(codigo){
+    const v = VOZ[codigo] || VOZ.es;
+    const A = 'A', B = 'B';
+    return [
+        [ '15 - 0',      marcadorCantado({pa:1, pb:0, saca:A}, codigo) ],
+        [ '30 - 30',     marcadorCantado({pa:2, pb:2, saca:A}, codigo) ],
+        [ '40 - 40',     marcadorCantado({deuce:true},        codigo) ],
+        [ i2('Ventaja','Advantage'), marcadorCantado({ventaja:'A'}, codigo).replace(' A.', ' ' + i2('(pareja)','(team)') + '.') ],
+        [ i2('Gana el juego','Game won'), `${v.juego} (${i2('pareja','team')}). 1 - 0.` ],
+        [ i2('Gana el set','Set won'),    `${v.set} (${i2('pareja','team')}). 6 - 4.` ],
+        [ i2('Tie-break','Tie-break'),    marcadorCantado({tb:true, tbA:5, tbB:3, saca:A}, codigo) ],
+        [ i2('Gana el partido','Match won'), `(${i2('pareja','team')}) ${v.gana}. 2 - 0.` ]
+    ];
+}
+
+function VozInfoCard(){
+    const mu = tc.muted(), te = tc.text(), p = tc.primary();
+    const actual = S.lang || 'es';
+    const L = LANGS[actual] || LANGS.es;
+
+    const filas = ejemplosDeCanto(actual).map(([caso, dicho]) => `
+        <div class="flex items-start justify-between gap-3 py-1.5" style="border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span class="text-[9px] uppercase tracking-wide shrink-0 pt-0.5" style="color:${mu}">${caso}</span>
+            <span class="text-[11px] font-bold text-right" style="color:${te}">${dicho}</span>
+        </div>`).join('');
+
+    const tabla = Object.entries(VOZ).map(([codigo, v]) => {
+        const nombre = (LANGS[codigo] || {}).name || codigo;
+        const bandera = (LANGS[codigo] || {}).flag || '';
+        const esEste = codigo === actual;
+        return `
+        <div class="py-2" style="border-bottom:1px solid rgba(255,255,255,0.04)">
+            <div class="flex items-center gap-2 mb-1">
+                ${bandera}
+                <span class="text-[10px] font-black uppercase tracking-wide" style="color:${esEste ? p : te}">${nombre}</span>
+                ${esEste ? `<span class="text-[8px] uppercase" style="color:${p}">${i2('en uso','in use')}</span>` : ''}
+            </div>
+            <div class="text-[10px] leading-relaxed" style="color:${mu}">
+                0 · 15 · 30 · 40 → <span style="color:${te}">${v.p.join(' · ')}</span>
+            </div>
+            <div class="text-[10px] leading-relaxed" style="color:${mu}">
+                ${v.iguales} · ${v.ventaja} · ${v.juego} · ${v.set}
+            </div>
+        </div>`;
+    }).join('');
+
+    return `
+    <div id="ficha-voz" class="bg-surface-container rounded-3xl p-4">
+        <div class="flex items-center gap-3 mb-1">
+            <span class="material-symbols-outlined text-primary">campaign</span>
+            <div class="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">
+                ${i2('Como se cantan los puntos','How points are called')}
+            </div>
+        </div>
+        <div class="text-[9px] leading-relaxed mb-3" style="color:${mu}">
+            ${i2('Lo que dice la app al sumar un punto, en el idioma que tengas puesto. Se canta primero el punto de quien saca, como en pista.',
+                  'What the app says when a point is scored, in the language you have set. The server\'s score is called first, as on court.')}
+        </div>
+
+        <div class="rounded-2xl p-3 mb-3" style="background:${tc.surf2()};border:1px solid rgba(255,255,255,0.04)">
+            <div class="flex items-center gap-2 mb-2">
+                ${L.flag || ''}
+                <span class="text-[10px] font-black uppercase tracking-wide" style="color:${p}">${L.name || actual}</span>
+            </div>
+            ${filas}
+        </div>
+
+        <button onclick="_verTodosLosIdiomas=!_verTodosLosIdiomas;render();"
+            class="w-full py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest scale-press flex items-center justify-center gap-1"
+            style="background:rgba(255,255,255,0.05);color:${te};border:1px solid rgba(255,255,255,0.08)">
+            <span class="material-symbols-outlined text-[14px]">${_verTodosLosIdiomas ? 'expand_less' : 'expand_more'}</span>
+            ${i2('Los 13 idiomas','All 13 languages')}
+        </button>
+
+        ${_verTodosLosIdiomas ? `<div class="mt-3">${tabla}</div>` : ''}
+
+        <div class="rounded-2xl p-3 mt-3" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05)">
+            <div class="text-[9px] font-bold uppercase tracking-widest mb-1" style="color:${mu}">
+                ${i2('Si lo dices tu','If you say it')}
+            </div>
+            <div class="text-[9px] leading-relaxed" style="color:${mu}">
+                ${i2('Para fijar el marcador a voz, di los puntos en el orden de la pantalla: primero tu pareja. "Cuarenta treinta" pone 40 - 30, saque quien saque.',
+                      'To set the score by voice, say the points in the order shown: your team first. "Forty thirty" sets 40 - 30, whoever is serving.')}
+            </div>
+        </div>
+
+        <div class="text-[9px] mt-3 leading-relaxed" style="color:${mu};opacity:.8">
+            ${i2('Si el movil no tiene voz instalada para ese idioma, se canta con la que haya. Se instalan en Ajustes de Android, en Idiomas y entrada de texto.',
+                  'If the phone has no voice for that language, it uses whatever it has. You install them in Android Settings, under Languages and input.')}
+        </div>
+    </div>`;
 }
 
 /** Foto del marcador, para comparar antes y despues de un punto. */
@@ -3488,7 +3600,7 @@ function processVoiceLocal(txt){
     // ── MARCADOR ESPECÍFICO ("30 iguales", "quince treinta", etc.) ──
     const scoreResult = matchScoreVoice(t);
     if(scoreResult !== null){
-        const {srvPts, rstrPts, isDeuce, advSrv, advRstr} = scoreResult;
+        const {p1, p2, isDeuce, advSrv, advRstr} = scoreResult;
         if(S.tiebreak||S.superTiebreak){ showToast('⚠️ Tiebreak activo',2000); return true; }
         snapshot();
         if(isDeuce){
@@ -3498,9 +3610,13 @@ function processVoiceLocal(txt){
         } else if(advRstr){
             S.teamA.points=3; S.teamB.points=3; S.deuce=true; S.advantage=rstr;
         } else {
-            S['team'+srv].points=srvPts;
-            S['team'+rstr].points=rstrPts;
-            S.deuce=(srvPts===3&&rstrPts===3); S.advantage=null;
+            /* El orden es el del MARCADOR, no el del saque: dices "cuarenta
+               treinta" mirando la pantalla, asi que el primer numero es el de
+               la pareja A. Antes el primero se le daba a quien sacaba, asi que
+               con el saque en la B salia del reves. */
+            S.teamA.points = p1;
+            S.teamB.points = p2;
+            S.deuce = (p1===3 && p2===3); S.advantage = null;
         }
         const lab=getScoreDisplay();
         speak(lab.scoreA+' — '+lab.scoreB);
@@ -3587,11 +3703,11 @@ function matchScoreVoice(t){
 
     // ── Ventaja servidor ──
     if(/ventaja servi|ventaja saque|ventaja al saque|advantage serv|advantage in|ad in|vantaggio serv|vorhand aufschlag/.test(t)){
-        return {srvPts:3,rstrPts:3,isDeuce:false,advSrv:true,advRstr:false};
+        return {p1:3,p2:3,isDeuce:false,advSrv:true,advRstr:false};
     }
     // ── Ventaja restador ──
     if(/ventaja rest|ventaja al rest|ventaja recept|advantage out|advantage rec|ad out|vantaggio rest/.test(t)){
-        return {srvPts:3,rstrPts:3,isDeuce:false,advSrv:false,advRstr:true};
+        return {p1:3,p2:3,isDeuce:false,advSrv:false,advRstr:true};
     }
 
     // ── "X iguales" / "X igual" → marcador igualado en X ──
@@ -3601,14 +3717,14 @@ function matchScoreVoice(t){
     if(equalsMatch){
         const v = W[equalsMatch[1].replace('quince','quince')] ?? W[equalsMatch[1]];
         if(v !== undefined){
-            if(v===3) return {srvPts:3,rstrPts:3,isDeuce:true,advSrv:false,advRstr:false}; // 40 iguales = deuce
-            return {srvPts:v,rstrPts:v,isDeuce:false,advSrv:false,advRstr:false};
+            if(v===3) return {p1:3,p2:3,isDeuce:true,advSrv:false,advRstr:false}; // 40 iguales = deuce
+            return {p1:v,p2:v,isDeuce:false,advSrv:false,advRstr:false};
         }
     }
 
     // ── "iguales" / "deuce" solo (sin número) → deuce/40-40 ──
     if(/^(deuce|iguales?|parità|égalité|einstand|tasapeli)$/.test(t)){
-        return {srvPts:3,rstrPts:3,isDeuce:true,advSrv:false,advRstr:false};
+        return {p1:3,p2:3,isDeuce:true,advSrv:false,advRstr:false};
     }
 
     // ── Quitar palabras de relleno y parsear "X a Y" / "X Y" ──
@@ -3627,8 +3743,8 @@ function matchScoreVoice(t){
         if(w2 in W){
             const s1=W[w1], s2=W[w2];
             // 40-40 → deuce
-            if(s1===3 && s2===3) return {srvPts:3,rstrPts:3,isDeuce:true,advSrv:false,advRstr:false};
-            return {srvPts:s1,rstrPts:s2,isDeuce:false,advSrv:false,advRstr:false};
+            if(s1===3 && s2===3) return {p1:3,p2:3,isDeuce:true,advSrv:false,advRstr:false};
+            return {p1:s1,p2:s2,isDeuce:false,advSrv:false,advRstr:false};
         }
     }
     return null;
@@ -6696,6 +6812,8 @@ const SettingsView=()=>`
             <input type="range" min="20" max="100" value="${S.brightness}" class="w-full" oninput="S.brightness=parseInt(this.value);document.documentElement.style.filter='brightness('+S.brightness/100+')';saveState();">
         </div>
     </div>
+
+    ${VozInfoCard()}
 
     <div class="bg-surface-container rounded-3xl p-4">
         <div class="flex items-center justify-between mb-2">
