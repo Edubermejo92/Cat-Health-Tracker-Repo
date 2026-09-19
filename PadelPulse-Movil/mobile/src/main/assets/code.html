@@ -2374,6 +2374,127 @@ function showConfirmModal(title,subtitle,label,onConfirm){
 }
 
 // ═══════════════════════════════════════════
+// CORREGIR MARCADOR
+// ═══════════════════════════════════════════
+/*
+ * Hasta ahora los juegos y los sets solo se podian mover ganando puntos o
+ * deshaciendo uno a uno. Si el arbitro se despista un juego entero -o llegas
+ * con el partido empezado- no habia forma de cuadrarlo.
+ *
+ * Se edita sobre un borrador y solo se aplica al guardar: asi un toque de mas
+ * no toca el marcador de verdad.
+ */
+let _scoreDraft = null;
+
+function showScoreEditor(){
+    _scoreDraft = {
+        gA: S.teamA.games|0,
+        gB: S.teamB.games|0,
+        sA: setsGanados('A'),
+        sB: setsGanados('B')
+    };
+    const el = document.createElement('div');
+    el.id = 'score-editor';
+    el.style.cssText = 'position:fixed;inset:0;z-index:200;display:flex;align-items:flex-end;background:rgba(0,0,0,0.7);';
+    document.body.appendChild(el);
+    renderScoreEditor();
+}
+
+function setsGanados(team){
+    return (S.setsHistory||[]).filter(s=>s.winner===team).length;
+}
+
+function editScore(campo, delta){
+    if(!_scoreDraft) return;
+    const tope = (campo==='sA'||campo==='sB') ? 3 : 15;
+    _scoreDraft[campo] = Math.max(0, Math.min(tope, _scoreDraft[campo] + delta));
+    renderScoreEditor();
+}
+
+function renderScoreEditor(){
+    const el = document.getElementById('score-editor');
+    if(!el || !_scoreDraft) return;
+    const p = tc.primary(), mu = tc.muted(), te = tc.text();
+
+    const fila = (titulo, campoA, campoB) => `
+        <div>
+            <div class="text-[9px] font-bold uppercase tracking-widest mb-2" style="color:${mu}">${titulo}</div>
+            ${[[S.teamA.name, campoA],[S.teamB.name, campoB]].map(([nombre,campo])=>`
+            <div class="flex items-center justify-between gap-3 mb-2">
+                <span class="text-[12px] font-bold truncate flex-1" style="color:${te}">${String(nombre||'').replace(/</g,'&lt;')}</span>
+                <div class="flex items-center gap-2">
+                    <button onclick="editScore('${campo}',-1)" class="w-9 h-9 rounded-xl scale-press flex items-center justify-center"
+                        style="background:rgba(255,255,255,0.06);color:${te}">
+                        <span class="material-symbols-outlined text-[18px]">remove</span>
+                    </button>
+                    <span class="w-8 text-center text-[20px] font-black" style="color:${p}">${_scoreDraft[campo]}</span>
+                    <button onclick="editScore('${campo}',1)" class="w-9 h-9 rounded-xl scale-press flex items-center justify-center"
+                        style="background:rgba(255,255,255,0.06);color:${te}">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                    </button>
+                </div>
+            </div>`).join('')}
+        </div>`;
+
+    el.innerHTML = `<div class="slide-up w-full max-w-md mx-auto rounded-t-3xl md:rounded-3xl md:mb-10 p-6 flex flex-col gap-5" style="background:${tc.surf2()}">
+        <div>
+            <div class="font-black text-base" style="color:${te}">${i2('Corregir marcador','Fix the score')}</div>
+            <div class="text-[11px] mt-1 leading-relaxed" style="color:${mu}">
+                ${i2('Para cuadrar el marcador si se ha escapado algun juego. Los puntos del juego en curso no se tocan.',
+                      'To straighten out the score if a game got away. Points in the current game are left alone.')}
+            </div>
+        </div>
+        ${fila(i2('Juegos de este set','Games this set'), 'gA', 'gB')}
+        ${fila(i2('Sets ganados','Sets won'), 'sA', 'sB')}
+        <div class="flex gap-3">
+            <button onclick="closeScoreEditor()"
+                class="flex-1 py-4 rounded-2xl text-[13px] font-black uppercase scale-press"
+                style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5)">${i('cancel')}</button>
+            <button onclick="applyScoreEditor()"
+                class="flex-1 py-4 rounded-2xl text-[13px] font-black uppercase scale-press"
+                style="background:${p};color:#04120B">${i2('Guardar','Save')}</button>
+        </div>
+    </div>`;
+}
+
+function closeScoreEditor(){
+    const el = document.getElementById('score-editor');
+    if(el) el.remove();
+    _scoreDraft = null;
+}
+
+function applyScoreEditor(){
+    if(!_scoreDraft){ closeScoreEditor(); return; }
+    const d = _scoreDraft;
+    snapshot();                       // corregir a mano tambien se puede deshacer
+
+    S.teamA.games = d.gA;
+    S.teamB.games = d.gB;
+
+    /* Los sets se cuadran anadiendo o quitando entradas del historial, no
+       reconstruyendolo entero: asi no se pierde el 7-5 real de un set que ya
+       estaba jugado. */
+    ['A','B'].forEach(team=>{
+        const objetivo = team==='A' ? d.sA : d.sB;
+        let hist = S.setsHistory || (S.setsHistory = []);
+        while(setsGanados(team) < objetivo){
+            hist.push({winner:team, a: team==='A'?6:0, b: team==='A'?0:6, tiebreak:false, tbA:0, tbB:0});
+        }
+        while(setsGanados(team) > objetivo){
+            for(let k=hist.length-1; k>=0; k--){
+                if(hist[k].winner===team){ hist.splice(k,1); break; }
+            }
+        }
+    });
+    S.currentSet = (S.setsHistory||[]).length + 1;
+
+    closeScoreEditor();
+    saveState();                      // guarda y lo difunde al reloj
+    render();
+    showToast('✅ ' + i2('Marcador corregido','Score fixed'), 2200);
+}
+
+// ═══════════════════════════════════════════
 // COMPARTIR
 // ═══════════════════════════════════════════
 function getLiveUrl(){
@@ -2916,26 +3037,47 @@ function processVoiceLocal(txt){
         newMatch(); return true;
     }
 
-    // ── JUEGO ──
-    // "juego", "juego pareja a", "juego equipo b", "game team a"
-    const gA = /\bjuego\b/.test(t)&&(
-        /\b(equipo a|pareja a|primero|para a|al uno|al primero|uno)\b/.test(t)||
-        (nA.length>=3&&t.includes(nA))||/\bjuego a\b/.test(t));
-    const gB = /\bjuego\b/.test(t)&&(
-        /\b(equipo b|pareja b|segundo|para b|al dos|al segundo|dos)\b/.test(t)||
-        (nB.length>=3&&t.includes(nB))||/\bjuego b\b/.test(t));
-    if(gA&&!gB){ winGame('A'); speak('Juego '+S.teamA.name+'.'); showToast('🏆 Juego '+S.teamA.name); return true; }
-    if(gB&&!gA){ winGame('B'); speak('Juego '+S.teamB.name+'.'); showToast('🏆 Juego '+S.teamB.name); return true; }
+    /* ── JUEGO y SET ──────────────────────────────────────────────────────
+     * Antes habia que nombrar al equipo si o si: "juego" a secas no hacia
+     * nada y encima no avisaba de nada, asi que parecia que la voz estaba
+     * rota. Ahora se aceptan mas formas de nombrarlos y, si aun asi no queda
+     * claro de quien es, la app lo dice en vez de callarse.
+     */
+    const esA = /\b(equipo a|pareja a|primero|primera|para a|al uno|al primero|uno|nosotros|local|locales|team a)\b/.test(t)
+                || (nA.length>=3 && t.includes(nA));
+    const esB = /\b(equipo b|pareja b|segundo|segunda|para b|al dos|al segundo|dos|ellos|vosotros|visita|visitante|visitantes|team b)\b/.test(t)
+                || (nB.length>=3 && t.includes(nB));
 
-    // ── SET ──
-    const sA = /\bset\b/.test(t)&&(
-        /\b(equipo a|pareja a|primero|para a|uno)\b/.test(t)||
-        (nA.length>=3&&t.includes(nA))||/\bset a\b/.test(t));
-    const sB = /\bset\b/.test(t)&&(
-        /\b(equipo b|pareja b|segundo|para b|dos)\b/.test(t)||
-        (nB.length>=3&&t.includes(nB))||/\bset b\b/.test(t));
-    if(sA&&!sB){ winSet('A',S.teamA.games,S.teamB.games,false); speak('Set '+S.teamA.name+'.'); showToast('🏆 Set '+S.teamA.name); return true; }
-    if(sB&&!sA){ winSet('B',S.teamA.games,S.teamB.games,false); speak('Set '+S.teamB.name+'.'); showToast('🏆 Set '+S.teamB.name); return true; }
+    if(/\b(juego|game|gioco|jeu|spiel|peli)\b/.test(t) && !/\b(nuevo|nueva|new)\b/.test(t)){
+        const quien = /\bjuego a\b/.test(t) ? 'A'
+                    : /\bjuego b\b/.test(t) ? 'B'
+                    : (esA && !esB) ? 'A'
+                    : (esB && !esA) ? 'B' : null;
+        if(quien){
+            const nombre = S['team'+quien].name;
+            winGame(quien); speak('Juego '+nombre+'.'); showToast('🏆 Juego '+nombre);
+        }else{
+            speak(i2('De quien es el juego?','Whose game?'));
+            showToast('🎙️ ' + i2('Di "juego A" o "juego B"','Say "game A" or "game B"'), 3000);
+        }
+        return true;
+    }
+
+    if(/\bset\b/.test(t)){
+        const quien = /\bset a\b/.test(t) ? 'A'
+                    : /\bset b\b/.test(t) ? 'B'
+                    : (esA && !esB) ? 'A'
+                    : (esB && !esA) ? 'B' : null;
+        if(quien){
+            const nombre = S['team'+quien].name;
+            winSet(quien, S.teamA.games, S.teamB.games, false);
+            speak('Set '+nombre+'.'); showToast('🏆 Set '+nombre);
+        }else{
+            speak(i2('De quien es el set?','Whose set?'));
+            showToast('🎙️ ' + i2('Di "set A" o "set B"','Say "set A" or "set B"'), 3000);
+        }
+        return true;
+    }
 
     // ── DOBLE FALTA ──
     if(/\b(doble falta|double fault|doppio fallo|double faute|doppelfehler|kaksoishuti)\b/.test(t)){
@@ -5622,10 +5764,14 @@ const HomeView=()=>{
                     <span class="text-[8px] md:text-xs lg:text-base font-black uppercase">− ${S.teamB.name}</span>
                 </button>
             </div>
-            <div class="grid grid-cols-4 gap-1.5 md:gap-4 lg:gap-4">
+            <div class="grid grid-cols-5 gap-1.5 md:gap-4 lg:gap-4">
                 <button onclick="undoPoint()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
                     style="background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
                     <span class="material-symbols-outlined text-[14px] md:text-[20px]">undo</span>${i('undo')}
+                </button>
+                <button onclick="showScoreEditor()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
+                    style="background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
+                    <span class="material-symbols-outlined text-[14px] md:text-[20px]">edit</span>${i2('Corregir','Fix')}
                 </button>
                 <button onclick="S.currentView='faults';render();" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
                     style="background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
