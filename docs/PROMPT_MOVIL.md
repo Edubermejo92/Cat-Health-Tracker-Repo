@@ -313,6 +313,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
@@ -360,6 +361,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     /** Escucha continua: el microfono se vuelve a abrir solo tras cada frase. */
     internal var escuchaContinua = false
+
+    /** True mientras el TTS canta el punto: el microfono no debe estar abierto. */
+    @Volatile private var hablando = false
     private var escuchando = false
 
     private var speechRecognizer: SpeechRecognizer? = null
@@ -609,7 +613,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             evalJs("if(typeof onVoiceState==='function') onVoiceState('off');")
             return
         }
-        webView?.postDelayed({ if (escuchaContinua) startMic() }, 700)
+        // Mientras la app canta el punto no se abre el microfono: se oiria a si
+        // misma y volveria a procesar el comando que acaba de ejecutar. Se
+        // vuelve a mirar cada poco hasta que termine.
+        if (hablando) {
+            webView?.postDelayed({ reabrirSiContinua() }, 250)
+            return
+        }
+        webView?.postDelayed({ if (escuchaContinua && !hablando) startMic() }, 700)
     }
 
     internal fun pararMic() {
@@ -630,6 +641,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val params = Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumenVoz)
         }
+        hablando = true
         tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, params, "pp")
     }
 
@@ -660,6 +672,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) return
         tts?.setLanguage(Locale("es", "ES"))
+        /*
+         * Saber cuando la app esta cantando el punto es lo que evita que el
+         * microfono se oiga a si misma. Sin esto se reabria a los 700 ms, en
+         * mitad del anuncio, y el reconocedor devolvia otra vez la misma frase:
+         * el ultimo comando se contaba dos veces.
+         */
+        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(id: String?) { hablando = true }
+            override fun onDone(id: String?) { hablando = false }
+            @Deprecated("La firma sin errorCode es la que llaman las versiones viejas")
+            override fun onError(id: String?) { hablando = false }
+            override fun onError(id: String?, errorCode: Int) { hablando = false }
+        })
         // Por multimedia y no por notificaciones: es el canal que el usuario
         // sube con los botones del lateral, y el que no se silencia solo.
         runCatching {
