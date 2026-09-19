@@ -121,6 +121,37 @@ quedarían diferentes para siempre.
 **Anti-eco**: mientras se aplica un estado remoto hay un flag que impide
 reemitir. Sin él las dos apps se mandan el mismo estado sin parar.
 
+### La voz
+
+Se canta el marcador **en cada punto**, se pulse en pantalla o se diga. Lo que
+se dice sale de la tabla `VOZ` (13 idiomas) y de `marcadorCantado()`, y el TTS
+nativo cambia de idioma con `speakIn(texto, idioma)` en el puente. Nada de
+frases escritas a pelo.
+
+No se canta el estado después del punto, sino **lo que ha pasado**
+(`cantarLoQuePaso`): al cerrar un juego los puntos ya están a cero, así que
+cantar el estado decía "cero iguales" en el momento más importante.
+
+Tres guardas que parecen redundantes y no lo son, porque el micrófono oye a la
+propia app:
+
+1. El TTS avisa cuándo empieza y acaba (`UtteranceProgressListener`) y el
+   micrófono **no se abre mientras la app habla**.
+2. Se recuerda lo que la app acaba de cantar y se ignora si vuelve por el
+   micrófono en 6 s. Sin esto, "quince, cero" dicho por la app es un comando
+   válido de fijar marcador y se monta un bucle.
+3. La misma frase repetida en 3,5 s se descarta.
+
+**Ojo con el orden**, que no es el mismo en los dos sentidos: la app canta
+primero el punto de quien saca (convención de pista); cuando el usuario dicta
+un marcador, el primer número es el de la pareja A, porque está leyendo la
+pantalla.
+
+**No hay árbitro IA.** Se quitó entero -los tres proveedores, la API Key, el
+chat y el entrenador post-partido-: exigía una clave del usuario, rompía el
+offline-first y podía inventarse la acción. Si lo ves en algún sitio, es
+código viejo.
+
 ### La pareja A eres tú
 
 Invariante del producto, no una convención suelta. De ella cuelgan los comandos
@@ -163,9 +194,10 @@ hash bcrypt. No añadas ninguna pantalla que las muestre.
    sincronización, cuentas, vistas) sin romper el offline-first: no puede haber
    peticiones de red para cargar la app.
 
-2. **Reconocimiento de voz sólo rico en español.** `processVoiceLocal()` tiene
-   expresiones regulares muy completas para español y parciales para el resto.
-   La app soporta 13 idiomas.
+2. **El reconocimiento de comandos sólo es rico en español.** Lo que la app
+   *dice* ya está en los 13 idiomas; lo que *entiende* no. Las expresiones
+   regulares de `processVoiceLocal()` son muy completas para español y
+   parciales para el resto.
 
 3. **Estado global `S`.** Todo el estado del partido está en un objeto global
    mutable. Cualquier refactor tiene que mantener `saveState()` /
