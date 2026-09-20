@@ -49,6 +49,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     private var speechResultCallback: ((String) -> Unit)? = null
 
+    var sensorsPaused by mutableStateOf(false)
+    private var isHrRegistered = false
+    private var isStepRegistered = false
+
     // ── Enlace con el movil ─────────────────────────────────────────────
 
     // El contenido lo procesa WearListenerService; aqui solo refrescamos presencia.
@@ -285,9 +289,28 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
 
+    fun pauseSensors() {
+        if (sensorsPaused) return
+        sensorsPaused = true
+        val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager.unregisterListener(this)
+        isHrRegistered = false
+        isStepRegistered = false
+        Log.i(TAG, "Sensores pausados (actividad automática deshabilitada)")
+    }
+
+    fun resumeSensors() {
+        if (!sensorsPaused) return
+        sensorsPaused = false
+        registerHeartRateSensor()
+        registerStepSensor()
+        Log.i(TAG, "Sensores reanudados")
+    }
+
     override fun onSensorChanged(event: SensorEvent?) {
         val engine = gameEngine ?: return
         if (event == null) return
+        if (sensorsPaused) return
         when (event.sensor.type) {
             Sensor.TYPE_HEART_RATE -> {
                 val hr = event.values.getOrNull(0)?.toInt() ?: 0
