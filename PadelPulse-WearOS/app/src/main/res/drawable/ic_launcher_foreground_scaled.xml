@@ -10,14 +10,14 @@
 
   - El lienzo del icono adaptativo mide 108dp pero la mascara solo garantiza
     los 72dp centrales: lo de fuera lo recorta el lanzador segun la forma que
-    use. A 115dp el logo se salia por los cuatro lados. A 88dp el dibujo, que
-    ocupa el 72% de su propio lienzo, queda en un 59% del icono: dentro de la
+    use. A 115dp el logo se salia por los cuatro lados. A 78dp el dibujo, que
+    ocupa el 72% de su propio lienzo, queda en un 52% del icono: dentro de la
     zona segura y con el mismo aire que el resto de iconos del reloj.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:drawable="@mipmap/icon_foreground"
-        android:width="88dp"
-        android:height="88dp"
+        android:width="78dp"
+        android:height="78dp"
         android:gravity="center" />
 </layer-list>
