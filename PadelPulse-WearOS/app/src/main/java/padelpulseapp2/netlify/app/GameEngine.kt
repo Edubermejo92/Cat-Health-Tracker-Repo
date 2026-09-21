@@ -126,7 +126,10 @@ class GameEngine(context: Context? = null) {
 
     fun undo() {
         if (history.isNotEmpty()) {
-            val last = history.removeLast()
+            // removeLast() no: en Android 15 java.util.List trae el suyo y tapa
+            // la extension de Kotlin, asi que al compilar contra SDK 35+ se
+            // enlaza un metodo que en Android 14 y anteriores no existe.
+            val last = history.removeAt(history.lastIndex)
             ptsA = last.ptsA; ptsB = last.ptsB; gamesA = last.gamesA; gamesB = last.gamesB
             setsA = last.setsA; setsB = last.setsB; isDeuce = last.isDeuce; adv = last.adv
             isTb = last.isTb; tbPtsA = last.tbPtsA; tbPtsB = last.tbPtsB
