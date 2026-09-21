@@ -175,7 +175,7 @@ fun AccountScreen(engine: GameEngine, activity: MainActivity) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(roundSafeBoxPadding()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -237,7 +237,7 @@ fun SplashScreen(engine: GameEngine, activity: MainActivity) {
     val logoScale by animateFloatAsState(if (visible) 1f else 0.85f, tween(700, easing = FastOutSlowInEasing), label = "scale")
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp).alpha(fade),
+        modifier = Modifier.fillMaxSize().padding(roundSafeBoxPadding(square = 18.dp)).alpha(fade),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -294,7 +294,7 @@ fun LangScreen(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 28.dp)
+        contentPadding = roundSafePadding(squareVertical = 28.dp)
     ) {
         item { PPLabel(ui.chooseLang, color = accent, size = PP.Label) }
         item { Spacer(Modifier.height(4.dp)) }
@@ -403,7 +403,7 @@ fun PairScreen(
         state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 24.dp)
+        contentPadding = roundSafePadding(squareHorizontal = 6.dp, squareVertical = 24.dp)
     ) {
         item { BackRow(engine) { engine.currentScreen = "score" } }
 
@@ -549,7 +549,7 @@ fun SettingsScreen(
         ScalingLazyColumn(
             modifier = Modifier.fillMaxSize().background(PP.Bg),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 26.dp)
+            contentPadding = roundSafePadding()
         ) {
             item { PPLabel(ui.chooseLang, color = accent, size = PP.Label) }
             items(Translations.langs) { l ->
@@ -584,7 +584,7 @@ fun SettingsScreen(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 26.dp)
+        contentPadding = roundSafePadding()
     ) {
         item {
             PPLabel(ui.settings, color = accent, size = PP.Label)
@@ -824,7 +824,7 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(roundSafeBoxPadding()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -872,7 +872,7 @@ fun ResumeScreen(engine: GameEngine, activity: MainActivity) {
     val es = engine.lang == "es"
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(roundSafeBoxPadding()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -939,7 +939,7 @@ fun HistoryScreen(
     // la sesion tiene que llegar del movil.
     if (!WatchAccount.signedIn) {
         Column(
-            modifier = Modifier.fillMaxSize().background(PP.Bg).padding(horizontal = 18.dp),
+            modifier = Modifier.fillMaxSize().background(PP.Bg).padding(roundSafeBoxPadding(square = 18.dp)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -985,7 +985,7 @@ fun HistoryScreen(
         state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 26.dp)
+        contentPadding = roundSafePadding()
     ) {
         item {
             PPLabel(if (es) "HISTORIAL" else "HISTORY", color = accent, size = PP.Label)

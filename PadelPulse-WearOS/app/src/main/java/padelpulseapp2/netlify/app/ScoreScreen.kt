@@ -66,12 +66,12 @@ fun ScoreScreen(
         modifier = Modifier.fillMaxSize().background(PP.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 26.dp)
+        contentPadding = roundSafePadding(squareHorizontal = 4.dp, squareVertical = 26.dp)
     ) {
         // Cabecera: pista, saque, cronometro y estado del enlace
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(0.96f),
+                modifier = Modifier.fillMaxWidth(safeWidth(edge = true, square = 0.96f)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -142,7 +142,7 @@ fun ScoreScreen(
         // Barra de acciones
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(0.98f),
+                modifier = Modifier.fillMaxWidth(safeWidth(edge = true, square = 0.98f)),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -160,6 +160,27 @@ fun ScoreScreen(
             }
         }
 
+        // Wear OS arranca su deteccion de ejercicio al detectar movimiento y se
+        // lleva la pantalla; pausar los sensores mientras se juega lo evita.
+        item {
+            val paused = activity.sensorsPaused
+            Button(
+                onClick = { if (paused) activity.resumeSensors() else activity.pauseSensors() },
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = if (paused) ThemeUtils.tint(engine.theme, 0.16f) else PP.Surface
+                ),
+                modifier = Modifier.fillMaxWidth(safeWidth(edge = true, square = 0.9f))
+                    .height(28.dp).clip(RoundedCornerShape(14.dp))
+            ) {
+                Text(
+                    if (paused) (if (engine.lang == "es") "▶ Reanudar sensores" else "▶ Resume sensors")
+                    else (if (engine.lang == "es") "⏸ Pausar sensores" else "⏸ Pause sensors"),
+                    color = if (paused) accent else PP.TextDim,
+                    fontSize = PP.Micro, fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
         item {
             Button(
                 onClick = {
@@ -169,7 +190,8 @@ fun ScoreScreen(
                     activity.onLocalScoreAction("reset")
                 },
                 colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF2A1212)),
-                modifier = Modifier.fillMaxWidth(0.9f).height(30.dp).clip(RoundedCornerShape(15.dp))
+                modifier = Modifier.fillMaxWidth(safeWidth(edge = true, square = 0.9f))
+                    .height(30.dp).clip(RoundedCornerShape(15.dp))
             ) {
                 Text(
                     ui.newMatch.uppercase(),
@@ -428,7 +450,7 @@ fun NameEditorScreen(
         state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 26.dp)
+        contentPadding = roundSafePadding()
     ) {
         item {
             PPLabel(

@@ -17,16 +17,16 @@ val hasKeystore = keystorePropsFile.exists()
 
 android {
     namespace = "padelpulseapp2.netlify.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "padelpulseapp2.netlify.app"
         minSdk = 25
-        targetSdk = 35
+        targetSdk = 36
         // Serie propia del movil. Debe ser DISTINTO al del reloj, que va en la
         // misma serie x10: movil 518, reloj 5180.
-        versionCode = 518
-        versionName = "5.1.8"
+        versionCode = 519
+        versionName = "5.2.1"
     }
 
     signingConfigs {

@@ -18,17 +18,17 @@ val hasKeystore = keystorePropsFile.exists()
 
 android {
     namespace = "padelpulseapp2.netlify.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "padelpulseapp2.netlify.app"
         minSdk = 30
-        targetSdk = 35
+        targetSdk = 36
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
         // serie -el del movil x10- y siempre por encima: movil 518, reloj 5180.
-        versionCode = 5180
-        versionName = "5.1.8"
+        versionCode = 5190
+        versionName = "5.2.1"
     }
 
     signingConfigs {
