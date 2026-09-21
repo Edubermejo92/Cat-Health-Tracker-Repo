@@ -1,8 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Capa de delante del icono adaptativo.
+
+  Dos cosas que hay que respetar y antes no se respetaban:
+
+  - La fuente es @mipmap/icon_foreground, el bitmap. Apuntar a @mipmap/icon
+    metia un icono adaptativo entero dentro del foreground de otro, porque en
+    API 26+ ese nombre resuelve al XML, no al webp.
+
+  - El lienzo del icono adaptativo mide 108dp pero la mascara solo garantiza
+    los 72dp centrales: lo de fuera lo recorta el lanzador segun la forma que
+    use. A 115dp el logo se salia por los cuatro lados. A 88dp el dibujo, que
+    ocupa el 72% de su propio lienzo, queda en un 59% del icono: dentro de la
+    zona segura y con el mismo aire que el resto de iconos del reloj.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:drawable="@mipmap/icon"
-        android:width="115dp"
-        android:height="115dp"
+        android:drawable="@mipmap/icon_foreground"
+        android:width="88dp"
+        android:height="88dp"
         android:gravity="center" />
 </layer-list>
