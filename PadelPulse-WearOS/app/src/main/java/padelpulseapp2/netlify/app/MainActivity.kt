@@ -50,8 +50,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     private var speechResultCallback: ((String) -> Unit)? = null
 
     var sensorsPaused by mutableStateOf(false)
-    private var isHrRegistered = false
-    private var isStepRegistered = false
 
     // ── Enlace con el movil ─────────────────────────────────────────────
 
