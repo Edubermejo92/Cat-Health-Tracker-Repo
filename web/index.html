@@ -6588,14 +6588,6 @@ function render(){
     const scrollEl = app.querySelector('.scrollable');
     const saveScroll = (scrollEl && _lastView === S.currentView) ? scrollEl.scrollTop : 0;
 
-    // El #app del HTML viene centrado en linea, para que el spinner previo a
-    // que arranque el JS salga en medio. En linea gana a la clase, asi que si
-    // no se quitan aqui la app entera hereda ese centrado: las vistas se
-    // encogen al ancho del contenido y cada repintado las recoloca en vertical.
-    // El splash si los quiere, por eso se limpian al renderizar y no antes.
-    app.style.removeProperty('align-items');
-    app.style.removeProperty('justify-content');
-
     app.className='watch-frame font-body';
     applyTheme(S.theme||'neon');
     const ba = document.getElementById('blob-a');
