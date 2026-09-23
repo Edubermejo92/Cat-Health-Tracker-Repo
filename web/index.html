@@ -6586,7 +6586,8 @@ let _lastView = null;
 function render(){
     const app=document.getElementById('app');
     const scrollEl = app.querySelector('.scrollable');
-    const saveScroll = (scrollEl && _lastView === S.currentView) ? scrollEl.scrollTop : 0;
+    const sameView = (_lastView === S.currentView);
+    const saveScroll = (scrollEl && sameView) ? scrollEl.scrollTop : 0;
 
     app.className='watch-frame font-body';
     applyTheme(S.theme||'neon');
@@ -6616,6 +6617,15 @@ function render(){
         }
     }
     
+    // La animacion de entrada solo tiene sentido al cambiar de vista. Al
+    // repintar la misma, cada pasada la reinicia desde opacity:0 y se ve como
+    // un parpadeo. Pasa sobre todo tras registrarse: syncNow() repinta dos
+    // veces -al empezar y al acabar- y el window.load lanza otro a los 2,5s,
+    // asi que la pantalla de formato y idioma se reanimaba cuatro veces.
+    // slideUp termina en translateY(0);opacity:1, el estado natural del
+    // elemento, asi que quitar la clase no mueve nada de sitio.
+    if(sameView) app.querySelectorAll('.slide-up').forEach(el=>el.classList.remove('slide-up'));
+
     paintIcons(app);
     _lastView = S.currentView;
     const newScroll = app.querySelector('.scrollable');
