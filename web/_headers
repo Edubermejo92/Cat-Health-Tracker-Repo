@@ -2,3 +2,9 @@
   Cache-Control: public, max-age=31536000, immutable
 /tailwind.css
   Cache-Control: public, max-age=604800
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: public, max-age=3600
+/icon-*.png
+  Cache-Control: public, max-age=604800

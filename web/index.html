@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#0e0e0e">
 <meta name="color-scheme" content="dark">
 <title>PadelPulse Live</title>
+<!-- Instalable desde el navegador en la version de Netlify. El manifest y sus
+     iconos viven solo en web/: dentro de la app esto no se usa, porque el
+     WebView no monta apps web. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PadelPulse">
 <!-- Todo local: la app funciona sin conexion (pista sin cobertura) -->
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="tailwind.css">
@@ -277,7 +285,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '5.1.8';
+const WEB_VERSION = '5.2.2';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -2643,11 +2651,11 @@ function getLiveUrl(){
     return window.location.origin + window.location.pathname + '#pp=' + encoded;
 }
 
-function getShareText(){
+function getShareText(platform){
     const nA=S.teamA.name, nB=S.teamB.name;
     const pA=[S.teamA.playerA,S.teamA.playerB].filter(Boolean).join(' / ');
     const pB=[S.teamB.playerA,S.teamB.playerB].filter(Boolean).join(' / ');
-    
+
     let setsInfo = S.setsHistory.map((s,i)=>`Set ${i+1}: ${s.a}-${s.b}${s.tiebreak?' (TB)':''}`).join('\n');
     if (!S.matchOver) {
         let currentScore = `Set ${S.currentSet} (Actual): ${S.teamA.games}-${S.teamB.games}`;
@@ -2658,17 +2666,24 @@ function getShareText(){
         }
         setsInfo = setsInfo ? setsInfo + '\n' + currentScore : currentScore;
     }
-    const winnerText = S.matchWinner ? `\n\n🏆 Ganador: ${S['team'+S.matchWinner].name}` : '';
-    
+    const winnerText = S.matchWinner ? `\n🏆 Ganador: ${S['team'+S.matchWinner].name}` : '';
+    const timeText = `⏱️ ${formatTime(S.gameTime)}`;
+
+    if (platform === 'whatsapp') {
+        return `🎾 ${nA} vs ${nB}\n${setsInfo||i('match')}${winnerText}\n${timeText}\n\n👁️ padelpulselive.netlify.app`;
+    }
+    if (platform === 'instagram') {
+        return `🎾 ${nA} vs ${nB}\nSet ${S.currentSet}: ${S.teamA.games}-${S.teamB.games}${winnerText}\n\n👁️ Ver en vivo en\npadelpulselive.netlify.app`;
+    }
     const liveUrl = getLiveUrl();
-    return `🎾 PadelPulse Live\n\n${nA}${pA?' ('+pA+')':''}\nvs\n${nB}${pB?' ('+pB+')':''}\n\n${setsInfo||i('match')}${winnerText}\n⏱️ ${formatTime(S.gameTime)}\n\n👁️ Live:\n${liveUrl}`;
+    return `🎾 PadelPulse Live\n\n${nA}${pA?' ('+pA+')':''}\nvs\n${nB}${pB?' ('+pB+')':''}\n\n${setsInfo||i('match')}${winnerText}\n${timeText}\n\n👁️ Live:\n${liveUrl}`;
 }
 
 // Dentro del WebView no existen window.open ni navigator.share: los botones
 // de compartir no hacian nada. Todo va por el puente nativo, y solo se usa el
 // camino web cuando la pagina corre en un navegador de verdad (version Netlify).
 function shareSocial(platform, textOverride) {
-    const text = textOverride || getShareText();
+    const text = textOverride || getShareText(platform);
     const url = getLiveUrl();
     const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
 
@@ -2695,7 +2710,7 @@ function shareSocial(platform, textOverride) {
 }
 
 function shareResult(textOverride){
-    const text = textOverride || getShareText();
+    const text = textOverride || getShareText(null);
     const title = 'PadelPulse Live — ' + S.teamA.name + ' vs ' + S.teamB.name;
     const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
     if (b && b.shareText) { b.shareText(text, title); return; }
