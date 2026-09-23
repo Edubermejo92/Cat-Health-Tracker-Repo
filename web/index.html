@@ -6583,7 +6583,13 @@ ${BottomNav('settings')}`;
 // RENDER
 // ═══════════════════════════════════════════
 let _lastView = null;
+// El splash es dueno de #app mientras dura. Cualquier render() de fuera -y hay
+// varios en vuelo al arrancar con sesion: syncNow repinta al empezar y al
+// acabar- le arrancaria el splash de debajo a media animacion. Se ignoran:
+// el estado se actualiza igual y el propio splash pinta lo que haya al soltar.
+let _splashing = false;
 function render(){
+    if(_splashing) return;
     const app=document.getElementById('app');
     const scrollEl = app.querySelector('.scrollable');
     const sameView = (_lastView === S.currentView);
@@ -6647,6 +6653,7 @@ startTimer();
 
 // ── SPLASH SCREEN ──────────────────────
 function showSplash(){
+    _splashing = true;
     const app=document.getElementById('app');
     app.className='watch-frame';
     app.style.background='#000';
@@ -6721,6 +6728,7 @@ function showSplash(){
     setTimeout(()=>{
         clearInterval(tick);
         app.style.background='';
+        _splashing = false;
         render();
     }, 3100);
 }
