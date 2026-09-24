@@ -113,8 +113,8 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
     val es = engine.lang == "es"
 
     val servingA = engine.serving == "A"
-    val colA = if (servingA) accent else Color.White.copy(alpha = 0.85f)
-    val colB = if (!servingA) accent else Color.White.copy(alpha = 0.85f)
+    val colA = if (servingA) accent else PP.TextBright.copy(alpha = 0.85f)
+    val colB = if (!servingA) accent else PP.TextBright.copy(alpha = 0.85f)
     val need = Math.ceil(engine.bestOf / 2.0).toInt()
 
     fun point(team: String) {
@@ -181,8 +181,8 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
         At(w, -0.22f, -0.235f, 0.38f) { TeamName(engine.nameA, servingA, accent, sz(0.05f)) }
         At(w, 0.22f, -0.235f, 0.38f) { TeamName(engine.nameB, !servingA, accent, sz(0.05f)) }
 
-        At(w, -0.25f, -0.03f, 0.32f) { BigScore(engine.getScoreStr("A"), if (servingA) accent else Color.White, sz(0.23f)) }
-        At(w, 0.25f, -0.03f, 0.32f) { BigScore(engine.getScoreStr("B"), if (!servingA) accent else Color.White, sz(0.23f)) }
+        At(w, -0.25f, -0.03f, 0.32f) { BigScore(engine.getScoreStr("A"), if (servingA) accent else PP.TextBright, sz(0.23f)) }
+        At(w, 0.25f, -0.03f, 0.32f) { BigScore(engine.getScoreStr("B"), if (!servingA) accent else PP.TextBright, sz(0.23f)) }
 
         // Pista vista desde arriba, con el cuadro de saque encendido. Tocarla
         // cambia quien saca.
@@ -205,9 +205,9 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        At(w, -0.25f, 0.135f, 0.2f) { Stat(engine.gamesA.toString(), Color.White, sz(0.075f)) }
+        At(w, -0.25f, 0.135f, 0.2f) { Stat(engine.gamesA.toString(), PP.TextBright, sz(0.075f)) }
         At(w, 0f, 0.137f, 0.2f) { Stat(ui.games.uppercase(), PP.TextMuted, sz(0.038f), FontWeight.Bold) }
-        At(w, 0.25f, 0.135f, 0.2f) { Stat(engine.gamesB.toString(), Color.White, sz(0.075f)) }
+        At(w, 0.25f, 0.135f, 0.2f) { Stat(engine.gamesB.toString(), PP.TextBright, sz(0.075f)) }
 
         At(w, 0f, 0.225f, 0.9f) {
             val phase = if (engine.goldenPointActive) ui.goldenPt.uppercase() else matchPhaseLabel(engine, ui)
@@ -233,7 +233,7 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
         EdgeBand(
             w = w,
             label = if (second) (if (es) "2º SAQUE" else "2ND SERVE") else ui.fault.uppercase(),
-            labelColor = if (second) PP.Warn else Color.White,
+            labelColor = if (second) PP.Warn else PP.TextBright,
             background = if (second) PP.Warn.copy(alpha = 0.20f) else PP.SurfaceHigh,
             line = if (second) PP.Warn else PP.Line,
             labelSize = sz(0.055f)
@@ -303,7 +303,7 @@ private fun CourtMini(serving: String, side: String, accent: Color, w: Dp) {
             cornerRadius = CornerRadius(3.dp.toPx()), style = Stroke(1.5.dp.toPx())
         )
         drawLine(
-            Color.White.copy(alpha = 0.55f),
+            PP.TextBright.copy(alpha = 0.55f),
             Offset(size.width / 2f, -2.dp.toPx()), Offset(size.width / 2f, size.height + 2.dp.toPx()),
             strokeWidth = 1.5.dp.toPx()
         )
@@ -408,7 +408,7 @@ private fun RoundAction(glyph: String, onClick: () -> Unit) {
         colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
         modifier = Modifier.size(44.dp)
     ) {
-        Text(glyph, fontSize = 18.sp, color = Color.White)
+        Text(glyph, fontSize = 18.sp, color = PP.TextBright)
     }
 }
 
@@ -419,7 +419,7 @@ private fun ControlChip(label: String, secondary: String?, danger: Boolean = fal
         label = {
             Text(
                 label, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, color = if (danger) PP.Danger else Color.White
+                overflow = TextOverflow.Ellipsis, color = if (danger) PP.Danger else PP.TextBright
             )
         },
         secondaryLabel = if (secondary != null) {
@@ -432,7 +432,7 @@ private fun ControlChip(label: String, secondary: String?, danger: Boolean = fal
         } else null,
         colors = ChipDefaults.primaryChipColors(
             backgroundColor = if (danger) Color(0xFF2A1212) else PP.SurfaceHigh,
-            contentColor = Color.White
+            contentColor = PP.TextBright
         ),
         modifier = Modifier.fillMaxWidth()
     )
@@ -475,10 +475,10 @@ private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color
 
         At(w, 0f, -0.31f, 0.6f) { Stat("⏱ " + activity.getTimerDisplay(), PP.TextDim, sz(0.05f), FontWeight.Bold) }
         At(w, 0f, -0.205f, 0.3f) { Stat("♥", accent, sz(0.06f)) }
-        At(w, 0f, -0.07f, 0.6f) { Stat(hr, Color.White, sz(0.22f), FontWeight.Black) }
+        At(w, 0f, -0.07f, 0.6f) { Stat(hr, PP.TextBright, sz(0.22f), FontWeight.Black) }
         At(w, 0f, 0.065f, 0.4f) { Stat("PPM", PP.TextMuted, sz(0.042f), FontWeight.Bold) }
-        At(w, -0.16f, 0.15f, 0.3f) { Stat(kcal, Color.White, sz(0.07f)) }
-        At(w, 0.16f, 0.15f, 0.3f) { Stat(km, Color.White, sz(0.07f)) }
+        At(w, -0.16f, 0.15f, 0.3f) { Stat(kcal, PP.TextBright, sz(0.07f)) }
+        At(w, 0.16f, 0.15f, 0.3f) { Stat(km, PP.TextBright, sz(0.07f)) }
         At(w, -0.16f, 0.215f, 0.3f) { Stat("🔥 KCAL", PP.TextMuted, sz(0.038f), FontWeight.Bold) }
         At(w, 0.16f, 0.215f, 0.3f) { Stat("🏃 KM", PP.TextMuted, sz(0.038f), FontWeight.Bold) }
 

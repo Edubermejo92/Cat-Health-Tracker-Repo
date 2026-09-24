@@ -159,7 +159,7 @@ fun InviteScreen(
                     )
                 },
                 icon = { Text("📲", fontSize = PP.Body) },
-                colors = ChipDefaults.primaryChipColors(backgroundColor = accent, contentColor = Color.Black),
+                colors = ChipDefaults.primaryChipColors(backgroundColor = accent, contentColor = PP.OnAccent),
                 modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp)
             )
         }

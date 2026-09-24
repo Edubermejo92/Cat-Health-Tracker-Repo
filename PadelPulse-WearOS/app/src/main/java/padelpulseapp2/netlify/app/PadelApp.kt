@@ -30,6 +30,7 @@ import padelpulseapp2.netlify.app.sync.CloudHistory
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.sync.SyncProtocol
+import padelpulseapp2.netlify.app.ui.Lexend
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
 import padelpulseapp2.netlify.app.ui.PPLabel
@@ -69,8 +70,13 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
             primary = accent,
             background = PP.Bg,
             surface = PP.Surface,
-            onPrimary = Color.Black
-        )
+            onPrimary = PP.OnAccent,
+            onBackground = PP.TextBright,
+            onSurface = PP.TextBright,
+            error = PP.Danger
+        ),
+        // Lexend en toda la app, como el movil
+        typography = Typography(defaultFontFamily = Lexend)
     ) {
         Scaffold(
             timeText = { if (engine.currentScreen != "splash") TimeText() },
@@ -200,7 +206,7 @@ fun AccountScreen(engine: GameEngine, activity: MainActivity) {
             Spacer(Modifier.height(4.dp))
             Text(
                 WatchAccount.name.ifEmpty { WatchAccount.email },
-                color = Color.White, fontSize = PP.Body,
+                color = PP.TextBright, fontSize = PP.Body,
                 fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center
             )
         } else {
@@ -279,7 +285,7 @@ fun SplashScreen(engine: GameEngine, activity: MainActivity) {
         ) {
             Text(
                 ui.start.uppercase(),
-                color = Color.Black,
+                color = PP.OnAccent,
                 fontWeight = FontWeight.Black,
                 fontSize = PP.Body
             )
@@ -327,7 +333,7 @@ fun LangScreen(
                 icon = { Text(l.flag, fontSize = 17.sp) },
                 colors = ChipDefaults.primaryChipColors(
                     backgroundColor = if (sel) accent.copy(alpha = 0.18f) else PP.Surface,
-                    contentColor = if (sel) accent else Color.White
+                    contentColor = if (sel) accent else PP.TextBright
                 ),
                 modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
             )
@@ -340,7 +346,7 @@ fun LangScreen(
                 colors = ButtonDefaults.buttonColors(backgroundColor = accent),
                 modifier = Modifier.fillMaxWidth(0.78f).height(38.dp)
             ) {
-                Text(ui.done.uppercase(), color = Color.Black, fontWeight = FontWeight.Black, fontSize = PP.Body)
+                Text(ui.done.uppercase(), color = PP.OnAccent, fontWeight = FontWeight.Black, fontSize = PP.Body)
             }
         }
     }
@@ -495,7 +501,7 @@ fun PairScreen(
                             ) {
                                 Text(
                                     label,
-                                    color = if (digit == -2) Color.Black else Color.White,
+                                    color = if (digit == -2) PP.OnAccent else PP.TextBright,
                                     fontSize = PP.Body,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -579,7 +585,7 @@ fun SettingsScreen(
                     icon = { Text(l.flag, fontSize = 16.sp) },
                     colors = ChipDefaults.primaryChipColors(
                         backgroundColor = if (engine.lang == l.id) accent.copy(alpha = 0.18f) else PP.Surface,
-                        contentColor = if (engine.lang == l.id) accent else Color.White
+                        contentColor = if (engine.lang == l.id) accent else PP.TextBright
                     ),
                     modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
                 )
@@ -589,7 +595,7 @@ fun SettingsScreen(
                     onClick = { showLangPicker = false },
                     colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
                     modifier = Modifier.padding(top = 6.dp).size(40.dp)
-                ) { Text("✕", color = Color.White) }
+                ) { Text("✕", color = PP.TextBright) }
             }
         }
         return
@@ -629,7 +635,7 @@ fun SettingsScreen(
                         },
                         label = { Text(if (es) "Sincronizar" else "Sync", fontSize = PP.Micro) },
                         colors = ChipDefaults.primaryChipColors(
-                            backgroundColor = accent, contentColor = Color.Black
+                            backgroundColor = accent, contentColor = PP.OnAccent
                         )
                     )
                     CompactChip(
@@ -719,7 +725,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 "$n",
-                                color = if (sel) Color.Black else Color.White,
+                                color = if (sel) PP.OnAccent else PP.TextBright,
                                 fontSize = PP.Body,
                                 fontWeight = FontWeight.Black
                             )
@@ -745,7 +751,7 @@ fun SettingsScreen(
                                 .clip(CircleShape)
                                 .background(ThemeUtils.getDotColor(th))
                                 .border(
-                                    if (sel) 2.dp else 0.dp, Color.White, CircleShape
+                                    if (sel) 2.dp else 0.dp, PP.TextBright, CircleShape
                                 )
                                 .clickable {
                                     engine.theme = th
@@ -831,7 +837,7 @@ fun ToggleRow(label: String, checked: Boolean, accent: Color, onCheck: (Boolean)
     ) {
         Text(
             label.uppercase(),
-            color = if (checked) Color.White else PP.TextDim,
+            color = if (checked) PP.TextBright else PP.TextDim,
             fontSize = PP.Micro,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f)
@@ -879,7 +885,7 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
         )
         Text(
             "${engine.setsA} – ${engine.setsB}",
-            color = Color.White,
+            color = PP.TextBright,
             fontSize = 26.sp,
             fontWeight = FontWeight.Black
         )
@@ -900,7 +906,7 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
             colors = ButtonDefaults.buttonColors(backgroundColor = accent),
             modifier = Modifier.height(38.dp).fillMaxWidth(0.82f).clip(RoundedCornerShape(19.dp))
         ) {
-            Text(ui.newMatch.uppercase(), fontSize = PP.Label, color = Color.Black, fontWeight = FontWeight.Black)
+            Text(ui.newMatch.uppercase(), fontSize = PP.Label, color = PP.OnAccent, fontWeight = FontWeight.Black)
         }
     }
 }
@@ -924,7 +930,7 @@ fun ResumeScreen(engine: GameEngine, activity: MainActivity) {
         PPCard(modifier = Modifier.fillMaxWidth(0.92f)) {
             Text(
                 "${engine.nameA} · ${engine.nameB}",
-                color = Color.White, fontSize = PP.Micro,
+                color = PP.TextBright, fontSize = PP.Micro,
                 fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(2.dp))
@@ -942,7 +948,7 @@ fun ResumeScreen(engine: GameEngine, activity: MainActivity) {
         ) {
             Text(
                 if (es) "CONTINUAR" else "CONTINUE",
-                color = Color.Black, fontWeight = FontWeight.Black, fontSize = PP.Label
+                color = PP.OnAccent, fontWeight = FontWeight.Black, fontSize = PP.Label
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -1069,7 +1075,7 @@ fun HistoryScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        HistoryStat(summary.first.toString(), if (es) "JUGADOS" else "PLAYED", Color.White)
+                        HistoryStat(summary.first.toString(), if (es) "JUGADOS" else "PLAYED", PP.TextBright)
                         Box(Modifier.width(1.dp).height(18.dp).background(PP.Line))
                         HistoryStat(summary.second.toString(), if (es) "GANADOS" else "WON", accent)
                         Box(Modifier.width(1.dp).height(18.dp).background(PP.Line))

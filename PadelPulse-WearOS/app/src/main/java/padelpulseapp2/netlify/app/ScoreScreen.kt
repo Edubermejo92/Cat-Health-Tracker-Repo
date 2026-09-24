@@ -128,7 +128,7 @@ fun NameEditorScreen(
                     )
                 },
                 colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = accent, contentColor = Color.Black
+                    backgroundColor = accent, contentColor = PP.OnAccent
                 ),
                 modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
             )
@@ -154,7 +154,7 @@ fun NameEditorScreen(
                 onClick = { apply(p) },
                 label = { Text(p, fontSize = PP.Label) },
                 colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = PP.Surface, contentColor = Color.White
+                    backgroundColor = PP.Surface, contentColor = PP.TextBright
                 ),
                 modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp)
             )
@@ -166,7 +166,7 @@ fun NameEditorScreen(
                 onClick = onClose,
                 colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
                 modifier = Modifier.size(40.dp)
-            ) { Text("✕", color = Color.White, fontWeight = FontWeight.Bold) }
+            ) { Text("✕", color = PP.TextBright, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -200,7 +200,7 @@ fun ScorePicker(
                 Picker(state = stateA, modifier = Modifier.size(52.dp, 84.dp), contentDescription = null) {
                     Text("$it", fontSize = 26.sp, color = if (it == stateA.selectedOption) accent else PP.TextMuted)
                 }
-                Text("–", color = Color.White, fontSize = 20.sp)
+                Text("–", color = PP.TextBright, fontSize = 20.sp)
                 Picker(state = stateB, modifier = Modifier.size(52.dp, 84.dp), contentDescription = null) {
                     Text("$it", fontSize = 26.sp, color = if (it == stateB.selectedOption) accent else PP.TextMuted)
                 }
@@ -222,7 +222,7 @@ fun ScorePicker(
                 colors = ButtonDefaults.buttonColors(backgroundColor = accent),
                 modifier = Modifier.height(34.dp)
             ) {
-                Text("OK", color = Color.Black, fontWeight = FontWeight.Black, fontSize = PP.Label)
+                Text("OK", color = PP.OnAccent, fontWeight = FontWeight.Black, fontSize = PP.Label)
             }
         }
     }

@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import padelpulseapp2.netlify.app.sync.CloudHistory
+import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.sync.WatchAccount
@@ -32,7 +33,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "5.2.2"
+        const val APP_VERSION = "5.3.0"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
     }
@@ -431,6 +432,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
         val engine = GameEngine(this)
         gameEngine = engine
+        // Los colores de la app siguen al tema del marcador, igual que en el movil
+        PP.themeSource = { engine.theme }
         engine.onSpeak = { text -> speak(text, engine.lang) }
 
         // La app arranca por la cuenta: o llega la sesion del movil, o el
