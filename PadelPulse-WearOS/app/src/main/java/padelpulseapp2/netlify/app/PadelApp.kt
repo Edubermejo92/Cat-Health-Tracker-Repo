@@ -71,7 +71,10 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     ) {
         Scaffold(
             timeText = { if (engine.currentScreen != "splash") TimeText() },
-            vignette = { Vignette(vignettePosition = VignettePosition.TopAndBottom) },
+            // En el marcador no: oscureceria la banda de FALTA pegada al borde
+            vignette = {
+                if (engine.currentScreen != "score") Vignette(vignettePosition = VignettePosition.TopAndBottom)
+            },
             positionIndicator = {
                 activeState?.let { PositionIndicator(scalingLazyListState = it) }
             }
@@ -292,7 +295,7 @@ fun LangScreen(
 
     ScalingLazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = roundSafePadding(squareVertical = 28.dp)
     ) {
@@ -401,7 +404,7 @@ fun PairScreen(
 
     ScalingLazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().background(PP.Bg),
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = roundSafePadding(squareHorizontal = 6.dp, squareVertical = 24.dp)
     ) {
@@ -546,8 +549,10 @@ fun SettingsScreen(
     var showLangPicker by remember { mutableStateOf(false) }
 
     if (showLangPicker) {
+        val langPickerState = rememberScalingLazyListState()
         ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize().background(PP.Bg),
+            state = langPickerState,
+            modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(langPickerState),
             horizontalAlignment = Alignment.CenterHorizontally,
             contentPadding = roundSafePadding()
         ) {
@@ -582,7 +587,7 @@ fun SettingsScreen(
 
     ScalingLazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = roundSafePadding()
     ) {
@@ -983,7 +988,7 @@ fun HistoryScreen(
 
     ScalingLazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().background(PP.Bg),
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = roundSafePadding()
     ) {
