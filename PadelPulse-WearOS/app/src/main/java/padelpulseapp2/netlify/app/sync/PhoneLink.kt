@@ -3,6 +3,7 @@ package padelpulseapp2.netlify.app.sync
 import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.android.gms.tasks.Tasks
@@ -30,6 +31,38 @@ object PhoneLink {
 
     var pairedCode by mutableStateOf("")
     var phoneName by mutableStateOf("")
+
+    /**
+     * Peticiones de vinculo seguidas sin oir nada del movil. Si crece, no es
+     * que falte pulsar algo: el movil no esta recibiendo (app sin instalar, o
+     * las dos apps firmadas distinto y el sistema tira los mensajes).
+     */
+    var unanswered by mutableIntStateOf(0)
+        private set
+
+    private const val PREFS = "padel_link"
+
+    /**
+     * El vinculo se guarda en disco. Wear OS cierra las apps en segundo plano a
+     * menudo, y sin esto cada arranque empezaba sin vincular: el reloj dejaba
+     * de mandar el marcador hasta que alguien volvia a vincular a mano.
+     */
+    fun load(context: Context) {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        paired = p.getBoolean("paired", false)
+        pairedCode = p.getString("code", "") ?: ""
+    }
+
+    fun save(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean("paired", paired)
+            .putString("code", pairedCode)
+            .apply()
+    }
+
+    fun heardFromPhone() { unanswered = 0 }
+
+    fun countUnanswered() { unanswered += 1 }
 
     /** Ultimo error legible, para poder enseñarlo en pantalla en vez de fallar en silencio. */
     var lastError by mutableStateOf<String?>(null)

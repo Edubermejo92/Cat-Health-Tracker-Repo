@@ -461,6 +461,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 .apply()
         }
 
+        /**
+         * La parte nativa tiene que saber si se acepta el vinculo sin codigo:
+         * con la app cerrada no hay web que lo decida, y el reloj pide el
+         * vinculo en cuanto ve el movil.
+         */
+        @JavascriptInterface
+        fun setAutoPair(on: Boolean) {
+            activity.getSharedPreferences("padel", 0).edit().putBoolean("autoPair", on).apply()
+        }
+
         @JavascriptInterface
         fun loadPairing(): String = JSONObject()
             .put("code", activity.getSharedPreferences("padel", 0).getString("pairingCode", "") ?: "")

@@ -359,6 +359,7 @@ const PPSync = {
             this.autoPair = localStorage.getItem('pp_auto_pair')!=='0';
             const b=this.bridge;
             if(b){
+                if(b.setAutoPair){ try{ b.setAutoPair(this.autoPair); }catch(e){} }
                 if(b.loadPairing){
                     const p=JSON.parse(b.loadPairing()||'{}');
                     if(p.code) this.code=p.code;
@@ -786,13 +787,23 @@ const BT = {
 
     toggleAutoPair(){
         PPSync.autoPair = !PPSync.autoPair;
-        try{ localStorage.setItem('pp_auto_pair', PPSync.autoPair?'1':'0'); }catch(e){}
+        BT.saveAutoPair();
         render();
+    },
+
+    saveAutoPair(){
+        try{ localStorage.setItem('pp_auto_pair', PPSync.autoPair?'1':'0'); }catch(e){}
+        const b=PPSync.bridge;
+        if(b && b.setAutoPair){ try{ b.setAutoPair(PPSync.autoPair); }catch(e){} }
     },
 
     unlink(){
         PPSync.paired = false;
         PPSync.persistPairing();
+        // El reloj pide el vinculo solo en cuanto ve el movil: si "sin codigo"
+        // siguiera activado, a los 30 segundos estaria vinculado otra vez.
+        PPSync.autoPair = false;
+        BT.saveAutoPair();
         showToast(i2('Reloj desvinculado','Watch unlinked'), 2200, true);
         render();
     },

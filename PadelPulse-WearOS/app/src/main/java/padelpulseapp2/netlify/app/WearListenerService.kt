@@ -33,6 +33,7 @@ class WearListenerService : WearableListenerService() {
 
         // Si el movil nos habla, el movil esta ahi
         PhoneLink.setConnected(true)
+        PhoneLink.heardFromPhone()
 
         if (!PhoneLink.acceptSeq(obj.optLong("seq", 0L))) return
 
@@ -60,7 +61,10 @@ class WearListenerService : WearableListenerService() {
     }
 
     private fun onHello(obj: JSONObject) {
-        MainActivity.instance?.onPhoneHello(obj.optString("app", ""), obj.optInt("proto", 0))
+        MainActivity.instance?.onPhoneHello(
+            obj.optString("app", ""), obj.optInt("proto", 0),
+            if (obj.has("paired")) obj.optBoolean("paired", false) else null
+        )
     }
 
     private fun onPair(obj: JSONObject) {

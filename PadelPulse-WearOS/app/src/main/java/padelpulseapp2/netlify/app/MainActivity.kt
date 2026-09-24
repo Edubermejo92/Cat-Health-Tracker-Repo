@@ -105,16 +105,50 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     val isPaired: Boolean
         get() = PhoneLink.paired
 
-    fun onPhoneHello(appVersion: String, proto: Int) {
+    /**
+     * [phonePaired] es lo que el movil cree: null si es un movil antiguo que
+     * no lo dice. Asi los dos lados se ponen de acuerdo solos, sin pantallas.
+     */
+    fun onPhoneHello(appVersion: String, proto: Int, phonePaired: Boolean? = null) {
         phoneAppVersion = appVersion
         phoneProtocol = proto
         PhoneLink.setConnected(true)
+        when {
+            // El movil nos tiene vinculados y nosotros lo habiamos olvidado
+            phonePaired == true && !PhoneLink.paired -> {
+                PhoneLink.paired = true
+                PhoneLink.save(this)
+                sendSettingsToPhone()
+                pushStateToPhone()
+            }
+            // El movil ya no nos tiene (reinstalado, o desvinculado alli)
+            phonePaired == false && PhoneLink.paired -> {
+                PhoneLink.paired = false
+                PhoneLink.save(this)
+                autoPairIfNeeded()
+            }
+        }
+    }
+
+    /**
+     * Pide el vinculo sin codigo si hay movil y aun no estamos vinculados. El
+     * movil lo acepta solo -tambien con su app cerrada- mientras tenga activado
+     * "Vincular sin codigo", que viene activado de serie.
+     */
+    fun autoPairIfNeeded() {
+        if (PhoneLink.paired || !PhoneLink.connected) return
+        PhoneLink.countUnanswered()
+        PhoneLink.send(
+            this, SyncProtocol.PATH_PAIR,
+            SyncProtocol.pairRequest(PhoneLink.nextSeq(), "AUTO", android.os.Build.MODEL ?: "Wear OS")
+        )
     }
 
     fun onPairingConfirmed(code: String) {
         PhoneLink.paired = true
         PhoneLink.pairedCode = code
         PhoneLink.lastError = null
+        PhoneLink.save(this)
         gameEngine?.pairingCode = code
         sendSettingsToPhone()
         pushStateToPhone()
@@ -122,6 +156,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     fun onPairingRejected() {
         PhoneLink.paired = false
+        PhoneLink.save(this)
         PhoneLink.lastError = "codigo"
     }
 
@@ -400,6 +435,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         }
 
         updateBrightness(engine.brightness)
+        PhoneLink.load(this)
+        engine.pairingCode = PhoneLink.pairedCode.ifEmpty { engine.pairingCode }
         PhoneLink.announce(this)
 
         val neededPerms = mutableListOf<String>()
@@ -437,10 +474,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         sendHello()
         helloJob?.cancel()
         helloJob = lifecycleScope.launch {
+            // Un primer intento enseguida -refreshConnection va en otro hilo y
+            // tarda un poco en saber si hay movil- y despues uno cada 30 s
+            // mientras siga sin vincular.
+            delay(2_000)
+            autoPairIfNeeded()
             while (true) {
                 delay(30_000)
                 PhoneLink.refreshConnection(this@MainActivity)
                 sendHello()
+                autoPairIfNeeded()
             }
         }
     }

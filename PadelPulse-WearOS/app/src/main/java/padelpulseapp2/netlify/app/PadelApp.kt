@@ -113,7 +113,9 @@ fun linkLabel(engine: GameEngine): String {
     val es = engine.lang == "es"
     return when {
         !PhoneLink.connected -> if (es) "SIN MOVIL" else "NO PHONE"
-        !PhoneLink.paired -> if (es) "SIN VINCULAR" else "NOT LINKED"
+        !PhoneLink.paired && PhoneLink.unanswered >= 2 -> if (es) "MOVIL NO RESPONDE" else "PHONE NOT ANSWERING"
+        // Ya no hay que pulsar nada: se vincula solo en cuanto el movil contesta
+        !PhoneLink.paired -> if (es) "VINCULANDO…" else "LINKING…"
         else -> if (es) "CONECTADO" else "CONNECTED"
     }
 }
@@ -121,6 +123,7 @@ fun linkLabel(engine: GameEngine): String {
 @Composable
 fun linkColor(engine: GameEngine): Color = when {
     !PhoneLink.connected -> PP.Danger
+    !PhoneLink.paired && PhoneLink.unanswered >= 2 -> PP.Danger
     !PhoneLink.paired -> PP.Warn
     else -> ThemeUtils.getColor(engine.theme)
 }
@@ -391,6 +394,8 @@ fun PairScreen(
         PhoneLink.paired -> if (es) "¡VINCULADO!" else "LINKED!"
         PhoneLink.lastError == "codigo" -> if (es) "CODIGO INCORRECTO" else "WRONG CODE"
         !PhoneLink.connected -> if (es) "ABRE LA APP DEL MOVIL" else "OPEN THE PHONE APP"
+        PhoneLink.unanswered >= 2 && code.isEmpty() ->
+            if (es) "EL MOVIL NO CONTESTA" else "PHONE NOT ANSWERING"
         autoTried && code.isEmpty() -> if (es) "EMPAREJANDO…" else "PAIRING…"
         code.size == 4 -> if (es) "ESPERANDO AL MOVIL…" else "WAITING FOR PHONE…"
         else -> if (es) "CODIGO DEL MOVIL" else "CODE FROM PHONE"
@@ -399,6 +404,7 @@ fun PairScreen(
         PhoneLink.paired -> accent
         PhoneLink.lastError == "codigo" -> PP.Danger
         !PhoneLink.connected -> PP.Warn
+        PhoneLink.unanswered >= 2 -> PP.Danger
         else -> PP.TextDim
     }
 
