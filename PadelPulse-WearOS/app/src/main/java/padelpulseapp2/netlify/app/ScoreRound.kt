@@ -23,6 +23,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -49,6 +51,7 @@ import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Text
 import padelpulseapp2.netlify.app.sync.PhoneLink
+import padelpulseapp2.netlify.app.voice.VoiceReferee
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPLabel
 import kotlin.math.cos
@@ -206,22 +209,52 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
 
         // Logo arriba, como la cabecera del movil, con un punto que dice si el
         // movil esta enlazado. Cabe entre la hora y los nombres: a -0.34 la
-        // esfera mide 0.74 de ancho y el logo solo 0.26.
+        // esfera mide 0.74 de ancho y el logo solo 0.22.
         val linkOk = PhoneLink.connected && PhoneLink.paired
-        At(w, 0f, -0.34f, 0.4f) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // Tocar la fila del logo enciende o apaga el arbitro por voz: se
+        // cantan los puntos ("punto para Edu", "quince treinta") y se suman.
+        val voice = activity.voice
+        val micOn = voice.on
+        val micPulse by animateFloatAsState(
+            if (voice.state == VoiceReferee.State.PROCESSING) 0.45f else 1f, tween(250), label = "mic"
+        )
+        At(w, 0f, -0.34f, 0.5f) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(PP.PillShape)
+                    .clickable {
+                        voice.toggle()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                    .padding(horizontal = w * 0.02f, vertical = w * 0.006f)
+            ) {
+                Box(
+                    Modifier
+                        .size(w * 0.06f)
+                        .clip(CircleShape)
+                        .background(if (micOn) PP.Danger.copy(alpha = 0.25f * micPulse + 0.1f) else PP.SurfaceHigh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "🎙", fontSize = sz(0.034f),
+                        color = if (micOn) PP.Danger else PP.TextMuted,
+                        modifier = Modifier.alpha(if (micOn) micPulse else 0.6f)
+                    )
+                }
+                Spacer(Modifier.width(w * 0.015f))
                 Image(
                     painter = painterResource(id = R.drawable.logo_wordmark),
                     contentDescription = "PadelPulse Live",
-                    modifier = Modifier.width(w * 0.26f).aspectRatio(LOGO_RATIO)
+                    modifier = Modifier.width(w * 0.22f).aspectRatio(LOGO_RATIO)
                 )
                 Spacer(Modifier.width(w * 0.015f))
                 Box(Modifier.size(w * 0.02f).clip(CircleShape).background(linkColor(engine)))
             }
         }
 
-        At(w, -0.22f, -0.235f, 0.38f) { TeamName(engine.nameA, servingA, accent, sz(0.05f), w) }
-        At(w, 0.22f, -0.235f, 0.38f) { TeamName(engine.nameB, !servingA, accent, sz(0.05f), w) }
+        At(w, -0.22f, -0.225f, 0.36f) { SideNames(engine, "A", servingA, accent, w, ::sz) }
+        At(w, 0.22f, -0.225f, 0.36f) { SideNames(engine, "B", !servingA, accent, w, ::sz) }
 
         // Estado especial del juego, en una pastilla entre nombres y tanteo
         val tbActive = engine.isTb || engine.isSuperTbActive()
@@ -234,7 +267,7 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             engine.isTb -> "TIE-BREAK" to PP.Warn
             else -> null
         }
-        if (pill != null) At(w, 0f, -0.155f, 0.5f) { Pill(pill.first, pill.second, sz(0.034f), w) }
+        if (pill != null) At(w, 0f, -0.148f, 0.5f) { Pill(pill.first, pill.second, sz(0.034f), w) }
 
         val strA = engine.getScoreStr("A")
         val strB = engine.getScoreStr("B")
@@ -277,7 +310,20 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
         At(w, 0f, 0.225f, 0.9f) {
             val phase = if (tbActive) (if (engine.isTb) "TIE-BREAK" else "SUPER TB")
                         else matchPhaseLabel(engine, ui)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Lo que ha oido la voz, un momento: asi se sabe si ha entendido
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(voice.heardAt) {
+                now = System.currentTimeMillis()
+                kotlinx.coroutines.delay(3000)
+                now = System.currentTimeMillis()
+            }
+            val showHeard = micOn && voice.heard.isNotBlank() && now - voice.heardAt < 3000
+            if (showHeard) {
+                Text(
+                    "🎙 «${voice.heard}»", color = PP.Danger, fontSize = sz(0.042f),
+                    fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
                 // Si el enlace falla, eso va primero
                 if (!linkOk) {
                     Text(
@@ -318,19 +364,38 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
     }
 }
 
-/** Nombre de pareja; quien saca lleva delante la pelota y el color del tema. */
+/**
+ * Un lado del marcador es una pareja: con los dos jugadores puestos se ven
+ * los dos, uno encima del otro; si no, el nombre de la pareja. Quien saca
+ * lleva delante la pelota y el color del tema.
+ */
 @Composable
-private fun TeamName(name: String, serving: Boolean, accent: Color, size: TextUnit, w: Dp) {
+private fun SideNames(engine: GameEngine, team: String, serving: Boolean, accent: Color, w: Dp, sz: (Float) -> TextUnit) {
+    val players = engine.players(team)
+    val color = if (serving) accent else PP.TextDim
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (serving) {
             Box(Modifier.size(w * 0.022f).clip(CircleShape).background(BALL))
             Spacer(Modifier.width(w * 0.012f))
         }
-        Text(
-            name.uppercase(), color = if (serving) accent else PP.TextDim, fontSize = size,
-            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
+        if (players.size == 2) {
+            val size = sz(0.041f)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                players.forEach { p ->
+                    Text(
+                        p.uppercase(), color = color, fontSize = size, fontWeight = FontWeight.Bold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                        style = TextStyle(lineHeight = size * 1.05f)
+                    )
+                }
+            }
+        } else {
+            Text(
+                (players.firstOrNull() ?: engine.getName(team)).uppercase(), color = color, fontSize = sz(0.05f),
+                fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -455,6 +520,14 @@ private fun ControlsPage(
             }
         }
 
+        item {
+            val v = activity.voice
+            ControlChip(
+                if (es) "Árbitro por voz" else "Voice referee",
+                if (v.on) (if (es) "Escuchando · canta los puntos" else "Listening · call the points")
+                else (if (es) "Apagado" else "Off")
+            ) { v.toggle() }
+        }
         item { VoiceVolumeCard(engine, activity, accent) }
 
         item {
@@ -480,8 +553,18 @@ private fun ControlsPage(
         }
         item { ControlChip(ui.sets, "${engine.setsA} – ${engine.setsB}") { onPicker("sets") } }
         item { ControlChip(ui.games, "${engine.gamesA} – ${engine.gamesB}") { onPicker("games") } }
-        item { ControlChip(ui.teamA, engine.nameA) { onEditName("A") } }
-        item { ControlChip(ui.teamB, engine.nameB) { onEditName("B") } }
+        // Cada lado es una pareja: su nombre y sus dos jugadores
+        for (t in listOf("A", "B")) {
+            item { ControlChip(if (t == "A") ui.teamA else ui.teamB, engine.getName(t)) { onEditName(t) } }
+            for (n in 1..2) {
+                item {
+                    ControlChip(
+                        (if (es) "Jugador " else "Player ") + "$t$n",
+                        engine.getName("$t$n").ifBlank { if (es) "Sin nombre" else "No name" }
+                    ) { onEditName("$t$n") }
+                }
+            }
+        }
         item { ControlChip(if (es) "Móvil" else "Phone", linkLabel(engine)) { onMode() } }
         item {
             val paused = activity.sensorsPaused

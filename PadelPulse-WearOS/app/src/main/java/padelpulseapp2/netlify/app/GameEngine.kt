@@ -44,6 +44,35 @@ class GameEngine(context: Context? = null) {
     var nameA by mutableStateOf(NOMBRE_A_POR_DEFECTO)
     var nameB by mutableStateOf("PAREJA B")
 
+    // Cada lado es una pareja: dos jugadores. Vacios, el marcador ensena el
+    // nombre de la pareja. Viajan con los ajustes, igual que en el movil
+    // (teamA.playerA / playerB).
+    var playerA1 by mutableStateOf("")
+    var playerA2 by mutableStateOf("")
+    var playerB1 by mutableStateOf("")
+    var playerB2 by mutableStateOf("")
+
+    /** Jugadores con nombre de una pareja, en orden. */
+    fun players(team: String): List<String> =
+        (if (team == "A") listOf(playerA1, playerA2) else listOf(playerB1, playerB2))
+            .map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** "A", "B" (nombre de pareja) o "A1", "A2", "B1", "B2" (jugador). */
+    fun getName(key: String): String = when (key) {
+        "A" -> nameA; "B" -> nameB
+        "A1" -> playerA1; "A2" -> playerA2; "B1" -> playerB1; "B2" -> playerB2
+        else -> ""
+    }
+
+    fun setName(key: String, value: String) {
+        when (key) {
+            "A" -> nameA = value; "B" -> nameB = value
+            "A1" -> playerA1 = value; "A2" -> playerA2 = value
+            "B1" -> playerB1 = value; "B2" -> playerB2 = value
+        }
+        if (value.isNotBlank()) saveTeamNameToHistory(value.uppercase())
+    }
+
     // SOLO / PHONE / WATCH — ver docs/PROTOCOLO_SINCRONIZACION.md
     var goldenPoint by mutableStateOf(false)
     var goldenPointActive by mutableStateOf(false)
@@ -190,6 +219,63 @@ class GameEngine(context: Context? = null) {
             addNorm(team)
         }
         saveToDisk()
+    }
+
+    // ── Lo que se canta por voz ──────────────────────────────────────────
+    // Mismas reglas que los botones: guardan para deshacer y cantan el
+    // resultado. MainActivity.applyVoice() los llama con lo que entiende
+    // voice/VoiceParser.
+
+    /** "Quince treinta": pone el marcador del juego tal cual (0-3 = 0, 15, 30, 40). */
+    fun setPoints(a: Int, b: Int) {
+        if (over || isTb || isSuperTbActive()) return
+        saveState()
+        faultCount = 0
+        ptsA = a.coerceIn(0, 3); ptsB = b.coerceIn(0, 3)
+        isDeuce = ptsA == 3 && ptsB == 3
+        adv = null
+        goldenPointActive = isDeuce && goldenPoint
+        saveToDisk()
+        triggerSpeak(if (isDeuce) "deuce" else "score", serving)
+    }
+
+    /** "Ventaja rojos". Si no estaban iguales, es un punto para ellos. */
+    fun giveAdvantage(team: String) {
+        if (over) return
+        if (!isDeuce || goldenPointActive || goldenPoint) { addPoint(team); return }
+        saveState()
+        faultCount = 0
+        adv = team
+        saveToDisk()
+        triggerSpeak("adv", team)
+    }
+
+    /** "Juego Edu". En un tie-break, el juego que falta es el set. */
+    fun forceGame(team: String) {
+        if (over) return
+        saveState()
+        faultCount = 0
+        if (isTb || isSuperTbActive()) winSet(team) else winGame(team)
+        saveToDisk()
+    }
+
+    /** "Set rojos": se lo apunta con los juegos que haya. */
+    fun forceSet(team: String) {
+        if (over) return
+        saveState()
+        faultCount = 0
+        winSet(team)
+        saveToDisk()
+    }
+
+    /** "Como vamos": canta el marcador sin tocarlo. */
+    fun speakScore() {
+        when {
+            isTb || isSuperTbActive() -> triggerSpeak("tb", serving)
+            isDeuce && adv != null -> triggerSpeak("adv", adv!!)
+            isDeuce -> triggerSpeak("deuce", serving)
+            else -> triggerSpeak("score", serving)
+        }
     }
 
     private fun addNorm(t: String) {
@@ -668,6 +754,11 @@ class GameEngine(context: Context? = null) {
             nameB = it
             saveTeamNameToHistory(it)
         }
+        // Los jugadores si pueden llegar vacios: el movil los ha borrado
+        if (obj.has("playerA1")) playerA1 = obj.optString("playerA1", "")
+        if (obj.has("playerA2")) playerA2 = obj.optString("playerA2", "")
+        if (obj.has("playerB1")) playerB1 = obj.optString("playerB1", "")
+        if (obj.has("playerB2")) playerB2 = obj.optString("playerB2", "")
         saveToDisk()
     }
 
@@ -780,6 +871,8 @@ class GameEngine(context: Context? = null) {
         obj.put("nameA", nameA)
         obj.put("nameB", nameB)
         obj.put("setScores", setsDetailJson())
+        obj.put("playerA1", playerA1).put("playerA2", playerA2)
+        obj.put("playerB1", playerB1).put("playerB2", playerB2)
         return obj.toString()
     }
 
@@ -813,6 +906,8 @@ class GameEngine(context: Context? = null) {
             voiceEnabled = obj.optBoolean("voiceEnabled", true)
             nameA = obj.optString("nameA", NOMBRE_A_POR_DEFECTO)
             nameB = obj.optString("nameB", "PAREJA B")
+            playerA1 = obj.optString("playerA1", ""); playerA2 = obj.optString("playerA2", "")
+            playerB1 = obj.optString("playerB1", ""); playerB2 = obj.optString("playerB2", "")
             setScores = parseSetsDetail(obj.optJSONArray("setScores")).orEmpty()
                 .takeIf { it.size == setsA + setsB }.orEmpty()
         } catch (e: Exception) {}
@@ -829,10 +924,11 @@ class GameEngine(context: Context? = null) {
     fun adoptarMiNombre(miNombre: String): Boolean {
         val yo = miNombre.trim()
         if (yo.isEmpty()) return false
-        if (!esNombreGenerico(nameA)) return false
+        var cambio = false
+        // Eres el primer jugador de la pareja A mientras no digas otra cosa
+        if (playerA1.isBlank()) { playerA1 = yo; cambio = true }
         val nuevo = yo.uppercase()
-        if (nameA == nuevo) return false
-        nameA = nuevo
-        return true
+        if (esNombreGenerico(nameA) && nameA != nuevo) { nameA = nuevo; cambio = true }
+        return cambio
     }
 }

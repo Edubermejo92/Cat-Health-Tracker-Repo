@@ -152,6 +152,7 @@ los guardaba como 6-0. El reloj lo enseña en el marcador entre los juegos.
 | `serve` | `A`/`B` | Cambia quién saca |
 | `reset` | — | Partido nuevo |
 | `invite` | — | Solo reloj → móvil: abre la hoja de compartir con la invitación |
+| `voice_owner` | — | Quien lo manda acaba de encender su árbitro por voz: el otro apaga el suyo (si escuchan los dos, cada punto cantado se sumaría dos veces) |
 
 `invite` no es del marcador y sí la usa la versión actual: la pantalla «Invita a
 un amigo» del reloj pide al móvil que mande su invitación de siempre (mismo texto y
@@ -179,6 +180,11 @@ la hoja de compartir desde segundo plano.
   "nameA": "NOSOTROS", "nameB": "ELLOS", "mode": "PHONE",
   "inviteUrl": "https://play.google.com/apps/testing/padelpulseapp2.netlify.app" }
 ```
+
+`playerA1`, `playerA2`, `playerB1`, `playerB2` (desde 7.0.0) son los dos jugadores de
+cada pareja, en los dos sentidos. Pueden llegar vacíos (jugador borrado). En el móvil son
+`teamA.playerA/playerB` y `teamB.playerA/playerB`; el reloj los enseña en el marcador, uno
+encima del otro, y la voz los reconoce ("punto para Juan").
 
 `inviteUrl` solo lo manda el móvil: es el enlace que pinta el QR de «Invita a un
 amigo» en el reloj, el mismo que manda el móvil al invitar (prueba cerrada o ficha de

@@ -1,0 +1,1036 @@
+{
+ "names": {
+  "A": [
+   "EDU",
+   "Edu",
+   "Juan"
+  ],
+  "B": [
+   "ROJOS",
+   "Ana",
+   "Luis"
+  ]
+ },
+ "cases": [
+  {
+   "lang": "es",
+   "text": "Punto para Edu",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "punto rojos",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "punto de ellos",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "punto pareja b",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "punto a",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "quince treinta",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "es",
+   "text": "15-30",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "es",
+   "text": "treinta iguales",
+   "expect": {
+    "type": "score",
+    "a": 2,
+    "b": 2
+   }
+  },
+  {
+   "lang": "es",
+   "text": "cuarenta iguales",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "es",
+   "text": "iguales",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "es",
+   "text": "ventaja Ana",
+   "expect": {
+    "type": "adv",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "ventaja al saque",
+   "expect": {
+    "type": "adv",
+    "team": "SRV"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "juego para Juan",
+   "expect": {
+    "type": "game",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "set rojos",
+   "expect": {
+    "type": "set",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "deshacer",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "falta",
+   "expect": {
+    "type": "fault"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "doble falta",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "nueva partida",
+   "expect": {
+    "type": "newMatch"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "cómo vamos",
+   "expect": {
+    "type": "query"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "cambio de saque",
+   "expect": {
+    "type": "serve",
+    "team": null
+   }
+  },
+  {
+   "lang": "es",
+   "text": "punto al resto",
+   "expect": {
+    "type": "point",
+    "team": "RCV"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "saque directo",
+   "expect": {
+    "type": "point",
+    "team": "SRV"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "punto",
+   "expect": {
+    "type": "point",
+    "team": null
+   }
+  },
+  {
+   "lang": "es",
+   "text": "izquierda",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "es",
+   "text": "hola que tal",
+   "expect": null
+  },
+  {
+   "lang": "en",
+   "text": "point Edu",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "point to team b",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "fifteen love",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 0
+   }
+  },
+  {
+   "lang": "en",
+   "text": "thirty all",
+   "expect": {
+    "type": "score",
+    "a": 2,
+    "b": 2
+   }
+  },
+  {
+   "lang": "en",
+   "text": "deuce",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "en",
+   "text": "advantage Luis",
+   "expect": {
+    "type": "adv",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "game Juan",
+   "expect": {
+    "type": "game",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "set team a",
+   "expect": {
+    "type": "set",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "undo",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "double fault",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "new match",
+   "expect": {
+    "type": "newMatch"
+   }
+  },
+  {
+   "lang": "en",
+   "text": "what's the score",
+   "expect": {
+    "type": "query"
+   }
+  },
+  {
+   "lang": "it",
+   "text": "punto squadra a",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "it",
+   "text": "quindici trenta",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "it",
+   "text": "trenta pari",
+   "expect": {
+    "type": "score",
+    "a": 2,
+    "b": 2
+   }
+  },
+  {
+   "lang": "it",
+   "text": "parità",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "it",
+   "text": "vantaggio Luis",
+   "expect": {
+    "type": "adv",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "it",
+   "text": "gioco Edu",
+   "expect": {
+    "type": "game",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "it",
+   "text": "annulla",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "it",
+   "text": "doppio fallo",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "point pour Ana",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "quinze trente",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "trente partout",
+   "expect": {
+    "type": "score",
+    "a": 2,
+    "b": 2
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "égalité",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "avantage Edu",
+   "expect": {
+    "type": "adv",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "jeu équipe b",
+   "expect": {
+    "type": "game",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "annuler",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "fr",
+   "text": "double faute",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "de",
+   "text": "Punkt für Luis",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "de",
+   "text": "fünfzehn dreißig",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "de",
+   "text": "Einstand",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "de",
+   "text": "Vorteil Edu",
+   "expect": {
+    "type": "adv",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "de",
+   "text": "Spiel Team B",
+   "expect": {
+    "type": "game",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "de",
+   "text": "rückgängig",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "de",
+   "text": "Doppelfehler",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "de",
+   "text": "neues Spiel",
+   "expect": {
+    "type": "newMatch"
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "piste Edu",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "viisitoista kolmekymmentä",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "tasan",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "etu Ana",
+   "expect": {
+    "type": "adv",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "peli Juan",
+   "expect": {
+    "type": "game",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "peruuta",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "fi",
+   "text": "kaksoisvirhe",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "ponto para Luis",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "quinze trinta",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "trinta iguais",
+   "expect": {
+    "type": "score",
+    "a": 2,
+    "b": 2
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "vantagem Edu",
+   "expect": {
+    "type": "adv",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "jogo dupla b",
+   "expect": {
+    "type": "game",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "desfazer",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "dupla falta",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "pt",
+   "text": "nova partida",
+   "expect": {
+    "type": "newMatch"
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "punt voor Ana",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "vijftien dertig",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "deuce",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "voordeel Edu",
+   "expect": {
+    "type": "adv",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "game team a",
+   "expect": {
+    "type": "game",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "ongedaan maken",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "nl",
+   "text": "dubbele fout",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "poäng till Luis",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "femton trettio",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "lika",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "fördel Edu",
+   "expect": {
+    "type": "adv",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "game lag b",
+   "expect": {
+    "type": "game",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "ångra",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "sv",
+   "text": "dubbelfel",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "очко команде б",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "очко команда б",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "пятнадцать тридцать",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "ровно",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "больше Эду",
+   "expect": {
+    "type": "adv",
+    "team": null
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "гейм команда а",
+   "expect": {
+    "type": "game",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "отмена",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "двойная ошибка",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "ru",
+   "text": "новый матч",
+   "expect": {
+    "type": "newMatch"
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "A队得分",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "乙队得分",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "十五比三十",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "15比30",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "三十平",
+   "expect": {
+    "type": "score",
+    "a": 2,
+    "b": 2
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "平分",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "A队占先",
+   "expect": {
+    "type": "adv",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "撤销",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "双误",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "zh",
+   "text": "比分",
+   "expect": {
+    "type": "query"
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "Aチームのポイント",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "チームBのポイント",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "フィフティーン サーティ",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "デュース",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "アドバンテージ Bチーム",
+   "expect": {
+    "type": "adv",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "取り消し",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "ja",
+   "text": "ダブルフォルト",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "ko",
+   "text": "에이팀 포인트",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "ko",
+   "text": "B팀 포인트",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "ko",
+   "text": "피프틴 서티",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "ko",
+   "text": "듀스",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "ko",
+   "text": "취소",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "ko",
+   "text": "더블 폴트",
+   "expect": {
+    "type": "doubleFault"
+   }
+  },
+  {
+   "lang": "ar",
+   "text": "نقطة للفريق أ",
+   "expect": {
+    "type": "point",
+    "team": "A"
+   }
+  },
+  {
+   "lang": "ar",
+   "text": "نقطة للفريق ب",
+   "expect": {
+    "type": "point",
+    "team": "B"
+   }
+  },
+  {
+   "lang": "ar",
+   "text": "خمسة عشر ثلاثين",
+   "expect": {
+    "type": "score",
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "lang": "ar",
+   "text": "تعادل",
+   "expect": {
+    "type": "score",
+    "a": 3,
+    "b": 3
+   }
+  },
+  {
+   "lang": "ar",
+   "text": "تراجع",
+   "expect": {
+    "type": "undo"
+   }
+  },
+  {
+   "lang": "ar",
+   "text": "خطأ مزدوج",
+   "expect": {
+    "type": "doubleFault"
+   }
+  }
+ ]
+}

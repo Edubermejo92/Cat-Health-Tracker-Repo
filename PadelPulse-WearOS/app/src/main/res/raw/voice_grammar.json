@@ -1,0 +1,1210 @@
+{
+ "version": 1,
+ "_comment": "Gramatica de voz comun al movil (code.html) y al reloj (res/raw). Fuente: tools/voice_grammar.json. Se copia con tools/sync-voice.sh.",
+ "letterA": [
+  "a",
+  "а"
+ ],
+ "letterB": [
+  "b",
+  "б"
+ ],
+ "langs": {
+  "es": {
+   "sub": false,
+   "point": [
+    "punto",
+    "tanto"
+   ],
+   "teamA": [
+    "pareja a",
+    "equipo a",
+    "izquierda",
+    "los de la izquierda",
+    "nosotros",
+    "local",
+    "locales"
+   ],
+   "teamB": [
+    "pareja b",
+    "equipo b",
+    "derecha",
+    "los de la derecha",
+    "ellos",
+    "visitante",
+    "visitantes",
+    "visita"
+   ],
+   "server": [
+    "saque",
+    "al saque",
+    "servicio",
+    "saque directo",
+    "ace"
+   ],
+   "receiver": [
+    "resto",
+    "al resto",
+    "restador",
+    "break"
+   ],
+   "zero": [
+    "cero",
+    "nada"
+   ],
+   "fifteen": [
+    "quince"
+   ],
+   "thirty": [
+    "treinta"
+   ],
+   "forty": [
+    "cuarenta"
+   ],
+   "all": [
+    "iguales",
+    "igual"
+   ],
+   "deuce": [
+    "iguales",
+    "deuce"
+   ],
+   "advantage": [
+    "ventaja"
+   ],
+   "game": [
+    "juego"
+   ],
+   "set": [
+    "set"
+   ],
+   "undo": [
+    "deshacer",
+    "deshaz",
+    "anula",
+    "anular",
+    "corrige",
+    "corregir",
+    "error",
+    "atras",
+    "volver"
+   ],
+   "fault": [
+    "falta"
+   ],
+   "doubleFault": [
+    "doble falta"
+   ],
+   "newMatch": [
+    "nueva partida",
+    "nuevo partido",
+    "nuevo juego"
+   ],
+   "query": [
+    "como vamos",
+    "cuanto vamos",
+    "marcador",
+    "resultado"
+   ],
+   "serveChange": [
+    "cambio de saque",
+    "cambia el saque",
+    "cambiar saque",
+    "cambio saque"
+   ]
+  },
+  "en": {
+   "sub": false,
+   "point": [
+    "point"
+   ],
+   "teamA": [
+    "team a",
+    "pair a",
+    "left",
+    "left side",
+    "us",
+    "home"
+   ],
+   "teamB": [
+    "team b",
+    "pair b",
+    "right",
+    "right side",
+    "them",
+    "away"
+   ],
+   "server": [
+    "serve",
+    "server",
+    "ace",
+    "serving"
+   ],
+   "receiver": [
+    "return",
+    "receiver",
+    "break"
+   ],
+   "zero": [
+    "zero",
+    "love",
+    "nil"
+   ],
+   "fifteen": [
+    "fifteen"
+   ],
+   "thirty": [
+    "thirty"
+   ],
+   "forty": [
+    "forty"
+   ],
+   "all": [
+    "all"
+   ],
+   "deuce": [
+    "deuce"
+   ],
+   "advantage": [
+    "advantage",
+    "ad"
+   ],
+   "game": [
+    "game"
+   ],
+   "set": [
+    "set"
+   ],
+   "undo": [
+    "undo",
+    "cancel",
+    "go back",
+    "correction",
+    "take back"
+   ],
+   "fault": [
+    "fault"
+   ],
+   "doubleFault": [
+    "double fault"
+   ],
+   "newMatch": [
+    "new match",
+    "new game"
+   ],
+   "query": [
+    "score",
+    "what s the score",
+    "whats the score"
+   ],
+   "serveChange": [
+    "change serve",
+    "switch serve",
+    "change of serve"
+   ]
+  },
+  "it": {
+   "sub": false,
+   "point": [
+    "punto"
+   ],
+   "teamA": [
+    "squadra a",
+    "coppia a",
+    "sinistra",
+    "noi"
+   ],
+   "teamB": [
+    "squadra b",
+    "coppia b",
+    "destra",
+    "loro"
+   ],
+   "server": [
+    "servizio",
+    "battuta",
+    "battitore"
+   ],
+   "receiver": [
+    "risposta",
+    "ricevitore"
+   ],
+   "zero": [
+    "zero"
+   ],
+   "fifteen": [
+    "quindici"
+   ],
+   "thirty": [
+    "trenta"
+   ],
+   "forty": [
+    "quaranta"
+   ],
+   "all": [
+    "pari"
+   ],
+   "deuce": [
+    "parita",
+    "deuce"
+   ],
+   "advantage": [
+    "vantaggio"
+   ],
+   "game": [
+    "gioco",
+    "game"
+   ],
+   "set": [
+    "set"
+   ],
+   "undo": [
+    "annulla",
+    "indietro",
+    "correggi"
+   ],
+   "fault": [
+    "fallo"
+   ],
+   "doubleFault": [
+    "doppio fallo"
+   ],
+   "newMatch": [
+    "nuova partita"
+   ],
+   "query": [
+    "punteggio",
+    "come siamo"
+   ],
+   "serveChange": [
+    "cambio servizio",
+    "cambio di servizio"
+   ]
+  },
+  "fr": {
+   "sub": false,
+   "point": [
+    "point"
+   ],
+   "teamA": [
+    "equipe a",
+    "paire a",
+    "gauche",
+    "nous"
+   ],
+   "teamB": [
+    "equipe b",
+    "paire b",
+    "droite",
+    "eux"
+   ],
+   "server": [
+    "service",
+    "serveur"
+   ],
+   "receiver": [
+    "retour",
+    "relanceur",
+    "receveur"
+   ],
+   "zero": [
+    "zero"
+   ],
+   "fifteen": [
+    "quinze"
+   ],
+   "thirty": [
+    "trente"
+   ],
+   "forty": [
+    "quarante"
+   ],
+   "all": [
+    "partout",
+    "a"
+   ],
+   "deuce": [
+    "egalite",
+    "deuce"
+   ],
+   "advantage": [
+    "avantage"
+   ],
+   "game": [
+    "jeu"
+   ],
+   "set": [
+    "set",
+    "manche"
+   ],
+   "undo": [
+    "annuler",
+    "annule",
+    "corriger"
+   ],
+   "fault": [
+    "faute"
+   ],
+   "doubleFault": [
+    "double faute"
+   ],
+   "newMatch": [
+    "nouveau match",
+    "nouvelle partie"
+   ],
+   "query": [
+    "score",
+    "ou en est"
+   ],
+   "serveChange": [
+    "changement de service",
+    "changer de service"
+   ]
+  },
+  "de": {
+   "sub": false,
+   "point": [
+    "punkt"
+   ],
+   "teamA": [
+    "team a",
+    "paar a",
+    "links",
+    "wir",
+    "heim"
+   ],
+   "teamB": [
+    "team b",
+    "paar b",
+    "rechts",
+    "die anderen",
+    "gast",
+    "gaste"
+   ],
+   "server": [
+    "aufschlag",
+    "aufschlager"
+   ],
+   "receiver": [
+    "return",
+    "ruckschlag",
+    "ruckschlager"
+   ],
+   "zero": [
+    "null"
+   ],
+   "fifteen": [
+    "funfzehn"
+   ],
+   "thirty": [
+    "dreissig"
+   ],
+   "forty": [
+    "vierzig"
+   ],
+   "all": [
+    "beide",
+    "gleich"
+   ],
+   "deuce": [
+    "einstand",
+    "deuce"
+   ],
+   "advantage": [
+    "vorteil"
+   ],
+   "game": [
+    "spiel",
+    "game"
+   ],
+   "set": [
+    "satz",
+    "set"
+   ],
+   "undo": [
+    "ruckgangig",
+    "zuruck",
+    "korrigieren"
+   ],
+   "fault": [
+    "fehler"
+   ],
+   "doubleFault": [
+    "doppelfehler"
+   ],
+   "newMatch": [
+    "neues spiel",
+    "neues match"
+   ],
+   "query": [
+    "spielstand",
+    "wie steht",
+    "stand"
+   ],
+   "serveChange": [
+    "aufschlagwechsel",
+    "aufschlag wechseln"
+   ]
+  },
+  "fi": {
+   "sub": false,
+   "point": [
+    "piste"
+   ],
+   "teamA": [
+    "joukkue a",
+    "pari a",
+    "vasen",
+    "me"
+   ],
+   "teamB": [
+    "joukkue b",
+    "pari b",
+    "oikea",
+    "he"
+   ],
+   "server": [
+    "syotto",
+    "syottaja"
+   ],
+   "receiver": [
+    "palautus",
+    "vastaanottaja"
+   ],
+   "zero": [
+    "nolla"
+   ],
+   "fifteen": [
+    "viisitoista"
+   ],
+   "thirty": [
+    "kolmekymmenta"
+   ],
+   "forty": [
+    "neljakymmenta"
+   ],
+   "all": [
+    "tasan"
+   ],
+   "deuce": [
+    "tasan",
+    "deuce"
+   ],
+   "advantage": [
+    "etu"
+   ],
+   "game": [
+    "peli",
+    "gemi"
+   ],
+   "set": [
+    "era",
+    "setti"
+   ],
+   "undo": [
+    "peruuta",
+    "kumoa"
+   ],
+   "fault": [
+    "virhe"
+   ],
+   "doubleFault": [
+    "kaksoisvirhe"
+   ],
+   "newMatch": [
+    "uusi ottelu",
+    "uusi peli"
+   ],
+   "query": [
+    "tilanne",
+    "pisteet"
+   ],
+   "serveChange": [
+    "syoton vaihto",
+    "vaihda syotto"
+   ]
+  },
+  "pt": {
+   "sub": false,
+   "point": [
+    "ponto"
+   ],
+   "teamA": [
+    "dupla a",
+    "equipa a",
+    "equipe a",
+    "par a",
+    "esquerda",
+    "nos"
+   ],
+   "teamB": [
+    "dupla b",
+    "equipa b",
+    "equipe b",
+    "par b",
+    "direita",
+    "eles"
+   ],
+   "server": [
+    "saque",
+    "servico",
+    "servidor"
+   ],
+   "receiver": [
+    "resposta",
+    "devolucao",
+    "recebedor"
+   ],
+   "zero": [
+    "zero"
+   ],
+   "fifteen": [
+    "quinze"
+   ],
+   "thirty": [
+    "trinta"
+   ],
+   "forty": [
+    "quarenta"
+   ],
+   "all": [
+    "iguais",
+    "igual"
+   ],
+   "deuce": [
+    "iguais",
+    "deuce"
+   ],
+   "advantage": [
+    "vantagem"
+   ],
+   "game": [
+    "jogo",
+    "game"
+   ],
+   "set": [
+    "set"
+   ],
+   "undo": [
+    "desfazer",
+    "anular",
+    "corrigir",
+    "voltar"
+   ],
+   "fault": [
+    "falta"
+   ],
+   "doubleFault": [
+    "dupla falta"
+   ],
+   "newMatch": [
+    "nova partida",
+    "novo jogo"
+   ],
+   "query": [
+    "placar",
+    "resultado",
+    "como estamos"
+   ],
+   "serveChange": [
+    "troca de saque",
+    "trocar saque",
+    "mudar saque"
+   ]
+  },
+  "nl": {
+   "sub": false,
+   "point": [
+    "punt"
+   ],
+   "teamA": [
+    "team a",
+    "paar a",
+    "links",
+    "wij"
+   ],
+   "teamB": [
+    "team b",
+    "paar b",
+    "rechts",
+    "zij"
+   ],
+   "server": [
+    "service",
+    "opslag",
+    "serveerder"
+   ],
+   "receiver": [
+    "return",
+    "ontvanger"
+   ],
+   "zero": [
+    "nul"
+   ],
+   "fifteen": [
+    "vijftien"
+   ],
+   "thirty": [
+    "dertig"
+   ],
+   "forty": [
+    "veertig"
+   ],
+   "all": [
+    "gelijk",
+    "beide"
+   ],
+   "deuce": [
+    "deuce",
+    "gelijk"
+   ],
+   "advantage": [
+    "voordeel"
+   ],
+   "game": [
+    "game",
+    "spel"
+   ],
+   "set": [
+    "set"
+   ],
+   "undo": [
+    "ongedaan",
+    "terug",
+    "herstel",
+    "annuleer"
+   ],
+   "fault": [
+    "fout"
+   ],
+   "doubleFault": [
+    "dubbele fout"
+   ],
+   "newMatch": [
+    "nieuwe wedstrijd",
+    "nieuw spel"
+   ],
+   "query": [
+    "stand",
+    "score"
+   ],
+   "serveChange": [
+    "wissel service",
+    "service wisselen"
+   ]
+  },
+  "sv": {
+   "sub": false,
+   "point": [
+    "poang"
+   ],
+   "teamA": [
+    "lag a",
+    "par a",
+    "vanster",
+    "vi"
+   ],
+   "teamB": [
+    "lag b",
+    "par b",
+    "hoger",
+    "dom"
+   ],
+   "server": [
+    "serve",
+    "serven",
+    "servare"
+   ],
+   "receiver": [
+    "retur",
+    "mottagare"
+   ],
+   "zero": [
+    "noll"
+   ],
+   "fifteen": [
+    "femton"
+   ],
+   "thirty": [
+    "trettio"
+   ],
+   "forty": [
+    "fyrtio"
+   ],
+   "all": [
+    "lika"
+   ],
+   "deuce": [
+    "lika",
+    "deuce"
+   ],
+   "advantage": [
+    "fordel"
+   ],
+   "game": [
+    "game",
+    "gem",
+    "spel"
+   ],
+   "set": [
+    "set"
+   ],
+   "undo": [
+    "angra",
+    "tillbaka"
+   ],
+   "fault": [
+    "fel"
+   ],
+   "doubleFault": [
+    "dubbelfel"
+   ],
+   "newMatch": [
+    "ny match",
+    "nytt spel"
+   ],
+   "query": [
+    "stallning",
+    "resultat"
+   ],
+   "serveChange": [
+    "byt serve",
+    "byte av serve"
+   ]
+  },
+  "ru": {
+   "sub": false,
+   "point": [
+    "очко",
+    "балл",
+    "мяч"
+   ],
+   "teamA": [
+    "команда а",
+    "пара а",
+    "команда a",
+    "пара a",
+    "слева",
+    "левые",
+    "мы"
+   ],
+   "teamB": [
+    "команда б",
+    "пара б",
+    "команда b",
+    "пара b",
+    "справа",
+    "правые",
+    "они"
+   ],
+   "server": [
+    "подача",
+    "подающий",
+    "на подаче",
+    "эйс"
+   ],
+   "receiver": [
+    "прием",
+    "принимающий",
+    "на приеме"
+   ],
+   "zero": [
+    "ноль"
+   ],
+   "fifteen": [
+    "пятнадцать"
+   ],
+   "thirty": [
+    "тридцать"
+   ],
+   "forty": [
+    "сорок"
+   ],
+   "all": [
+    "поровну"
+   ],
+   "deuce": [
+    "ровно",
+    "равенство",
+    "деус"
+   ],
+   "advantage": [
+    "больше",
+    "преимущество"
+   ],
+   "game": [
+    "гейм",
+    "игра"
+   ],
+   "set": [
+    "сет",
+    "партия"
+   ],
+   "undo": [
+    "отмена",
+    "отменить",
+    "назад"
+   ],
+   "fault": [
+    "ошибка"
+   ],
+   "doubleFault": [
+    "двойная ошибка"
+   ],
+   "newMatch": [
+    "новый матч",
+    "новая игра"
+   ],
+   "query": [
+    "какой счет",
+    "счет"
+   ],
+   "serveChange": [
+    "смена подачи",
+    "сменить подачу"
+   ]
+  },
+  "zh": {
+   "sub": true,
+   "point": [
+    "得分",
+    "一分",
+    "赢了"
+   ],
+   "teamA": [
+    "a队",
+    "甲队",
+    "a组",
+    "左边",
+    "左方"
+   ],
+   "teamB": [
+    "b队",
+    "乙队",
+    "b组",
+    "右边",
+    "右方"
+   ],
+   "server": [
+    "发球方",
+    "发球"
+   ],
+   "receiver": [
+    "接发球",
+    "接发"
+   ],
+   "zero": [
+    "零",
+    "爱"
+   ],
+   "fifteen": [
+    "十五"
+   ],
+   "thirty": [
+    "三十"
+   ],
+   "forty": [
+    "四十"
+   ],
+   "all": [
+    "平"
+   ],
+   "deuce": [
+    "平分",
+    "局末平分"
+   ],
+   "advantage": [
+    "占先",
+    "优势"
+   ],
+   "game": [
+    "这局",
+    "一局",
+    "局"
+   ],
+   "set": [
+    "盘"
+   ],
+   "undo": [
+    "撤销",
+    "取消",
+    "撤回"
+   ],
+   "fault": [
+    "失误",
+    "发球失误"
+   ],
+   "doubleFault": [
+    "双误",
+    "双发失误"
+   ],
+   "newMatch": [
+    "新比赛",
+    "重新开始"
+   ],
+   "query": [
+    "比分",
+    "几比几"
+   ],
+   "serveChange": [
+    "换发球",
+    "交换发球"
+   ]
+  },
+  "ja": {
+   "sub": true,
+   "point": [
+    "ポイント",
+    "得点"
+   ],
+   "teamA": [
+    "aチーム",
+    "チームa",
+    "ペアa",
+    "左"
+   ],
+   "teamB": [
+    "bチーム",
+    "チームb",
+    "ペアb",
+    "右"
+   ],
+   "server": [
+    "サーブ",
+    "サーバー"
+   ],
+   "receiver": [
+    "レシーブ",
+    "レシーバー"
+   ],
+   "zero": [
+    "ラブ",
+    "ゼロ",
+    "零"
+   ],
+   "fifteen": [
+    "フィフティーン",
+    "十五",
+    "じゅうご"
+   ],
+   "thirty": [
+    "サーティ",
+    "三十",
+    "さんじゅう"
+   ],
+   "forty": [
+    "フォーティ",
+    "四十",
+    "よんじゅう"
+   ],
+   "all": [
+    "オール"
+   ],
+   "deuce": [
+    "デュース"
+   ],
+   "advantage": [
+    "アドバンテージ"
+   ],
+   "game": [
+    "ゲーム"
+   ],
+   "set": [
+    "セット"
+   ],
+   "undo": [
+    "取り消し",
+    "取消",
+    "戻す",
+    "もどす"
+   ],
+   "fault": [
+    "フォルト"
+   ],
+   "doubleFault": [
+    "ダブルフォルト"
+   ],
+   "newMatch": [
+    "新しい試合",
+    "新規試合"
+   ],
+   "query": [
+    "スコア",
+    "何対何"
+   ],
+   "serveChange": [
+    "サーブ交代",
+    "サーブ交替"
+   ]
+  },
+  "ko": {
+   "sub": true,
+   "point": [
+    "포인트",
+    "득점"
+   ],
+   "teamA": [
+    "a팀",
+    "에이팀",
+    "왼쪽"
+   ],
+   "teamB": [
+    "b팀",
+    "비팀",
+    "오른쪽"
+   ],
+   "server": [
+    "서브",
+    "서버"
+   ],
+   "receiver": [
+    "리시브",
+    "리시버"
+   ],
+   "zero": [
+    "러브",
+    "제로"
+   ],
+   "fifteen": [
+    "피프틴",
+    "십오"
+   ],
+   "thirty": [
+    "서티",
+    "삼십"
+   ],
+   "forty": [
+    "포티",
+    "사십"
+   ],
+   "all": [
+    "올"
+   ],
+   "deuce": [
+    "듀스"
+   ],
+   "advantage": [
+    "어드밴티지"
+   ],
+   "game": [
+    "게임"
+   ],
+   "set": [
+    "세트"
+   ],
+   "undo": [
+    "취소",
+    "되돌리기",
+    "되돌려"
+   ],
+   "fault": [
+    "폴트"
+   ],
+   "doubleFault": [
+    "더블폴트",
+    "더블 폴트"
+   ],
+   "newMatch": [
+    "새 경기",
+    "새경기",
+    "새 게임"
+   ],
+   "query": [
+    "스코어",
+    "점수 알려"
+   ],
+   "serveChange": [
+    "서브 교대",
+    "서브교대"
+   ]
+  },
+  "ar": {
+   "sub": true,
+   "point": [
+    "نقطة",
+    "نقطه"
+   ],
+   "teamA": [
+    "الفريق أ",
+    "فريق أ",
+    "الفريق a",
+    "اليسار",
+    "يسار"
+   ],
+   "teamB": [
+    "الفريق ب",
+    "فريق ب",
+    "الفريق b",
+    "اليمين",
+    "يمين"
+   ],
+   "server": [
+    "الإرسال",
+    "ارسال",
+    "المرسل"
+   ],
+   "receiver": [
+    "الاستقبال",
+    "استقبال",
+    "المستقبل"
+   ],
+   "zero": [
+    "صفر"
+   ],
+   "fifteen": [
+    "خمسة عشر",
+    "خمس عشرة",
+    "خمستاشر"
+   ],
+   "thirty": [
+    "ثلاثين",
+    "ثلاثون"
+   ],
+   "forty": [
+    "أربعين",
+    "أربعون"
+   ],
+   "all": [
+    "متعادل"
+   ],
+   "deuce": [
+    "تعادل"
+   ],
+   "advantage": [
+    "أفضلية",
+    "ميزة"
+   ],
+   "game": [
+    "شوط",
+    "لعبة",
+    "جيم"
+   ],
+   "set": [
+    "مجموعة",
+    "سيت"
+   ],
+   "undo": [
+    "تراجع",
+    "إلغاء",
+    "الغاء"
+   ],
+   "fault": [
+    "خطأ"
+   ],
+   "doubleFault": [
+    "خطأ مزدوج"
+   ],
+   "newMatch": [
+    "مباراة جديدة"
+   ],
+   "query": [
+    "النتيجة",
+    "كم النتيجة"
+   ],
+   "serveChange": [
+    "تغيير الإرسال",
+    "تبديل الإرسال"
+   ]
+  }
+ }
+}

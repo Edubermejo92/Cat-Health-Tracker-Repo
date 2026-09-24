@@ -1,64 +1,47 @@
-# La voz: escuchar y que se oiga
+# Árbitro por voz
 
-Dos cosas distintas que se confunden con facilidad: **el micrófono**, que
-escucha al árbitro, y **la voz de la app**, que canta el marcador.
+Canta los puntos y se suman, en el móvil o en el reloj. Los dos entienden exactamente lo
+mismo: comparten la gramática (`tools/voice_grammar.json`) y el intérprete (`tools/voice-parser.js`
+en el móvil, `voice/VoiceParser.kt` en el reloj, copia paso a paso).
 
-## Modo árbitro (el micrófono)
+- **Móvil**: botón del micrófono de la cabecera (modo árbitro, se queda escuchando).
+- **Reloj**: toca la fila del logo, arriba del marcador (🎙 en rojo = escuchando), o Controles → Árbitro por voz.
+- Solo escucha uno a la vez: al encender uno, el otro se apaga solo.
+- Se escucha en el **idioma de la app**, no en el del teléfono.
 
-El botón del micrófono está en la cabecera del marcador, al lado del estado
-del reloj.
+## Qué se puede decir
 
-Antes escuchaba **una sola frase** por pulsación, lo que en un partido no
-sirve: nadie va a sacar el móvil del bolsillo antes de cada punto. Y no
-marcaba estado, así que el indicador "en vivo" que ya existía en la cabecera
-no se encendía nunca.
+| Qué | Cómo se nombra a la pareja |
+|---|---|
+| Punto | nombre de la pareja, **nombre de cualquiera de sus dos jugadores**, "pareja A/B", izquierda/derecha, saque/resto |
+| Marcador | dos puntos seguidos ("quince treinta"), uno + "iguales" ("treinta iguales"), "iguales" solo = 40-40 |
+| Ventaja, juego, set | la palabra + la pareja ("ventaja rojos", "juego para Edu") |
+| Falta, doble falta, deshacer, nueva partida, cambio de saque, "cómo vamos" | la palabra sola |
 
-Ahora el micrófono se queda abierto y se vuelve a abrir solo después de cada
-frase, con **700 ms de respiro** para no grabarse a sí misma la voz de la app
-cantando el punto.
+Si no queda claro de qué pareja es, la app pregunta "¿Para quién?" en vez de adivinar.
 
-En la cabecera se ve en qué punto está:
+## Ejemplos por idioma
 
-| Indicador | Qué pasa |
-|-----------|----------|
-| 🎙️ ESCUCHANDO, parpadeando | El micrófono está abierto |
-| El texto de lo que va oyendo | Va reconociendo la frase |
-| 📶 UN MOMENTO | Está entendiendo lo dicho |
+| Idioma | Punto | Marcador | Iguales | Ventaja | Juego | Deshacer |
+|---|---|---|---|---|---|---|
+| Español | punto para Juan | quince treinta | cuarenta iguales | ventaja rojos | juego Edu | deshacer |
+| English | point Juan | fifteen thirty | deuce | advantage team b | game left | undo |
+| Italiano | punto Juan | quindici trenta | parità | vantaggio squadra b | gioco Edu | annulla |
+| Français | point pour Juan | quinze trente | égalité | avantage équipe b | jeu Edu | annuler |
+| Deutsch | Punkt für Juan | fünfzehn dreißig | Einstand | Vorteil Team B | Spiel Edu | rückgängig |
+| Suomi | piste Juan | viisitoista kolmekymmentä | tasan | etu joukkue b | peli Edu | peruuta |
+| Português | ponto para Juan | quinze trinta | iguais | vantagem dupla b | jogo Edu | desfazer |
+| Nederlands | punt voor Juan | vijftien dertig | deuce | voordeel team b | game Edu | ongedaan |
+| Svenska | poäng till Juan | femton trettio | lika | fördel lag b | game Edu | ångra |
+| Русский | очко команда а | пятнадцать тридцать | ровно | больше команда б | гейм команда а | отмена |
+| 中文 | A队得分 | 十五比三十 | 平分 | B队占先 | A队这局 | 撤销 |
+| 日本語 | Aチームのポイント | フィフティーン サーティ | デュース | アドバンテージ Bチーム | ゲーム Aチーム | 取り消し |
+| 한국어 (solo reloj) | 에이팀 포인트 | 피프틴 서티 | 듀스 | 어드밴티지 B팀 | 게임 에이팀 | 취소 |
+| العربية | نقطة للفريق أ | خمسة عشر ثلاثين | تعادل | أفضلية الفريق ب | شوط الفريق أ | تراجع |
 
-Que se vea lo que va oyendo es lo que evita la duda de "¿me está cogiendo o
-estoy hablando a la nada?".
+## Cambiar o añadir palabras
 
-### Lo que no se cuenta
-
-Que entre punto y punto no se oiga nada es lo normal, así que los silencios y
-los "no te he entendido" **no molestan con avisos**: el micrófono se vuelve a
-abrir sin decir nada. Solo se avisa de lo que de verdad importa, como que
-falte el permiso de micrófono.
-
-### El idioma
-
-Se escucha en el idioma de la app, no en el del teléfono. Parece obvio y no lo
-era: antes se usaba el del sistema, así que un móvil en inglés no entendía
-"punto para nosotros".
-
-## La voz de la app
-
-### Por el motor de Android, no por el del navegador
-
-La interfaz del móvil es un WebView, y `speechSynthesis` del navegador ahí es
-irregular: a veces no hay voces cargadas, a veces no suena, y **no deja
-controlar el volumen**. Había un puente nativo para hablar pero la app no lo
-usaba. Ahora sí, y el camino del navegador se queda solo para la versión web.
-
-### El volumen
-
-En **Ajustes › Audio › Volumen de la voz**, de 0 a 100 %. Al soltar el mando
-se oye una frase de prueba, para ajustarlo sin salir a la pista.
-
-Hay una trampa que conviene entender: **el volumen del TTS es relativo al del
-teléfono**. Por muy alto que se pida, si el móvil está a la mitad se oye a la
-mitad. Por eso está el botón **"Móvil al máximo"**, que sube el volumen
-multimedia del aparato; es lo que de verdad se nota al otro lado de la pista.
-
-La voz sale por el canal **multimedia** (`USAGE_MEDIA`), que es el que el
-usuario sube con los botones del lateral y el que no se silencia solo.
+1. Edita `tools/voice_grammar.json`.
+2. `./tools/sync-voice.sh` lo copia al reloj (`res/raw`) y a `code.html`.
+3. `./tools/probar-voz.sh` pasa las frases de `tools/voice_tests.json`; añade allí la frase nueva con su resultado esperado.
+4. `./tools/antes-de-compilar.sh` falla si alguna de las dos apps tiene una gramática distinta.

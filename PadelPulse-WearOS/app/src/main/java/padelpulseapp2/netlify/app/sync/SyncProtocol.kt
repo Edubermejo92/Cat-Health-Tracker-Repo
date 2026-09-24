@@ -109,7 +109,8 @@ object SyncProtocol {
     fun settings(
         seq: Long, lang: String, theme: String, colorHex: String,
         goldenPoint: Boolean, superTieBreak: Boolean, bestOf: Int,
-        nameA: String, nameB: String, mode: String
+        nameA: String, nameB: String, mode: String,
+        players: List<String> = emptyList()
     ): String = envelope(PATH_SETTINGS, seq)
         .put("lang", lang)
         .put("theme", theme)
@@ -122,5 +123,12 @@ object SyncProtocol {
         .put("nameA", nameA)
         .put("nameB", nameB)
         .put("mode", normalizeMode(mode))
+        .apply {
+            // Los dos jugadores de cada pareja: A1, A2, B1, B2
+            if (players.size == 4) {
+                put("playerA1", players[0]).put("playerA2", players[1])
+                put("playerB1", players[2]).put("playerB2", players[3])
+            }
+        }
         .toString()
 }

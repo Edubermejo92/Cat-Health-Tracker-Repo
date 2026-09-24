@@ -92,8 +92,11 @@ fun NameEditorScreen(
         }
     }
 
+    // team: "A"/"B" para el nombre de la pareja, "A1".."B2" para un jugador
+    val isPlayer = team.length == 2
     fun apply(name: String) {
-        if (team == "A") engine.nameA = name else engine.nameB = name
+        // Los jugadores se guardan como se dicen ("Edu"); la pareja, en mayusculas
+        engine.setName(team, if (isPlayer) name.trim().lowercase().replaceFirstChar { it.titlecase() } else name)
         engine.saveState()
         activity.sendSettingsToPhone()
         activity.pushStateToPhone()
@@ -108,7 +111,8 @@ fun NameEditorScreen(
     ) {
         item {
             PPLabel(
-                if (es) "NOMBRE PAREJA $team" else "TEAM $team NAME",
+                if (isPlayer) (if (es) "PAREJA ${team[0]} · JUGADOR ${team[1]}" else "TEAM ${team[0]} · PLAYER ${team[1]}")
+                else (if (es) "NOMBRE PAREJA $team" else "TEAM $team NAME"),
                 color = accent, size = PP.Label
             )
             Spacer(Modifier.height(4.dp))
@@ -118,7 +122,7 @@ fun NameEditorScreen(
             Chip(
                 onClick = {
                     activity.startSpeechToText { text ->
-                        if (text.isNotBlank()) apply(text.uppercase()) else onClose()
+                        if (text.isNotBlank()) apply(if (isPlayer) text else text.uppercase()) else onClose()
                     }
                 },
                 label = {
@@ -158,6 +162,17 @@ fun NameEditorScreen(
                 ),
                 modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp)
             )
+        }
+
+        if (isPlayer && engine.getName(team).isNotBlank()) {
+            item {
+                Chip(
+                    onClick = { apply("") },
+                    label = { Text(if (es) "Sin jugador" else "No player", fontSize = PP.Label) },
+                    colors = ChipDefaults.primaryChipColors(backgroundColor = PP.Surface, contentColor = PP.Danger),
+                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp)
+                )
+            }
         }
 
         item {

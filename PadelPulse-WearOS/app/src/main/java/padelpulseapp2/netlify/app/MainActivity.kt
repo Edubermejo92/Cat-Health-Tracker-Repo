@@ -27,6 +27,8 @@ import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.sync.WatchAccount
+import padelpulseapp2.netlify.app.voice.VoiceParser
+import padelpulseapp2.netlify.app.voice.VoiceReferee
 import java.util.Locale
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEventListener {
@@ -51,6 +53,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     private var helloJob: Job? = null
 
     private var speechResultCallback: ((String) -> Unit)? = null
+
+    /** Arbitro por voz: canta los puntos y se suman. */
+    val voice by lazy { VoiceReferee(this) }
 
     var sensorsPaused by mutableStateOf(false)
 
@@ -234,7 +239,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
             SyncProtocol.settings(
                 PhoneLink.nextSeq(), engine.lang, engine.theme,
                 ThemeUtils.getHexColor(engine.theme), engine.goldenPoint,
-                engine.superTb, engine.bestOf, engine.nameA, engine.nameB, SyncProtocol.MODE_SYNC
+                engine.superTb, engine.bestOf, engine.nameA, engine.nameB, SyncProtocol.MODE_SYNC,
+                listOf(engine.playerA1, engine.playerA2, engine.playerB1, engine.playerB2)
             )
         )
     }
@@ -315,12 +321,78 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
      * continuarlo-, pero se quita de la esfera, se cierra el entreno propio y
      * la app desaparece tambien de recientes.
      */
+    // ── Arbitro por voz ──────────────────────────────────────────────────
+
+    /** Solo escucha uno: al encender la voz aqui, el movil apaga la suya. */
+    fun claimVoice() {
+        if (!PhoneLink.paired) return
+        PhoneLink.send(this, SyncProtocol.PATH_CMD, SyncProtocol.command(PhoneLink.nextSeq(), "voice_owner", null))
+    }
+
+    private val voiceOnceLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.let { voice.handle(it) }
+        }
+    }
+
+    /** Reloj sin reconocimiento continuo: una frase con el dictado del sistema. */
+    fun listenOnce() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, voice.voiceLang())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        }
+        runCatching { voiceOnceLauncher.launch(intent) }.onFailure { Log.e(TAG, "Dictado no disponible", it) }
+    }
+
+    /**
+     * Aplica lo que se ha cantado. Hace lo mismo que el boton equivalente del
+     * marcador, asi que el movil se entera por el estado como siempre.
+     */
+    fun applyVoice(a: VoiceParser.Action) {
+        val e = gameEngine ?: return
+        val srv = e.serving
+        val rcv = if (srv == "A") "B" else "A"
+        val team = when (a.team) { "SRV" -> srv; "RCV" -> rcv; else -> a.team }
+        val v = Translations.vd[e.lang] ?: Translations.vd["es"]!!
+        fun ask() { speak(Translations.ask[e.lang] ?: Translations.ask.getValue("en"), e.lang) }
+        when (a.type) {
+            "point" -> if (team == null) ask() else { e.addPoint(team); onLocalScoreAction("point", team) }
+            "adv" -> if (team == null) ask() else { e.giveAdvantage(team); onLocalScoreAction("point", team) }
+            "game" -> if (team == null) ask() else { e.forceGame(team); onLocalScoreAction("game", team) }
+            "set" -> if (team == null) ask() else { e.forceSet(team); onLocalScoreAction("set", team) }
+            "score" -> { e.setPoints(a.a, a.b); onLocalScoreAction("score") }
+            "undo" -> {
+                e.undo(); onLocalScoreAction("undo")
+                speak((Translations.ui[e.lang] ?: Translations.ui.getValue("es")).undo + ".", e.lang)
+            }
+            "fault" -> { e.handleFault(e.serving); onLocalScoreAction("fault", e.serving) }
+            "doubleFault" -> {
+                // La segunda falta de la misma jugada es la doble
+                e.faultCount = 1
+                e.handleFault(e.serving); onLocalScoreAction("fault", e.serving)
+            }
+            "serve" -> {
+                val quien = team ?: rcv
+                e.serving = quien; e.faultCount = 0
+                e.speakServe(quien); onLocalScoreAction("serve", quien)
+            }
+            "newMatch" -> {
+                e.resetMatch(); resetTimer(); startTimer(); onLocalScoreAction("reset")
+            }
+            "query" -> e.speakScore()
+        }
+    }
+
     fun exitApp() {
         gameEngine?.clockSeconds = matchTimeSeconds
         gameEngine?.saveState()
         timerRunning = false
         MatchOngoingService.stop(this)
         WorkoutGuard.stop(this)
+        voice.stop()
         finishAndRemoveTask()
     }
 
@@ -428,6 +500,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == VoiceReferee.MIC_REQUEST) {
+            if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) voice.start()
+            return
+        }
         if (requestCode != 101) return
         permissions.forEachIndexed { i, perm ->
             if (grantResults.getOrNull(i) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -525,6 +601,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Con la app fuera de pantalla no se escucha: gasta y no se ve que oye
+        voice.stop()
+    }
+
     override fun onPause() {
         super.onPause()
         PhoneLink.removeListeners(this, messageListener, capabilityListener)
@@ -541,6 +623,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         if (!ttsReady) return
         val voiceLang = Translations.langs.find { it.id == currentLang }?.voiceLang ?: "es-ES"
         tts.language = Locale.forLanguageTag(voiceLang)
+        // Que el arbitro por voz no se oiga a si mismo cantar el punto
+        voice.onAppSpeaks(text)
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "padel_voice")
     }
 
@@ -548,6 +632,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         if (status == TextToSpeech.SUCCESS) {
             ttsReady = true
             tts.language = Locale("es", "ES")
+            tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) { runOnUiThread { voice.onAppDoneSpeaking() } }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) { runOnUiThread { voice.onAppDoneSpeaking() } }
+            })
         } else {
             Log.e(TAG, "TTS no disponible")
         }

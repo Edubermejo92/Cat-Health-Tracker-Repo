@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Arbitro por voz: cantar los puntos y que se sumen -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Pulso y podometro: sin ACTIVITY_RECOGNITION Android 10+ no entrega pasos -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
@@ -24,6 +26,10 @@
         <package android:name="com.google.android.wearable.healthservices" />
         <!-- Samsung Health, para abrirlo desde el boton de la deteccion automatica -->
         <package android:name="com.samsung.android.wear.shealth" />
+        <!-- Reconocimiento de voz del sistema, para el arbitro por voz -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

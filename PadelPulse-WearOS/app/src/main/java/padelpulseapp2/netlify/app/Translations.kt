@@ -38,6 +38,14 @@ object Translations {
         Language("ru", "🇷🇺", "Русский", "ru-RU")
     )
 
+    /** Cuando se canta algo sin decir de que pareja es. Igual que VOZ_PREGUNTA del movil. */
+    val ask = mapOf(
+        "es" to "¿Para quién?", "en" to "For whom?", "it" to "Per chi?", "fr" to "Pour qui ?",
+        "de" to "Für wen?", "fi" to "Kenelle?", "zh" to "给哪一队？", "ja" to "どちらのチーム？",
+        "ar" to "لأي فريق؟", "pt" to "Para quem?", "nl" to "Voor wie?", "sv" to "Till vem?",
+        "ru" to "Кому?", "ko" to "어느 팀?"
+    )
+
     val vd = mapOf(
         "es" to VoiceData("cero", "quince", "treinta", "cuarenta", "iguales", "iguales", "ventaja", "juego", "set", "punto de oro", "Falta.", "Doble falta.", "Saca"),
         "en" to VoiceData("love", "fifteen", "thirty", "forty", "all", "deuce", "advantage", "game", "set", "golden point", "Fault.", "Double fault.", "Serves"),

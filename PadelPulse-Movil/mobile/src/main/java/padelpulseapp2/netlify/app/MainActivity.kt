@@ -259,6 +259,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             // que ser el de la app.
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, idiomaVoz)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             // Un punto se canta en dos palabras: no hace falta esperar mas.
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
@@ -266,9 +267,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
                 escuchando = false
-                val txt = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.lowercase() ?: ""
-                evalJs("if(typeof processVoiceCommand==='function') processVoiceCommand(${JSONObject.quote(txt)});")
+                // Todas las transcripciones, de mas a menos probable: la web se
+                // queda con la primera que entienda del todo ("punto para Edu"
+                // puede llegar como "punto para él").
+                val lista = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+                val txt = lista.firstOrNull()?.lowercase() ?: ""
+                val todas = org.json.JSONArray(lista).toString()
+                evalJs("if(typeof processVoiceAlternatives==='function') processVoiceAlternatives($todas);" +
+                       " else if(typeof processVoiceCommand==='function') processVoiceCommand(${JSONObject.quote(txt)});")
                 reabrirSiContinua()
             }
             override fun onPartialResults(p0: Bundle?) {

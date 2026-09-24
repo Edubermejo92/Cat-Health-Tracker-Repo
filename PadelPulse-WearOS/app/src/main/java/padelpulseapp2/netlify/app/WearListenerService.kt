@@ -118,6 +118,9 @@ class WearListenerService : WearableListenerService() {
     private fun onCommand(engine: GameEngine, obj: JSONObject) {
         val team = obj.optString("team", "A").ifEmpty { "A" }
         when (obj.optString("action", "")) {
+            // El movil ha encendido su arbitro por voz: aqui se apaga, que si
+            // escuchan los dos cada punto cantado se suma dos veces.
+            "voice_owner" -> { MainActivity.instance?.voice?.stop(); return }
             "point" -> engine.addPoint(team)
             "minus" -> engine.decreasePoint(team)
             "undo" -> engine.undo()

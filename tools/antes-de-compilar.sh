@@ -110,6 +110,22 @@ if [ -f "$A/tailwind.css" ] && [ "$A/code.html" -nt "$A/tailwind.css" ]; then
     ambar "code.html es mas nuevo que tailwind.css: pasa ./tools/build-web-assets.sh"
 fi
 
+# ── 5b. La voz: misma gramatica en las dos apps ─────────────────────────────
+G="$ROOT/tools/voice_grammar.json"
+if cmp -s "$G" "$ROOT/PadelPulse-WearOS/app/src/main/res/raw/voice_grammar.json"; then
+    verde "gramatica de voz del reloj al dia"
+else
+    rojo "la gramatica de voz del reloj no coincide: pasa ./tools/sync-voice.sh"
+fi
+if python3 - "$G" "$ROOT/PadelPulse-Movil/mobile/src/main/assets/code.html" <<'PY'
+import json, sys
+g = json.dumps(json.load(open(sys.argv[1], encoding='utf-8')), ensure_ascii=False, separators=(',', ':'))
+sys.exit(0 if ('const VOICE_GRAMMAR = ' + g + ';') in open(sys.argv[2], encoding='utf-8').read() else 1)
+PY
+then verde "gramatica de voz del movil al dia"
+else rojo "la gramatica de voz de code.html no coincide: pasa ./tools/sync-voice.sh"
+fi
+
 # ── 6. La firma ──────────────────────────────────────────────────────────────
 for pr in PadelPulse-Movil PadelPulse-WearOS; do
     [ -f "$ROOT/$pr/keystore.properties" ] \

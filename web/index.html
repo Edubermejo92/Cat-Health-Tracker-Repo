@@ -553,6 +553,11 @@ const PPSync = {
         this._pushTimer = setTimeout(()=>{
             this._pushTimer = null;
             if(this._applyingRemote || !this.paired) return;
+            // Nombres de pareja o de jugadores cambiados en cualquier pantalla:
+            // van con los ajustes, asi que se mandan en cuanto cambian.
+            const nombres = [S.teamA.name, S.teamB.name, S.teamA.playerA, S.teamA.playerB,
+                             S.teamB.playerA, S.teamB.playerB].map(x=>x||'').join('|');
+            if(nombres !== this._namesSig){ this._namesSig = nombres; this.sendSettings(); }
             const st = this.buildState();
             const json = JSON.stringify(st);
             if(json === this._lastPushed) return;
@@ -599,6 +604,9 @@ const PPSync = {
             maxSets:S.bestOf||3,
             nameA:S.teamA.name||'LOCAL',
             nameB:S.teamB.name||'VISITA',
+            // Cada lado es una pareja: sus dos jugadores
+            playerA1:S.teamA.playerA||'', playerA2:S.teamA.playerB||'',
+            playerB1:S.teamB.playerA||'', playerB2:S.teamB.playerB||'',
             // El QR de "Invita a un amigo" del reloj lleva el mismo enlace que
             // mandaria el movil: prueba cerrada o ficha de Play.
             inviteUrl:(typeof inviteUrl==='function') ? inviteUrl() : '',
@@ -768,6 +776,16 @@ const PPSync = {
     onCommand(obj){
         // Invitar desde el reloj: el mensaje y el enlace son los del movil, y
         // el WhatsApp tambien. El reloj solo pide abrir la hoja de compartir.
+        // El reloj ha encendido su modo arbitro: solo uno escucha, o cada punto
+        // cantado se sumaria dos veces.
+        if(obj.action==='voice_owner'){
+            if(voiceOn()){
+                const b=this.bridge; if(b && b.stopVoice) b.stopVoice();
+                onVoiceState('off');
+                showToast(i2('⌚ La voz la lleva el reloj','⌚ The watch is listening now'), 2500);
+            }
+            return;
+        }
         if(obj.action==='invite'){
             showToast(i2('⌚ Invitar a un amigo','⌚ Invite a friend'), 1800);
             if(typeof inviteFriends==='function') inviteFriends();
@@ -795,6 +813,11 @@ const PPSync = {
         if(bo && [1,3,5].includes(+bo)){ S.bestOf=+bo; changed=true; }
         if(obj.nameA){ S.teamA.name=obj.nameA; changed=true; }
         if(obj.nameB){ S.teamB.name=obj.nameB; changed=true; }
+        // Jugadores puestos o cambiados desde el reloj (pueden venir vacios)
+        [['playerA1','teamA','playerA'],['playerA2','teamA','playerB'],
+         ['playerB1','teamB','playerA'],['playerB2','teamB','playerB']].forEach(([k,t,f])=>{
+            if(typeof obj[k]==='string' && obj[k]!==(S[t][f]||'')){ S[t][f]=obj[k]; changed=true; }
+        });
         // El campo "mode" lo siguen mandando los relojes sin actualizar. Se
         // ignora: ya no hay modos, siempre se sincroniza.
         if(changed){ saveStateOnly(); render(); }
@@ -1622,6 +1645,8 @@ function setLang(code){
     if(!S.teamA.name || S.teamA.name===oldA) S.teamA.name = miNombreDePareja();
     if(!S.teamB.name || S.teamB.name===oldB) S.teamB.name = i('teamB').toUpperCase();
     if(recognition){ stopVoice(); }
+    // El microfono nativo pasa a escuchar en el idioma nuevo desde la frase siguiente
+    try{ const b=window.AndroidBridge; if(b && b.setLanguage) b.setLanguage(currentLang().voice); }catch(e){}
     saveState(); render();
 }
 
@@ -2880,9 +2905,12 @@ function esEcoDeLaApp(frase){
 }
 
 function normalizarVoz(txt){
+    // Sin tildes y sin signos, pero conservando cualquier alfabeto: antes se
+    // quedaba solo con a-z y en chino, japones, arabe, ruso o coreano toda
+    // frase salia vacia y se tiraba como si no se hubiera dicho nada.
     return String(txt||'').toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // sin tildes
-        .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+        .normalize('NFKD').replace(/\p{M}+/gu,'').normalize('NFC')
+        .replace(/[^\p{L}\p{N} ]+/gu,' ').replace(/\s+/g,' ').trim();
 }
 
 /** False si hay que ignorar lo que se acaba de oir. */
@@ -3325,6 +3353,235 @@ function speak(text){
 // VOZ LOCAL — Sin IA, reglas deterministas
 // Entiende cualquier frase de pádel en todos los idiomas
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// VOZ: gramatica e interprete comunes con el reloj
+// ═══════════════════════════════════════════
+// No editar entre las marcas: lo escribe tools/sync-voice.sh desde
+// tools/voice_grammar.json y tools/voice-parser.js. El reloj lee lo mismo.
+/*VOICE_GRAMMAR*/
+const VOICE_GRAMMAR = {"version":1,"_comment":"Gramatica de voz comun al movil (code.html) y al reloj (res/raw). Fuente: tools/voice_grammar.json. Se copia con tools/sync-voice.sh.","letterA":["a","а"],"letterB":["b","б"],"langs":{"es":{"sub":false,"point":["punto","tanto"],"teamA":["pareja a","equipo a","izquierda","los de la izquierda","nosotros","local","locales"],"teamB":["pareja b","equipo b","derecha","los de la derecha","ellos","visitante","visitantes","visita"],"server":["saque","al saque","servicio","saque directo","ace"],"receiver":["resto","al resto","restador","break"],"zero":["cero","nada"],"fifteen":["quince"],"thirty":["treinta"],"forty":["cuarenta"],"all":["iguales","igual"],"deuce":["iguales","deuce"],"advantage":["ventaja"],"game":["juego"],"set":["set"],"undo":["deshacer","deshaz","anula","anular","corrige","corregir","error","atras","volver"],"fault":["falta"],"doubleFault":["doble falta"],"newMatch":["nueva partida","nuevo partido","nuevo juego"],"query":["como vamos","cuanto vamos","marcador","resultado"],"serveChange":["cambio de saque","cambia el saque","cambiar saque","cambio saque"]},"en":{"sub":false,"point":["point"],"teamA":["team a","pair a","left","left side","us","home"],"teamB":["team b","pair b","right","right side","them","away"],"server":["serve","server","ace","serving"],"receiver":["return","receiver","break"],"zero":["zero","love","nil"],"fifteen":["fifteen"],"thirty":["thirty"],"forty":["forty"],"all":["all"],"deuce":["deuce"],"advantage":["advantage","ad"],"game":["game"],"set":["set"],"undo":["undo","cancel","go back","correction","take back"],"fault":["fault"],"doubleFault":["double fault"],"newMatch":["new match","new game"],"query":["score","what s the score","whats the score"],"serveChange":["change serve","switch serve","change of serve"]},"it":{"sub":false,"point":["punto"],"teamA":["squadra a","coppia a","sinistra","noi"],"teamB":["squadra b","coppia b","destra","loro"],"server":["servizio","battuta","battitore"],"receiver":["risposta","ricevitore"],"zero":["zero"],"fifteen":["quindici"],"thirty":["trenta"],"forty":["quaranta"],"all":["pari"],"deuce":["parita","deuce"],"advantage":["vantaggio"],"game":["gioco","game"],"set":["set"],"undo":["annulla","indietro","correggi"],"fault":["fallo"],"doubleFault":["doppio fallo"],"newMatch":["nuova partita"],"query":["punteggio","come siamo"],"serveChange":["cambio servizio","cambio di servizio"]},"fr":{"sub":false,"point":["point"],"teamA":["equipe a","paire a","gauche","nous"],"teamB":["equipe b","paire b","droite","eux"],"server":["service","serveur"],"receiver":["retour","relanceur","receveur"],"zero":["zero"],"fifteen":["quinze"],"thirty":["trente"],"forty":["quarante"],"all":["partout","a"],"deuce":["egalite","deuce"],"advantage":["avantage"],"game":["jeu"],"set":["set","manche"],"undo":["annuler","annule","corriger"],"fault":["faute"],"doubleFault":["double faute"],"newMatch":["nouveau match","nouvelle partie"],"query":["score","ou en est"],"serveChange":["changement de service","changer de service"]},"de":{"sub":false,"point":["punkt"],"teamA":["team a","paar a","links","wir","heim"],"teamB":["team b","paar b","rechts","die anderen","gast","gaste"],"server":["aufschlag","aufschlager"],"receiver":["return","ruckschlag","ruckschlager"],"zero":["null"],"fifteen":["funfzehn"],"thirty":["dreissig"],"forty":["vierzig"],"all":["beide","gleich"],"deuce":["einstand","deuce"],"advantage":["vorteil"],"game":["spiel","game"],"set":["satz","set"],"undo":["ruckgangig","zuruck","korrigieren"],"fault":["fehler"],"doubleFault":["doppelfehler"],"newMatch":["neues spiel","neues match"],"query":["spielstand","wie steht","stand"],"serveChange":["aufschlagwechsel","aufschlag wechseln"]},"fi":{"sub":false,"point":["piste"],"teamA":["joukkue a","pari a","vasen","me"],"teamB":["joukkue b","pari b","oikea","he"],"server":["syotto","syottaja"],"receiver":["palautus","vastaanottaja"],"zero":["nolla"],"fifteen":["viisitoista"],"thirty":["kolmekymmenta"],"forty":["neljakymmenta"],"all":["tasan"],"deuce":["tasan","deuce"],"advantage":["etu"],"game":["peli","gemi"],"set":["era","setti"],"undo":["peruuta","kumoa"],"fault":["virhe"],"doubleFault":["kaksoisvirhe"],"newMatch":["uusi ottelu","uusi peli"],"query":["tilanne","pisteet"],"serveChange":["syoton vaihto","vaihda syotto"]},"pt":{"sub":false,"point":["ponto"],"teamA":["dupla a","equipa a","equipe a","par a","esquerda","nos"],"teamB":["dupla b","equipa b","equipe b","par b","direita","eles"],"server":["saque","servico","servidor"],"receiver":["resposta","devolucao","recebedor"],"zero":["zero"],"fifteen":["quinze"],"thirty":["trinta"],"forty":["quarenta"],"all":["iguais","igual"],"deuce":["iguais","deuce"],"advantage":["vantagem"],"game":["jogo","game"],"set":["set"],"undo":["desfazer","anular","corrigir","voltar"],"fault":["falta"],"doubleFault":["dupla falta"],"newMatch":["nova partida","novo jogo"],"query":["placar","resultado","como estamos"],"serveChange":["troca de saque","trocar saque","mudar saque"]},"nl":{"sub":false,"point":["punt"],"teamA":["team a","paar a","links","wij"],"teamB":["team b","paar b","rechts","zij"],"server":["service","opslag","serveerder"],"receiver":["return","ontvanger"],"zero":["nul"],"fifteen":["vijftien"],"thirty":["dertig"],"forty":["veertig"],"all":["gelijk","beide"],"deuce":["deuce","gelijk"],"advantage":["voordeel"],"game":["game","spel"],"set":["set"],"undo":["ongedaan","terug","herstel","annuleer"],"fault":["fout"],"doubleFault":["dubbele fout"],"newMatch":["nieuwe wedstrijd","nieuw spel"],"query":["stand","score"],"serveChange":["wissel service","service wisselen"]},"sv":{"sub":false,"point":["poang"],"teamA":["lag a","par a","vanster","vi"],"teamB":["lag b","par b","hoger","dom"],"server":["serve","serven","servare"],"receiver":["retur","mottagare"],"zero":["noll"],"fifteen":["femton"],"thirty":["trettio"],"forty":["fyrtio"],"all":["lika"],"deuce":["lika","deuce"],"advantage":["fordel"],"game":["game","gem","spel"],"set":["set"],"undo":["angra","tillbaka"],"fault":["fel"],"doubleFault":["dubbelfel"],"newMatch":["ny match","nytt spel"],"query":["stallning","resultat"],"serveChange":["byt serve","byte av serve"]},"ru":{"sub":false,"point":["очко","балл","мяч"],"teamA":["команда а","пара а","команда a","пара a","слева","левые","мы"],"teamB":["команда б","пара б","команда b","пара b","справа","правые","они"],"server":["подача","подающий","на подаче","эйс"],"receiver":["прием","принимающий","на приеме"],"zero":["ноль"],"fifteen":["пятнадцать"],"thirty":["тридцать"],"forty":["сорок"],"all":["поровну"],"deuce":["ровно","равенство","деус"],"advantage":["больше","преимущество"],"game":["гейм","игра"],"set":["сет","партия"],"undo":["отмена","отменить","назад"],"fault":["ошибка"],"doubleFault":["двойная ошибка"],"newMatch":["новый матч","новая игра"],"query":["какой счет","счет"],"serveChange":["смена подачи","сменить подачу"]},"zh":{"sub":true,"point":["得分","一分","赢了"],"teamA":["a队","甲队","a组","左边","左方"],"teamB":["b队","乙队","b组","右边","右方"],"server":["发球方","发球"],"receiver":["接发球","接发"],"zero":["零","爱"],"fifteen":["十五"],"thirty":["三十"],"forty":["四十"],"all":["平"],"deuce":["平分","局末平分"],"advantage":["占先","优势"],"game":["这局","一局","局"],"set":["盘"],"undo":["撤销","取消","撤回"],"fault":["失误","发球失误"],"doubleFault":["双误","双发失误"],"newMatch":["新比赛","重新开始"],"query":["比分","几比几"],"serveChange":["换发球","交换发球"]},"ja":{"sub":true,"point":["ポイント","得点"],"teamA":["aチーム","チームa","ペアa","左"],"teamB":["bチーム","チームb","ペアb","右"],"server":["サーブ","サーバー"],"receiver":["レシーブ","レシーバー"],"zero":["ラブ","ゼロ","零"],"fifteen":["フィフティーン","十五","じゅうご"],"thirty":["サーティ","三十","さんじゅう"],"forty":["フォーティ","四十","よんじゅう"],"all":["オール"],"deuce":["デュース"],"advantage":["アドバンテージ"],"game":["ゲーム"],"set":["セット"],"undo":["取り消し","取消","戻す","もどす"],"fault":["フォルト"],"doubleFault":["ダブルフォルト"],"newMatch":["新しい試合","新規試合"],"query":["スコア","何対何"],"serveChange":["サーブ交代","サーブ交替"]},"ko":{"sub":true,"point":["포인트","득점"],"teamA":["a팀","에이팀","왼쪽"],"teamB":["b팀","비팀","오른쪽"],"server":["서브","서버"],"receiver":["리시브","리시버"],"zero":["러브","제로"],"fifteen":["피프틴","십오"],"thirty":["서티","삼십"],"forty":["포티","사십"],"all":["올"],"deuce":["듀스"],"advantage":["어드밴티지"],"game":["게임"],"set":["세트"],"undo":["취소","되돌리기","되돌려"],"fault":["폴트"],"doubleFault":["더블폴트","더블 폴트"],"newMatch":["새 경기","새경기","새 게임"],"query":["스코어","점수 알려"],"serveChange":["서브 교대","서브교대"]},"ar":{"sub":true,"point":["نقطة","نقطه"],"teamA":["الفريق أ","فريق أ","الفريق a","اليسار","يسار"],"teamB":["الفريق ب","فريق ب","الفريق b","اليمين","يمين"],"server":["الإرسال","ارسال","المرسل"],"receiver":["الاستقبال","استقبال","المستقبل"],"zero":["صفر"],"fifteen":["خمسة عشر","خمس عشرة","خمستاشر"],"thirty":["ثلاثين","ثلاثون"],"forty":["أربعين","أربعون"],"all":["متعادل"],"deuce":["تعادل"],"advantage":["أفضلية","ميزة"],"game":["شوط","لعبة","جيم"],"set":["مجموعة","سيت"],"undo":["تراجع","إلغاء","الغاء"],"fault":["خطأ"],"doubleFault":["خطأ مزدوج"],"newMatch":["مباراة جديدة"],"query":["النتيجة","كم النتيجة"],"serveChange":["تغيير الإرسال","تبديل الإرسال"]}}};
+/*END_VOICE_GRAMMAR*/
+/*VOICE_PARSER*/
+/**
+ * Interprete de voz del marcador, comun al movil y al reloj.
+ *
+ * El reloj tiene una copia exacta de esta logica en Kotlin (VoiceParser.kt) y
+ * los dos leen la misma gramatica (tools/voice_grammar.json). Si cambias algo
+ * aqui, cambialo alli: tools/probar-voz.sh pasa las mismas frases por los dos
+ * y falla si no dicen lo mismo.
+ *
+ * parse(frase, idioma, nombres) devuelve una accion o null:
+ *   {type:'point', team}          team: 'A' | 'B' | 'SRV' (saque) | 'RCV' (resto) | null (no se sabe de quien)
+ *   {type:'score', a, b}          0..3 = 0, 15, 30, 40; 3-3 son iguales
+ *   {type:'adv', team}  {type:'game', team}  {type:'set', team}  {type:'serve', team}
+ *   {type:'undo'} {type:'fault'} {type:'doubleFault'} {type:'newMatch'} {type:'query'}
+ */
+const VoiceParser = {
+    g: null, _cache: {},
+
+    init(grammar){ this.g = grammar; this._cache = {}; },
+
+    norm(s){
+        return String(s||'')
+            .replace(/[٠-٩]/g, d => String(d.charCodeAt(0)-0x0660))
+            .replace(/[۰-۹]/g, d => String(d.charCodeAt(0)-0x06F0))
+            .normalize('NFKD').replace(/\p{M}+/gu,'').normalize('NFC')
+            .toLowerCase().replace(/ß/g,'ss')
+            .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    },
+
+    lang(code){
+        if(this._cache[code]) return this._cache[code];
+        const src = this.g.langs[code] || this.g.langs.en;
+        const out = { sub: !!src.sub };
+        Object.keys(src).forEach(k => {
+            if(Array.isArray(src[k])) out[k] = src[k].map(x=>this.norm(x)).filter(Boolean);
+        });
+        return (this._cache[code] = out);
+    },
+
+    /** Donde aparece la frase: [inicio, fin] en t. Sin espacios (chino...) vale dentro de palabra. */
+    find(t, p, sub){
+        const res = [];
+        if(!p) return res;
+        if(sub){
+            let i = t.indexOf(p);
+            while(i >= 0){ res.push([i, i+p.length]); i = t.indexOf(p, i+1); }
+        }else{
+            const T = ' '+t+' ', P = ' '+p+' ';
+            let i = T.indexOf(P);
+            while(i >= 0){ res.push([i, i+p.length]); i = T.indexOf(P, i+1); }
+        }
+        return res;
+    },
+
+    has(t, list, sub){ return (list||[]).some(p => this.find(t, p, sub).length > 0); },
+
+    /** Puntos dichos en orden: 0, 15, 30, 40 en palabras del idioma o en cifras. */
+    numbers(t, G){
+        const hits = [];
+        ['zero','fifteen','thirty','forty'].forEach((k, v) => {
+            (G[k]||[]).forEach(p => this.find(t, p, G.sub).forEach(([s,e]) => hits.push([s,e,v])));
+        });
+        const re = /\d+/g; let m;
+        const val = {'0':0,'00':0,'15':1,'30':2,'40':3};
+        while((m = re.exec(t))){ if(m[0] in val) hits.push([m.index, m.index+m[0].length, val[m[0]]]); }
+        hits.sort((x,y) => x[0]-y[0] || (y[1]-y[0])-(x[1]-x[0]));
+        const out = []; let end = -1;
+        hits.forEach(h => { if(h[0] >= end){ out.push(h[2]); end = h[1]; } });
+        return out;
+    },
+
+    side(t, G, names, letters){
+        const sub = G.sub, min = sub ? 2 : 3;
+        const byName = list => (list||[]).some(n => { const x = this.norm(n); return x.length >= min && this.find(t, x, sub).length > 0; });
+        let a = this.has(t, G.teamA, sub) || byName(names && names.A);
+        let b = this.has(t, G.teamB, sub) || byName(names && names.B);
+        if(!a && !b && letters && !sub){
+            const toks = t.split(' ');
+            const last = toks[toks.length-1];
+            if(toks.length >= 2){
+                if(this.g.letterA.includes(last)) a = true;
+                else if(this.g.letterB.includes(last)) b = true;
+            }
+        }
+        return (a && !b) ? 'A' : (b && !a) ? 'B' : null;
+    },
+
+    parse(text, code, names){
+        if(!this.g) return null;
+        const G = this.lang(code), sub = G.sub;
+        const t = this.norm(text);
+        if(!t) return null;
+        const h = list => this.has(t, list, sub);
+        const kw = h(G.point) || h(G.game) || h(G.set) || h(G.advantage) || h(G.serveChange);
+
+        if(h(G.undo)) return {type:'undo'};
+        if(h(G.newMatch)) return {type:'newMatch'};
+        if(h(G.query)) return {type:'query'};
+        if(h(G.doubleFault)) return {type:'doubleFault'};
+        if(h(G.fault)) return {type:'fault'};
+        if(h(G.serveChange)) return {type:'serve', team: this.side(t, G, names, true)};
+        if(h(G.advantage)){
+            const team = this.side(t, G, names, true) || (h(G.receiver) ? 'RCV' : h(G.server) ? 'SRV' : null);
+            return {type:'adv', team};
+        }
+        const n = this.numbers(t, G);
+        if(n.length >= 2) return {type:'score', a:n[0], b:n[1]};
+        if(n.length === 1 && h(G.all)) return {type:'score', a:n[0], b:n[0]};
+        if(n.length === 0 && h(G.deuce)) return {type:'score', a:3, b:3};
+        if(h(G.game)) return {type:'game', team: this.side(t, G, names, true)};
+        if(h(G.set)) return {type:'set', team: this.side(t, G, names, true)};
+        const team = this.side(t, G, names, kw);
+        if(team) return {type:'point', team};
+        if(h(G.receiver)) return {type:'point', team:'RCV'};
+        if(h(G.server)) return {type:'point', team:'SRV'};
+        if(h(G.point)) return {type:'point', team:null};
+        return null;
+    }
+};
+if(typeof module !== 'undefined') module.exports = VoiceParser;
+/*END_VOICE_PARSER*/
+VoiceParser.init(VOICE_GRAMMAR);
+
+/** Nombres por los que se puede cantar a cada pareja: la pareja y sus dos jugadores. */
+function voiceNames(){
+    return {
+        A: [S.teamA.name, S.teamA.playerA, S.teamA.playerB].filter(Boolean),
+        B: [S.teamB.name, S.teamB.playerA, S.teamB.playerB].filter(Boolean)
+    };
+}
+
+/** "¿Para quien?" cuando se canta algo sin decir de que pareja es. */
+const VOZ_PREGUNTA = {es:'¿Para quién?', en:'For whom?', it:'Per chi?', fr:'Pour qui ?', de:'Für wen?',
+    fi:'Kenelle?', zh:'给哪一队？', ja:'どちらのチーム？', ar:'لأي فريق؟', pt:'Para quem?', nl:'Voor wie?',
+    sv:'Till vem?', ru:'Кому?', ko:'어느 팀?'};
+
+/**
+ * Ejecuta lo que ha entendido VoiceParser. Hace lo mismo que el boton
+ * equivalente de la pantalla, asi que el reloj se entera por el estado.
+ */
+function applyVoiceAction(r){
+    const srv = S.serving, rcv = srv==='A' ? 'B' : 'A';
+    const team = r.team==='SRV' ? srv : r.team==='RCV' ? rcv : r.team;
+    const v = voz();
+    const nombre = x => S['team'+x].name;
+    const preguntar = () => { speak(VOZ_PREGUNTA[S.lang] || VOZ_PREGUNTA.en); showToast('🎙️ ' + (VOZ_PREGUNTA[S.lang] || VOZ_PREGUNTA.en), 2500); return true; };
+    switch(r.type){
+        case 'undo':
+            speak(i('undo')+'.'); showToast('↩️ '+i('undo'));
+            setTimeout(()=>undoPoint(), 50); return true;
+        case 'newMatch': newMatch(); return true;
+        case 'query': {
+            const txt = marcadorCantado() || (S.teamA.games+' - '+S.teamB.games);
+            speak(txt); showToast('📊 '+txt, 3000); return true;
+        }
+        case 'doubleFault':
+            speak(i('doubleFault')+'.'); showToast('🎙️ '+i('doubleFault'));
+            setTimeout(()=>addFault(srv,'doubleFault'), 50); return true;
+        case 'fault':
+            // Igual que el boton FALTA: primera falta, y la segunda es doble falta
+            speak(i('fault')+'.'); showToast('🎙️ '+i('fault'));
+            setTimeout(()=>addFault(srv,'footFault'), 50); return true;
+        case 'serve': {
+            const quien = team || rcv;
+            snapshot(); S.serving = quien; S.firstServeFault = false;
+            speak(nombre(quien)+' '+v.saca+'.'); showToast('🎾 '+nombre(quien)+' '+v.saca);
+            saveState(); render(); return true;
+        }
+        case 'adv':
+            if(!team) return preguntar();
+            if(!S.deuce){ addPoint(team); return true; }
+            snapshot(); S.advantage = team; soundPoint();
+            speak(v.ventaja+' '+nombre(team)+'.'); saveState(); render(); return true;
+        case 'score': {
+            if(S.tiebreak || S.superTiebreak){ showToast('⚠️ Tie-break', 2000); return true; }
+            snapshot();
+            S.teamA.points = r.a; S.teamB.points = r.b;
+            S.deuce = (r.a===3 && r.b===3); S.advantage = null;
+            cantarMarcador();
+            showToast('🎙️ '+getScoreDisplay().scoreA+' - '+getScoreDisplay().scoreB);
+            saveState(); render(); return true;
+        }
+        case 'game':
+            if(!team) return preguntar();
+            winGame(team); speak(v.juego+' '+nombre(team)+'.'); showToast('🏆 '+v.juego+' '+nombre(team)); return true;
+        case 'set':
+            if(!team) return preguntar();
+            winSet(team, S.teamA.games, S.teamB.games, false);
+            speak(v.set+' '+nombre(team)+'.'); showToast('🏆 '+v.set+' '+nombre(team)); return true;
+        case 'point':
+            if(!team) return preguntar();
+            addPoint(team); return true;
+    }
+    return false;
+}
+
+/**
+ * El microfono nativo manda todas las transcripciones posibles, de mas a
+ * menos probable. Vale la primera que se entienda del todo: "punto para
+ * Edu" puede llegar como "punto para edú" o "punto para él" y solo una sirve.
+ */
+function processVoiceAlternatives(lista){
+    lista = (lista||[]).map(x=>String(x||'')).filter(Boolean);
+    if(!lista.length) return;
+    if(!vozAceptada(lista[0])) return;
+    const nombres = voiceNames();
+    const completa = r => r && !(['point','adv','game','set'].includes(r.type) && !r.team);
+    for(const alt of lista){
+        const r = VoiceParser.parse(alt, S.lang||'es', nombres);
+        if(completa(r)){
+            _speakingUntil = _cmdLock = Date.now() + CMD_LOCK_MS;
+            applyVoiceAction(r);
+            if(!S.soundEnabled) setTimeout(()=>showScoreAnnounce('', null), 80);
+            return;
+        }
+    }
+    // Ninguna del todo clara: la mas probable, por el camino de siempre
+    _ultimaFrase = '';
+    processVoiceCommand(lista[0]);
+}
+
 async function processVoiceCommand(txt){
     // 0. Filtrar ecos y repeticiones. Vale para los dos caminos: el microfono
     //    continuo de Android y el del navegador.
@@ -3352,6 +3609,11 @@ function processVoiceLocal(txt){
     // Bloquear mic inmediatamente para evitar doble disparo en cualquier comando
     _speakingUntil = Date.now() + CMD_LOCK_MS;
     _cmdLock = _speakingUntil;
+
+    // Primero la gramatica comun con el reloj, en el idioma de la app: la
+    // misma frase hace lo mismo en los dos. Lo de abajo queda por si acaso.
+    const accion = VoiceParser.parse(txt, S.lang||'es', voiceNames());
+    if(accion) return applyVoiceAction(accion);
 
     // ── DESHACER ──
     if(/\b(deshacer|error|anula|anular|volver|atrás|cancela|repetir|repite|undo|annul|annulla|annuler|rückgängig|peruuta)\b/.test(t)){
@@ -6433,8 +6695,13 @@ function toggleReferee(){
         onVoiceState('off');
         showToast(i2('Modo arbitro apagado','Referee mode off'), 1800);
     }else{
+        // El microfono escucha en el idioma de la app, no en el del telefono:
+        // sin esto oia siempre en español y en los demas idiomas no entendia nada.
+        if(b.setLanguage) b.setLanguage(currentLang().voice);
         b.startVoiceContinuous();
         onVoiceState('listening');
+        // Que el reloj apague el suyo si lo tenia encendido
+        try{ PPSync.send(PP_PATH.cmd, {action:'voice_owner'}); }catch(e){}
         showToast(i2('Modo arbitro: canta los puntos','Referee mode: call the points'), 2600);
     }
 }
@@ -6442,7 +6709,7 @@ function toggleReferee(){
 /** Una sola frase, para probar o para un comando suelto. */
 function pedirVoz() {
     const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
-    if (b && b.startVoiceCommand) b.startVoiceCommand();
+    if (b && b.startVoiceCommand){ if(b.setLanguage) b.setLanguage(currentLang().voice); b.startVoiceCommand(); }
     else showToast(i2('Solo en la app de Android','Android app only'), 2000);
 }
 
