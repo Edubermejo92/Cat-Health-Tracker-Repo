@@ -123,6 +123,20 @@ Detalles que importan (aquí es donde fallaba la v2):
 - `teams.X.sets` son sets ganados, no el historial. El historial es local de cada app.
 - `clock` es el cronómetro del partido en segundos.
 
+### `setsDetail` (desde 7.0.0)
+
+Los dos lados añaden al estado el resultado de cada set terminado, en orden y
+siempre visto desde A:
+
+```json
+"setsDetail": [ {"a":6,"b":4,"winner":"A","tiebreak":false},
+                {"a":6,"b":7,"winner":"B","tiebreak":true} ]
+```
+
+Quien lo recibe solo lo usa si trae tantos sets como `teams.A.sets + teams.B.sets`.
+Sin él (versiones antiguas), el móvil solo sabía cuántos sets llevaba cada uno y
+los guardaba como 6-0. El reloj lo enseña en el marcador entre los juegos.
+
 ## `/padel/cmd` — acción suelta (solo versiones antiguas)
 
 ```json

@@ -287,7 +287,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '5.3.1';
+const WEB_VERSION = '7.0.0';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -439,6 +439,8 @@ const PPSync = {
             },
             health:{ hr:S.heartRate|0, kcal:S.calories|0, km:+(S.distanceKm||0) },
             clock:S.gameTime|0,
+            // Resultado de cada set, para que el otro no se los invente
+            setsDetail:(S.setsHistory||[]).map(x=>({a:x.a|0, b:x.b|0, winner:x.winner, tiebreak:!!x.tiebreak})),
             rev:this.rev()
         };
     },
@@ -458,7 +460,7 @@ const PPSync = {
 
             // Sets: el reloj manda el numero, aqui reconstruimos el historial
             // para que las vistas de sets y estadisticas cuadren.
-            this.rebuildSetsHistory(A.sets|0, B.sets|0);
+            this.rebuildSetsHistory(A.sets|0, B.sets|0, st.setsDetail);
 
             S.deuce = !!f.deuce;
             S.advantage = (f.adv && f.adv!=='null' && f.adv!=='') ? f.adv
@@ -501,9 +503,19 @@ const PPSync = {
         }
     },
 
-    rebuildSetsHistory(setsA, setsB){
+    rebuildSetsHistory(setsA, setsB, detalle){
+        // Un reloj actualizado manda el resultado de cada set: ese manda.
+        if(Array.isArray(detalle) && detalle.length === setsA + setsB){
+            const prev = S.setsHistory||[];
+            S.setsHistory = detalle.map((x,k)=>Object.assign({}, prev[k]||{}, {
+                a:x.a|0, b:x.b|0, winner:x.winner==='B'?'B':'A', tiebreak:!!x.tiebreak
+            }));
+            S.currentSet = setsA + setsB + 1;
+            return;
+        }
         const curA=this.setsWon('A'), curB=this.setsWon('B');
         if(curA===setsA && curB===setsB) return;
+        // Reloj antiguo: solo sabemos cuantos sets lleva cada uno
         const hist=[];
         for(let k=0;k<setsA;k++) hist.push({winner:'A', a:6, b:0});
         for(let k=0;k<setsB;k++) hist.push({winner:'B', a:0, b:6});

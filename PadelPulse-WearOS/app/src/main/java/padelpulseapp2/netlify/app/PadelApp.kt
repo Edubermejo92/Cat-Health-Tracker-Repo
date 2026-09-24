@@ -890,6 +890,13 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
             fontSize = 26.sp,
             fontWeight = FontWeight.Black
         )
+        // El resultado de cada set, que es lo que se cuenta despues
+        if (engine.setScores.isNotEmpty()) {
+            Text(
+                engine.setScores.joinToString("  ·  "),
+                color = PP.TextDim, fontSize = PP.Body, fontWeight = FontWeight.Bold, maxLines = 1
+            )
+        }
         PPLabel(
             "${activity.getTimerDisplay()} · ${engine.calories} KCAL",
             color = PP.TextMuted, size = PP.Micro

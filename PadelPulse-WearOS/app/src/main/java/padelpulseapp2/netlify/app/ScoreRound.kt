@@ -1,6 +1,12 @@
 package padelpulseapp2.netlify.app
 
 import androidx.compose.animation.core.Spring
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
@@ -108,17 +114,30 @@ fun ScorePager(
 // Pagina 0 · marcador
 // ─────────────────────────────────────────────────────────────────────
 
+/** Amarillo pelota: marca quien saca sin depender del color del tema. */
+private val BALL = Color(0xFFE8FF3A)
+
 @Composable
 private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings, accent: Color, w: Dp) {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     fun sz(frac: Float): TextUnit = with(density) { (w * frac).toSp() }
     val es = engine.lang == "es"
+    val v = Translations.vd[engine.lang] ?: Translations.vd["es"]!!
 
     val servingA = engine.serving == "A"
-    val colA = if (servingA) accent else PP.TextBright.copy(alpha = 0.85f)
-    val colB = if (!servingA) accent else PP.TextBright.copy(alpha = 0.85f)
+    val colA = if (servingA) accent else PP.TextBright.copy(alpha = 0.9f)
+    val colB = if (!servingA) accent else PP.TextBright.copy(alpha = 0.9f)
     val need = Math.ceil(engine.bestOf / 2.0).toInt()
+
+    // Cada mitad se ilumina un instante al tocarla: en un reloj no hay otra
+    // forma de saber que el toque ha entrado antes de que cambie el numero.
+    val tapA = remember { MutableInteractionSource() }
+    val tapB = remember { MutableInteractionSource() }
+    val pressA by tapA.collectIsPressedAsState()
+    val pressB by tapB.collectIsPressedAsState()
+    val flashA by animateFloatAsState(if (pressA) 0.14f else 0f, tween(if (pressA) 60 else 260), label = "fa")
+    val flashB by animateFloatAsState(if (pressB) 0.14f else 0f, tween(if (pressB) 60 else 260), label = "fb")
 
     fun point(team: String) {
         engine.addPoint(team)
@@ -127,13 +146,28 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
     }
 
     Box(Modifier.fillMaxSize()) {
-        // Arcos pegados al bisel: juegos del set en curso, llenandose de abajo
-        // arriba, y un punto por cada set que haga falta ganar.
         Canvas(Modifier.fillMaxSize()) {
             val side = min(size.width, size.height)
-            val sw = side * 0.022f
-            val r = side / 2f - sw / 2f - side * 0.012f
             val c = center
+
+            // Halo detras del tanteo de quien saca: se sabe de un vistazo, de lejos
+            val gx = c.x + side * (if (servingA) -0.27f else 0.27f)
+            val gy = c.y - side * 0.03f
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(accent.copy(alpha = 0.22f), Color.Transparent),
+                    center = Offset(gx, gy), radius = side * 0.30f
+                ),
+                radius = side * 0.30f, center = Offset(gx, gy)
+            )
+            // Destello de la mitad tocada
+            if (flashA > 0f) drawRect(accent.copy(alpha = flashA), Offset(0f, 0f), Size(c.x, size.height * BAND_TOP))
+            if (flashB > 0f) drawRect(accent.copy(alpha = flashB), Offset(c.x, 0f), Size(c.x, size.height * BAND_TOP))
+
+            // Aros pegados al bisel: juegos del set en curso llenandose de abajo
+            // arriba, y un punto por cada set que haga falta ganar.
+            val sw = side * 0.026f
+            val r = side / 2f - sw / 2f - side * 0.012f
             val tl = Offset(c.x - r, c.y - r)
             val box = Size(r * 2f, r * 2f)
             val stroke = Stroke(width = sw, cap = StrokeCap.Round)
@@ -141,7 +175,7 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
                 drawArc(color, start, sweep, useCenter = false, topLeft = tl, size = box, style = stroke)
             fun dot(deg: Float, color: Color) {
                 val a = Math.toRadians(deg.toDouble())
-                drawCircle(color, radius = sw * 0.55f,
+                drawCircle(color, radius = sw * 0.6f,
                     center = Offset(c.x + r * cos(a).toFloat(), c.y + r * sin(a).toFloat()))
             }
             // A a la izquierda (145°-235°), B a la derecha (305°-395°). Paran
@@ -153,16 +187,12 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             if (fa > 0f) arc(145f, 90f * fa, colA)
             if (fb > 0f) arc(35f - 90f * fb, 90f * fb, colB)
             for (i in 0 until need) {
-                dot(241f + i * 6.5f, if (i < engine.setsA) colA else PP.Line)
-                dot(299f - i * 6.5f, if (i < engine.setsB) colB else PP.Line)
+                dot(243f + i * 7f, if (i < engine.setsA) colA else PP.Line)
+                dot(297f - i * 7f, if (i < engine.setsB) colB else PP.Line)
             }
         }
 
-        // Mitades tocables: cada una suma a su pareja. Sin ondulacion porque en
-        // un rectangulo recortado por el circulo queda raro; el aviso es el
-        // numero que late y la vibracion.
-        val tapA = remember { MutableInteractionSource() }
-        val tapB = remember { MutableInteractionSource() }
+        // Mitades tocables: cada una suma a su pareja
         Row(
             Modifier
                 .align(Alignment.TopCenter)
@@ -190,18 +220,33 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        At(w, -0.22f, -0.235f, 0.38f) { TeamName(engine.nameA, servingA, accent, sz(0.05f)) }
-        At(w, 0.22f, -0.235f, 0.38f) { TeamName(engine.nameB, !servingA, accent, sz(0.05f)) }
+        At(w, -0.22f, -0.235f, 0.38f) { TeamName(engine.nameA, servingA, accent, sz(0.05f), w) }
+        At(w, 0.22f, -0.235f, 0.38f) { TeamName(engine.nameB, !servingA, accent, sz(0.05f), w) }
 
-        At(w, -0.25f, -0.03f, 0.32f) { BigScore(engine.getScoreStr("A"), if (servingA) accent else PP.TextBright, sz(0.23f)) }
-        At(w, 0.25f, -0.03f, 0.32f) { BigScore(engine.getScoreStr("B"), if (!servingA) accent else PP.TextBright, sz(0.23f)) }
+        // Estado especial del juego, en una pastilla entre nombres y tanteo
+        val tbActive = engine.isTb || engine.isSuperTbActive()
+        val pill: Pair<String, Color>? = when {
+            engine.goldenPointActive -> v.goldenPoint.uppercase() to Color(0xFFFFD24A)
+            engine.isDeuce && engine.adv != null ->
+                "${v.advantage.uppercase()} ${if (engine.adv == "A") engine.nameA else engine.nameB}" to accent
+            engine.isDeuce -> v.deuce.uppercase() to PP.Warn
+            engine.isSuperTbActive() -> "SUPER TIE-BREAK" to PP.Warn
+            engine.isTb -> "TIE-BREAK" to PP.Warn
+            else -> null
+        }
+        if (pill != null) At(w, 0f, -0.155f, 0.5f) { Pill(pill.first, pill.second, sz(0.034f), w) }
 
-        // Pista vista desde arriba, con el cuadro de saque encendido. Tocarla
-        // cambia quien saca.
-        At(w, 0f, -0.03f, 0.16f) {
+        val strA = engine.getScoreStr("A")
+        val strB = engine.getScoreStr("B")
+        At(w, -0.27f, -0.035f, 0.3f) { BigScore(strA, if (servingA) accent else PP.TextBright, sz(if (strA.length > 1) 0.225f else 0.25f), servingA) }
+        At(w, 0.27f, -0.035f, 0.3f) { BigScore(strB, if (!servingA) accent else PP.TextBright, sz(if (strB.length > 1) 0.225f else 0.25f), !servingA) }
+
+        // Pista vista desde arriba, con la pelota en el cuadro de saque.
+        // Tocarla cambia quien saca.
+        At(w, 0f, -0.035f, 0.14f) {
             Box(
                 Modifier
-                    .size(w * 0.16f, w * 0.22f)
+                    .size(w * 0.13f, w * 0.2f)
                     .clip(CircleShape)
                     .clickable {
                         val next = if (servingA) "B" else "A"
@@ -217,15 +262,23 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        At(w, -0.25f, 0.135f, 0.2f) { Stat(engine.gamesA.toString(), PP.TextBright, sz(0.075f)) }
-        At(w, 0f, 0.137f, 0.2f) { Stat(ui.games.uppercase(), PP.TextMuted, sz(0.038f), FontWeight.Bold) }
-        At(w, 0.25f, 0.135f, 0.2f) { Stat(engine.gamesB.toString(), PP.TextBright, sz(0.075f)) }
+        // Juegos, y entre ellos los sets ya jugados (6-4 · 3-6)
+        At(w, -0.27f, 0.14f, 0.2f) { Stat(engine.gamesA.toString(), PP.TextBright, sz(0.08f), FontWeight.Black) }
+        At(w, 0.27f, 0.14f, 0.2f) { Stat(engine.gamesB.toString(), PP.TextBright, sz(0.08f), FontWeight.Black) }
+        At(w, 0f, 0.142f, 0.3f) {
+            val sets = engine.setScores.takeLast(3)
+            if (sets.isEmpty()) {
+                Stat(ui.games.uppercase(), PP.TextMuted, sz(0.038f), FontWeight.Bold)
+            } else {
+                Stat(sets.joinToString(" · "), PP.TextDim, sz(if (sets.size > 2) 0.036f else 0.042f), FontWeight.Bold)
+            }
+        }
 
         At(w, 0f, 0.225f, 0.9f) {
-            val phase = if (engine.goldenPointActive) ui.goldenPt.uppercase() else matchPhaseLabel(engine, ui)
+            val phase = if (tbActive) (if (engine.isTb) "TIE-BREAK" else "SUPER TB")
+                        else matchPhaseLabel(engine, ui)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Si el enlace falla, eso va primero: el texto que antes iba
-                // arriba (SIN MOVIL, VINCULANDO…) ocupa el sitio de la fase.
+                // Si el enlace falla, eso va primero
                 if (!linkOk) {
                     Text(
                         "● ${linkLabel(engine)} · ", color = linkColor(engine),
@@ -265,17 +318,38 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
     }
 }
 
+/** Nombre de pareja; quien saca lleva delante la pelota y el color del tema. */
 @Composable
-private fun TeamName(name: String, serving: Boolean, accent: Color, size: TextUnit) {
+private fun TeamName(name: String, serving: Boolean, accent: Color, size: TextUnit, w: Dp) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (serving) {
+            Box(Modifier.size(w * 0.022f).clip(CircleShape).background(BALL))
+            Spacer(Modifier.width(w * 0.012f))
+        }
+        Text(
+            name.uppercase(), color = if (serving) accent else PP.TextDim, fontSize = size,
+            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** Pastilla de estado: iguales, ventaja, punto de oro, tie-break. */
+@Composable
+private fun Pill(text: String, color: Color, size: TextUnit, w: Dp) {
     Text(
-        name.uppercase(), color = if (serving) accent else PP.TextDim, fontSize = size,
-        fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center
+        text, color = color, fontSize = size, fontWeight = FontWeight.Black,
+        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+        modifier = Modifier
+            .clip(PP.PillShape)
+            .background(color.copy(alpha = 0.14f))
+            .border(1.dp, color.copy(alpha = 0.8f), PP.PillShape)
+            .padding(horizontal = w * 0.022f, vertical = w * 0.004f)
     )
 }
 
 @Composable
-private fun BigScore(text: String, color: Color, size: TextUnit) {
+private fun BigScore(text: String, color: Color, size: TextUnit, glow: Boolean) {
     // Late al cambiar: se nota el punto sin tener que leer el numero
     var bump by remember { mutableStateOf(false) }
     LaunchedEffect(text) {
@@ -289,7 +363,10 @@ private fun BigScore(text: String, color: Color, size: TextUnit) {
     )
     Text(
         text, color = color, fontSize = size, fontWeight = FontWeight.Black,
-        maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.scale(scale)
+        maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.scale(scale),
+        style = TextStyle(
+            shadow = if (glow) Shadow(color.copy(alpha = 0.45f), Offset.Zero, blurRadius = 24f) else null
+        )
     )
 }
 
@@ -301,17 +378,21 @@ private fun Stat(text: String, color: Color, size: TextUnit, weight: FontWeight 
 /**
  * Pista en horizontal: A a la izquierda, B a la derecha, red en medio. Quien
  * saca lo hace desde su cuadro derecho o izquierdo, y mirando a la red la
- * derecha de A cae abajo y la de B arriba.
+ * derecha de A cae abajo y la de B arriba. La pelota marca el cuadro.
  */
 @Composable
 private fun CourtMini(serving: String, side: String, accent: Color, w: Dp) {
-    Canvas(Modifier.size(w * 0.11f, w * 0.17f)) {
+    Canvas(Modifier.size(w * 0.085f, w * 0.15f)) {
         val cw = size.width / 2f
         val ch = size.height / 2f
         val thin = Stroke(1.dp.toPx())
         fun cell(col: Int, row: Int, on: Boolean) {
             val tl = Offset(col * cw, row * ch)
-            if (on) drawRect(accent.copy(alpha = 0.65f), topLeft = tl, size = Size(cw, ch))
+            if (on) {
+                drawRect(accent.copy(alpha = 0.7f), topLeft = tl, size = Size(cw, ch))
+                drawCircle(BALL, radius = cw * 0.3f, center = Offset(tl.x + cw / 2f, tl.y + ch / 2f))
+                drawCircle(Color.Black, radius = cw * 0.3f, center = Offset(tl.x + cw / 2f, tl.y + ch / 2f), style = thin)
+            }
             drawRect(PP.Line, topLeft = tl, size = Size(cw, ch), style = thin)
         }
         cell(0, 0, serving == "A" && side == "L")
@@ -319,11 +400,11 @@ private fun CourtMini(serving: String, side: String, accent: Color, w: Dp) {
         cell(1, 0, serving == "B" && side == "R")
         cell(1, 1, serving == "B" && side == "L")
         drawRoundRect(
-            Color(0xFF555555), size = size,
+            Color(0xFF666666), size = size,
             cornerRadius = CornerRadius(3.dp.toPx()), style = Stroke(1.5.dp.toPx())
         )
         drawLine(
-            PP.TextBright.copy(alpha = 0.55f),
+            PP.TextBright.copy(alpha = 0.7f),
             Offset(size.width / 2f, -2.dp.toPx()), Offset(size.width / 2f, size.height + 2.dp.toPx()),
             strokeWidth = 1.5.dp.toPx()
         )

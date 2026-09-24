@@ -27,8 +27,8 @@ android {
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
         // serie -el del movil x10- y siempre por encima: movil 518, reloj 5180.
-        versionCode = 5310
-        versionName = "5.3.1"
+        versionCode = 7000
+        versionName = "7.0.0"
     }
 
     signingConfigs {

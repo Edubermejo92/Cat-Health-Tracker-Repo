@@ -73,6 +73,18 @@ class GameEngine(context: Context? = null) {
     var faultCount by mutableIntStateOf(0)
     var lastPointWinner by mutableStateOf<String?>(null)
 
+    /**
+     * Resultado de cada set terminado, en orden. El marcador los ensena entre
+     * los juegos (6-4 · 3-6) y viajan al movil en "setsDetail": sin ellos el
+     * movil solo sabia cuantos sets llevaba cada uno y se los inventaba 6-0.
+     */
+    var setScores by mutableStateOf<List<SetResult>>(emptyList())
+
+    /** Un set terminado. [a] y [b] son juegos, o puntos si fue super tie-break. */
+    data class SetResult(val a: Int, val b: Int, val winner: String, val tiebreak: Boolean) {
+        override fun toString() = "$a-$b"
+    }
+
     /** Cronometro del partido en segundos. Lo mantiene al dia MainActivity. */
     var clockSeconds by mutableIntStateOf(0)
 
@@ -93,7 +105,8 @@ class GameEngine(context: Context? = null) {
         val setsA: Int, val setsB: Int, val isDeuce: Boolean, val adv: String?,
         val isTb: Boolean, val tbPtsA: Int, val tbPtsB: Int, val over: Boolean,
         val serving: String, val tbSrv: String, val tbN: Int, val faultCount: Int, 
-        val winner: String?, val lastPointWinner: String?, val goldenPointActive: Boolean
+        val winner: String?, val lastPointWinner: String?, val goldenPointActive: Boolean,
+        val setScores: List<SetResult> = emptyList()
     )
 
     init {
@@ -104,7 +117,8 @@ class GameEngine(context: Context? = null) {
         history.add(
             StateSnapshot(
                 ptsA, ptsB, gamesA, gamesB, setsA, setsB, isDeuce, adv,
-                isTb, tbPtsA, tbPtsB, over, serving, tbSrv, tbN, faultCount, winner, lastPointWinner, goldenPointActive
+                isTb, tbPtsA, tbPtsB, over, serving, tbSrv, tbN, faultCount, winner, lastPointWinner, goldenPointActive,
+                setScores
             )
         )
         saveToDisk()
@@ -117,6 +131,7 @@ class GameEngine(context: Context? = null) {
         over = false; faultCount = 0; tbN = 0; winner = null
         serving = "A"; tbSrv = "A"; lastPointWinner = null
         goldenPointActive = false
+        setScores = emptyList()
         saveToDisk()
     }
 
@@ -136,6 +151,7 @@ class GameEngine(context: Context? = null) {
             over = last.over; serving = last.serving; tbSrv = last.tbSrv
             tbN = last.tbN; faultCount = last.faultCount; winner = last.winner
             lastPointWinner = last.lastPointWinner; goldenPointActive = last.goldenPointActive
+            setScores = last.setScores
             saveToDisk()
         }
     }
@@ -277,6 +293,16 @@ class GameEngine(context: Context? = null) {
             val per = if (tw == "A") gamesB else gamesA
             if (gan == per) gan += 1
             "$gan - $per"
+        }
+
+        // Para el marcador y el movil, siempre visto desde A: 6-4, 7-6, 10-8
+        setScores = setScores + if (isSuperTbActive()) {
+            SetResult(tbPtsA, tbPtsB, tw, true)
+        } else {
+            var a = gamesA
+            var b = gamesB
+            if (a == b) { if (tw == "A") a++ else b++ }
+            SetResult(a, b, tw, isTb)
         }
 
         if (tw == "A") setsA++ else setsB++
@@ -547,7 +573,23 @@ class GameEngine(context: Context? = null) {
             .put("health", JSONObject()
                 .put("hr", heartRate).put("kcal", calories).put("km", distanceKm))
             .put("clock", clockSeconds)
+            .put("setsDetail", setsDetailJson())
             .toString()
+    }
+
+    private fun setsDetailJson(): org.json.JSONArray = org.json.JSONArray().apply {
+        setScores.forEach {
+            put(JSONObject().put("a", it.a).put("b", it.b).put("winner", it.winner).put("tiebreak", it.tiebreak))
+        }
+    }
+
+    private fun parseSetsDetail(arr: org.json.JSONArray?): List<SetResult>? {
+        if (arr == null) return null
+        return (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let {
+                SetResult(it.optInt("a"), it.optInt("b"), it.optString("winner", "A"), it.optBoolean("tiebreak"))
+            }
+        }
     }
 
     /**
@@ -591,6 +633,15 @@ class GameEngine(context: Context? = null) {
             bestOf = m.optInt("bestOf", bestOf)
             goldenPoint = m.optBoolean("goldenPoint", goldenPoint)
             superTb = m.optBoolean("superTieBreak", superTb)
+        }
+        // Los sets que manda el movil, si cuadran con los que lleva cada uno.
+        // Un movil antiguo no los manda: nos quedamos los nuestros si siguen
+        // valiendo y si no, ninguno, antes que ensenar sets que no son.
+        val detalle = parseSetsDetail(obj.optJSONArray("setsDetail"))
+        setScores = when {
+            detalle != null && detalle.size == setsA + setsB -> detalle
+            setScores.size == setsA + setsB -> setScores
+            else -> emptyList()
         }
         // La salud la mide el reloj: un estado del movil nunca la pisa.
         saveToDisk()
@@ -728,6 +779,7 @@ class GameEngine(context: Context? = null) {
         obj.put("voiceEnabled", voiceEnabled)
         obj.put("nameA", nameA)
         obj.put("nameB", nameB)
+        obj.put("setScores", setsDetailJson())
         return obj.toString()
     }
 
@@ -761,6 +813,8 @@ class GameEngine(context: Context? = null) {
             voiceEnabled = obj.optBoolean("voiceEnabled", true)
             nameA = obj.optString("nameA", NOMBRE_A_POR_DEFECTO)
             nameB = obj.optString("nameB", "PAREJA B")
+            setScores = parseSetsDetail(obj.optJSONArray("setScores")).orEmpty()
+                .takeIf { it.size == setsA + setsB }.orEmpty()
         } catch (e: Exception) {}
     }
 

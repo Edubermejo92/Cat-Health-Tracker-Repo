@@ -211,6 +211,8 @@ fun ScorePicker(
                     if (type == "sets") {
                         engine.setsA = stateA.selectedOption
                         engine.setsB = stateB.selectedOption
+                        // Sets puestos a mano: sus resultados ya no se saben
+                        if (engine.setScores.size != engine.setsA + engine.setsB) engine.setScores = emptyList()
                     } else {
                         engine.gamesA = stateA.selectedOption
                         engine.gamesB = stateB.selectedOption
