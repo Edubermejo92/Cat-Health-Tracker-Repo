@@ -137,6 +137,12 @@ Detalles que importan (aquí es donde fallaba la v2):
 | `fault` | `A`/`B` | Falta de saque (2ª falta = doble falta) |
 | `serve` | `A`/`B` | Cambia quién saca |
 | `reset` | — | Partido nuevo |
+| `invite` | — | Solo reloj → móvil: abre la hoja de compartir con la invitación |
+
+`invite` no es del marcador y sí la usa la versión actual: la pantalla «Invita a
+un amigo» del reloj pide al móvil que mande su invitación de siempre (mismo texto y
+enlace, WhatsApp incluido). Necesita la app del móvil abierta: Android no deja abrir
+la hoja de compartir desde segundo plano.
 
 ## `/padel/pair` — emparejamiento
 
@@ -156,8 +162,14 @@ Detalles que importan (aquí es donde fallaba la v2):
 ```json
 { "v": 3, "src": "phone", "lang": "es", "theme": "neon", "color": "#00FD87",
   "goldenPoint": false, "superTieBreak": true, "bestOf": 3,
-  "nameA": "NOSOTROS", "nameB": "ELLOS", "mode": "PHONE" }
+  "nameA": "NOSOTROS", "nameB": "ELLOS", "mode": "PHONE",
+  "inviteUrl": "https://play.google.com/apps/testing/padelpulseapp2.netlify.app" }
 ```
+
+`inviteUrl` solo lo manda el móvil: es el enlace que pinta el QR de «Invita a un
+amigo» en el reloj, el mismo que manda el móvil al invitar (prueba cerrada o ficha de
+Play, según `APP_EN_PRUEBAS`). El reloj solo acepta enlaces de `play.google.com` y,
+si no le llega, usa la ficha de Play.
 
 Los ajustes se propagan en los dos sentidos y en cualquier modo: idioma, tema y nombres
 de pareja deben verse igual en la muñeca y en el móvil. `theme` es el identificador

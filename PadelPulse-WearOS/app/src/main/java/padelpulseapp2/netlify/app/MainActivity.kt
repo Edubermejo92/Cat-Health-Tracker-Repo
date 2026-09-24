@@ -218,6 +218,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         )
     }
 
+    /** Pide al movil que abra su hoja de compartir con la invitacion. */
+    fun sendInviteToPhone(): Boolean {
+        if (!PhoneLink.paired) return false
+        PhoneLink.send(this, SyncProtocol.PATH_CMD, SyncProtocol.command(PhoneLink.nextSeq(), "invite", null))
+        return true
+    }
+
     fun sendSettingsToPhone() {
         val engine = gameEngine ?: return
         if (!PhoneLink.paired) return
@@ -430,6 +437,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         // usuario elige jugar sin ella. Solo se pregunta una vez.
         WatchAccount.load(this)
         CloudHistory.load(this)
+        InviteLink.load(this)
         // La pareja A eres tu, igual que en el movil.
         if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped) {

@@ -49,6 +49,7 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     val scoreState = rememberScalingLazyListState()
     val settingsState = rememberScalingLazyListState()
     val historyState = rememberScalingLazyListState()
+    val inviteState = rememberScalingLazyListState()
     val nameState = rememberScalingLazyListState()
 
     // El indicador sigue a la lista de la pantalla visible. En las pantallas
@@ -59,6 +60,7 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
         "score" -> scoreState
         "settings" -> settingsState
         "history" -> historyState
+        "invite" -> inviteState
         else -> null
     }
 
@@ -96,6 +98,7 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                         )
                         "settings" -> SettingsScreen(engine, activity, settingsState) { engine.currentScreen = "score" }
                         "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = "settings" }
+                        "invite" -> InviteScreen(engine, activity, inviteState) { engine.currentScreen = "settings" }
                         "end" -> EndScreen(engine, activity)
                         else -> SplashScreen(engine, activity)
                     }
@@ -651,6 +654,11 @@ fun SettingsScreen(
                 else (if (es) "HISTORIAL 🔒" else "HISTORY 🔒"),
                 accent
             ) { engine.currentScreen = "history" }
+        }
+        item {
+            SettingChip(if (es) "INVITA A UN AMIGO" else "INVITE A FRIEND", accent) {
+                engine.currentScreen = "invite"
+            }
         }
 
         item {

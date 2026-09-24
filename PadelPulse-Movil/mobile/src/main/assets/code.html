@@ -585,6 +585,9 @@ const PPSync = {
             maxSets:S.bestOf||3,
             nameA:S.teamA.name||'LOCAL',
             nameB:S.teamB.name||'VISITA',
+            // El QR de "Invita a un amigo" del reloj lleva el mismo enlace que
+            // mandaria el movil: prueba cerrada o ficha de Play.
+            inviteUrl:(typeof inviteUrl==='function') ? inviteUrl() : '',
             mode:this.mode()
         });
     },
@@ -747,6 +750,13 @@ const PPSync = {
      * atenderlas para no dejarlo tirado.
      */
     onCommand(obj){
+        // Invitar desde el reloj: el mensaje y el enlace son los del movil, y
+        // el WhatsApp tambien. El reloj solo pide abrir la hoja de compartir.
+        if(obj.action==='invite'){
+            showToast(i2('⌚ Invitar a un amigo','⌚ Invite a friend'), 1800);
+            if(typeof inviteFriends==='function') inviteFriends();
+            return;
+        }
         const team = obj.team || (obj.action==='point_B' ? 'B' : 'A');
         switch(obj.action){
             case 'point': case 'point_A': case 'point_B': addPoint(team); break;

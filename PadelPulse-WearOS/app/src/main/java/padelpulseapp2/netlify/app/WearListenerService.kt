@@ -134,6 +134,7 @@ class WearListenerService : WearableListenerService() {
 
     private fun onSettings(engine: GameEngine, obj: JSONObject) {
         engine.applySettings(obj)
+        SyncProtocol.optNullableString(obj, "inviteUrl")?.let { InviteLink.applyFromPhone(applicationContext, it) }
     }
 
     companion object {

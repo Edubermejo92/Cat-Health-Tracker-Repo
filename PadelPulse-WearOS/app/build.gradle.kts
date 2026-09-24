@@ -81,4 +81,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     // Actividad en curso: obligatoria para pasar la revision de Wear OS
     implementation("androidx.wear:wear-ongoing:1.0.0")
+    // QR de "Invita a un amigo": solo el codificador, sin camara ni vistas
+    implementation("com.google.zxing:core:3.5.3")
 }
