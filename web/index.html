@@ -2428,7 +2428,9 @@ function showMatchOver(team){
     const sA=S.setsHistory.filter(s=>s.winner==='A').length;
     const sB=S.setsHistory.filter(s=>s.winner==='B').length;
     const wSets=team==='A'?sA:sB, lSets=team==='A'?sB:sA;
-    const setsStr=S.setsHistory.map((s,idx)=>`<span style="display:inline-block;margin:0 4px;font-size:13px;font-weight:700;color:${s.winner===team?tc.primary():'rgba(255,255,255,0.35)'}">${s.a}-${s.b}${s.tiebreak?' TB':''}</span>`).join('');
+    const setsStr=S.setsHistory.map((s,idx)=>`<span style="display:inline-block;margin:0 4px;font-size:13px;font-weight:700;color:${s.winner===team?tc.primary():'rgba(255,255,255,0.35)'}">${team==='A'?s.a:s.b}-${team==='A'?s.b:s.a}${s.tiebreak?' TB':''}</span>`).join('');
+    // Cada set, igual que el resultado grande, visto desde quien gana: si gana
+    // la B, 6-0 6-0 y no 0-6 0-6 debajo de un 2-0.
     const p=tc.primary(), g=tc.glow();
 
     // Quitar modal anterior si existe
@@ -2761,7 +2763,9 @@ function getShareText(platform){
         return `🎾 ${nA} vs ${nB}\n${setsInfo||i('match')}${winnerText}\n${timeText}\n\n👁️ padelpulselive.netlify.app`;
     }
     if (platform === 'instagram') {
-        return `🎾 ${nA} vs ${nB}\nSet ${S.currentSet}: ${S.teamA.games}-${S.teamB.games}${winnerText}\n\n👁️ Ver en vivo en\npadelpulselive.netlify.app`;
+        // Acabado el partido los juegos ya estan a cero: van los sets jugados
+        const marcador = S.matchOver ? (setsInfo||'') : `Set ${S.currentSet}: ${S.teamA.games}-${S.teamB.games}`;
+        return `🎾 ${nA} vs ${nB}\n${marcador}${winnerText}\n\n👁️ Ver en vivo en\npadelpulselive.netlify.app`;
     }
     const liveUrl = getLiveUrl();
     return `🎾 PadelPulse Live\n\n${nA}${pA?' ('+pA+')':''}\nvs\n${nB}${pB?' ('+pB+')':''}\n\n${setsInfo||i('match')}${winnerText}\n${timeText}\n\n👁️ Live:\n${liveUrl}`;

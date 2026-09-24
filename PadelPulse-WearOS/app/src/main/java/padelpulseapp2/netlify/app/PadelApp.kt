@@ -884,8 +884,10 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
             textAlign = TextAlign.Center,
             maxLines = 2
         )
+        // Todo visto desde quien gana: 2-0 y 6-0 6-0, no 0-2 y 0-6 0-6
+        val ganaA = engine.winner != "B"
         Text(
-            "${engine.setsA} – ${engine.setsB}",
+            if (ganaA) "${engine.setsA} – ${engine.setsB}" else "${engine.setsB} – ${engine.setsA}",
             color = PP.TextBright,
             fontSize = 26.sp,
             fontWeight = FontWeight.Black
@@ -893,7 +895,7 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
         // El resultado de cada set, que es lo que se cuenta despues
         if (engine.setScores.isNotEmpty()) {
             Text(
-                engine.setScores.joinToString("  ·  "),
+                engine.setScores.joinToString("  ·  ") { if (ganaA) "${it.a}-${it.b}" else "${it.b}-${it.a}" },
                 color = PP.TextDim, fontSize = PP.Body, fontWeight = FontWeight.Bold, maxLines = 1
             )
         }
