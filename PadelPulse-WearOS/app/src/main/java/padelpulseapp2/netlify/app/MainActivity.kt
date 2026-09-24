@@ -22,6 +22,7 @@ import com.google.android.gms.wearable.MessageClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import padelpulseapp2.netlify.app.sync.CloudHistory
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.sync.WatchAccount
@@ -428,6 +429,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         // La app arranca por la cuenta: o llega la sesion del movil, o el
         // usuario elige jugar sin ella. Solo se pregunta una vez.
         WatchAccount.load(this)
+        CloudHistory.load(this)
         // La pareja A eres tu, igual que en el movil.
         if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped) {

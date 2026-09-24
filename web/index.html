@@ -289,7 +289,7 @@ const WEB_VERSION = '5.2.2';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
-    account:'/padel/account',
+    account:'/padel/account', history:'/padel/history',
     // v2
     legacySync:'/padel/sync', legacyPoint:'/padel/point', legacyBt:'/padel/bt'
 };
@@ -613,6 +613,32 @@ const PPSync = {
         } else {
             this.send(PP_PATH.account, {action:'signout'});
         }
+        this.sendHistoryToWatch();
+    },
+
+    /**
+     * Manda al reloj los ultimos partidos de la cuenta, ya en su formato, para
+     * que el Historial de la muñeca sea el mismo que el del movil. El reloj no
+     * habla con Supabase: enseña lo que este movil ya tiene sincronizado. Sin
+     * sesion va la lista vacia y el reloj vuelve a sus partidos locales.
+     */
+    sendHistoryToWatch(){
+        if(!this.paired) return;
+        const conCuenta = (typeof Auth!=='undefined') && Auth.isIn;
+        const todos = conCuenta ? getMatchHistory() : [];
+        const matches = todos.slice(0, 30).map(m => ({
+            date: typeof m.date==='number' ? m.date : (Date.parse(m.date)||0),
+            teamA: m.teamA||'', teamB: m.teamB||'',
+            scoreA: m.setsA|0, scoreB: m.setsB|0,
+            gamesA: m.gamesA|0, gamesB: m.gamesB|0,
+            winner: m.winner||'', duration: m.duration|0, kcal: m.kcal|0
+        }));
+        // El balance se cuenta sobre todo el historial, no solo lo que viaja
+        this.send(PP_PATH.history, {
+            signedIn: conCuenta, matches,
+            played: todos.length,
+            won: todos.filter(m => m.winner==='A').length
+        });
     },
 
     requestHealth(){ this.send(PP_PATH.health, {request:true}); },
@@ -3658,6 +3684,7 @@ function saveMatchToHistory(){
         if(hist.length>100) hist.pop();
         localStorage.setItem('pp_match_history', JSON.stringify(hist));
     }catch(e){}
+    try{ PPSync.sendHistoryToWatch(); }catch(e){}
 
     // Los que han jugado entran solos en la agenda. Nadie va a teclear una
     // lista de amigos a mano; luego ya se le pone telefono a quien haga falta.
@@ -4265,6 +4292,7 @@ const Auth = {
             }catch(e){ console.warn('agenda', e); }
             this.lastSync = Date.now();
             this.lastError = null;
+            try{ PPSync.sendHistoryToWatch(); }catch(e){}
             if(!quiet) showToast(bajados
                 ? i2(`Sincronizado · ${bajados} partidos nuevos`,`Synced · ${bajados} new matches`)
                 : i2('Todo sincronizado','All synced'), 2200);

@@ -26,6 +26,7 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import kotlinx.coroutines.delay
+import padelpulseapp2.netlify.app.sync.CloudHistory
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.sync.SyncProtocol
@@ -998,18 +999,31 @@ fun HistoryScreen(
         return
     }
 
-    val matches = remember {
-        val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
-        val json = prefs.getString("match_history", "[]") ?: "[]"
-        try {
-            val array = org.json.JSONArray(json)
-            // Ya se guardan con el mas reciente primero
-            (0 until array.length()).map { array.getJSONObject(it) }
-        } catch (e: Exception) {
-            emptyList()
+    // Primero el historial de la cuenta, que manda el movil ya sincronizado
+    // con la nube. Si no ha llegado -movil sin actualizar o cuenta nueva-, los
+    // partidos jugados con este reloj.
+    val cloud = remember(CloudHistory.json) { CloudHistory.matches() }
+    val fromCloud = cloud.isNotEmpty()
+    val matches = remember(CloudHistory.json) {
+        if (fromCloud) cloud else {
+            val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
+            val json = prefs.getString("match_history", "[]") ?: "[]"
+            try {
+                val array = org.json.JSONArray(json)
+                // Ya se guardan con el mas reciente primero
+                (0 until array.length()).map { array.getJSONObject(it) }
+            } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
-    val summary = remember { engine.historySummary() }
+    val summary = remember(CloudHistory.json, CloudHistory.played, CloudHistory.won) {
+        if (fromCloud) {
+            val played = maxOf(CloudHistory.played, cloud.size)
+            val won = CloudHistory.won
+            Triple(played, won, if (played > 0) won * 100 / played else 0)
+        } else engine.historySummary()
+    }
 
     ScalingLazyColumn(
         state = listState,
@@ -1018,8 +1032,17 @@ fun HistoryScreen(
         contentPadding = roundSafePadding()
     ) {
         item {
-            PPLabel(if (es) "HISTORIAL" else "HISTORY", color = accent, size = PP.Label)
-            Spacer(Modifier.height(4.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                PPLabel(if (es) "HISTORIAL" else "HISTORY", color = accent, size = PP.Label)
+                PPLabel(
+                    when {
+                        fromCloud -> if (es) "DE TU CUENTA" else "FROM YOUR ACCOUNT"
+                        else -> if (es) "DE ESTE RELOJ" else "ON THIS WATCH"
+                    },
+                    color = PP.TextMuted, size = PP.Micro
+                )
+                Spacer(Modifier.height(4.dp))
+            }
         }
 
         if (matches.isEmpty()) {

@@ -24,6 +24,7 @@ prefijo los mensajes no llegan cuando la app está en segundo plano.
 | `/padel/settings` | ambos | Ajustes (idioma, tema, reglas, nombres) |
 | `/padel/health` | reloj → móvil | Pulso, calorías, distancia |
 | `/padel/account` | móvil → reloj | Sesión de la cuenta (no se teclea en el reloj) |
+| `/padel/history` | móvil → reloj | Últimos 30 partidos de la cuenta, para el Historial del reloj |
 
 Rutas heredadas que se siguen aceptando (v2) para que un reloj o un móvil sin
 actualizar no rompan del todo: `/padel/sync`, `/padel/point`, `/padel/bt`. Se traducen
@@ -208,6 +209,32 @@ Al cerrar sesión en el móvil:
 { "v": 3, "src": "phone", "seq": 43, "action": "signout" }
 ```
 
-Es la única ruta que el reloj procesa **aunque su app esté cerrada**: el
-servicio guarda la sesión igual, para que ya esté puesta cuando el usuario
-levante la muñeca. Todas las demás necesitan el partido en marcha.
+Junto con `/padel/history`, es la única ruta que el reloj procesa **aunque
+su app esté cerrada**: el servicio guarda la sesión igual, para que ya esté
+puesta cuando el usuario levante la muñeca. Todas las demás necesitan el
+partido en marcha.
+
+## `/padel/history` — historial de la cuenta
+
+El reloj no habla con Supabase. El móvil ya sincroniza el historial de cada
+usuario y le pasa al reloj sus últimos 30 partidos, en el mismo formato que
+el reloj usa para los suyos. Se manda tras cada `/padel/account`, al terminar
+una sincronización con la nube y al guardar un partido.
+
+```json
+{
+  "v": 3, "src": "phone", "seq": 44,
+  "signedIn": true,
+  "played": 57, "won": 31,
+  "matches": [
+    { "date": 1757260800000, "teamA": "AZULES", "teamB": "ROJOS",
+      "scoreA": 2, "scoreB": 1, "gamesA": 16, "gamesB": 13,
+      "winner": "A", "duration": 4210, "kcal": 540 }
+  ]
+}
+```
+
+- `played` y `won` cuentan todo el historial, no solo lo que viaja.
+- `scoreA`/`scoreB` son sets; `gamesA`/`gamesB`, juegos totales.
+- Sin sesión, `matches` va vacío y el reloj vuelve a enseñar los partidos
+  jugados con él.

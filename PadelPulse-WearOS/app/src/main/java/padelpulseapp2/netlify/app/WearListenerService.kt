@@ -6,6 +6,7 @@ import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import org.json.JSONObject
+import padelpulseapp2.netlify.app.sync.CloudHistory
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.sync.WatchAccount
@@ -43,6 +44,11 @@ class WearListenerService : WearableListenerService() {
         if (path == SyncProtocol.PATH_ACCOUNT) {
             WatchAccount.applyFromPhone(applicationContext, obj)
             MainActivity.instance?.onAccountChanged()
+            return
+        }
+        // El historial igual: se guarda aunque la app este cerrada
+        if (path == SyncProtocol.PATH_HISTORY) {
+            CloudHistory.applyFromPhone(applicationContext, obj)
             return
         }
 

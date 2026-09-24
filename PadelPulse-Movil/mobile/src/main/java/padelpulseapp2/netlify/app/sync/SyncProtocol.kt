@@ -19,6 +19,8 @@ object SyncProtocol {
     const val PATH_HEALTH = "/padel/health"
     /** Sesion de la cuenta: el movil se la pasa al reloj, no sale a internet. */
     const val PATH_ACCOUNT = "/padel/account"
+    /** Ultimos partidos de la cuenta, para el Historial del reloj. */
+    const val PATH_HISTORY = "/padel/history"
 
     // Rutas v2 que seguimos aceptando
     const val PATH_LEGACY_SYNC = "/padel/sync"
@@ -26,7 +28,7 @@ object SyncProtocol {
     const val PATH_LEGACY_BT = "/padel/bt"
 
     val ALL_PATHS = listOf(
-        PATH_HELLO, PATH_PAIR, PATH_STATE, PATH_CMD, PATH_SETTINGS, PATH_HEALTH, PATH_ACCOUNT,
+        PATH_HELLO, PATH_PAIR, PATH_STATE, PATH_CMD, PATH_SETTINGS, PATH_HEALTH, PATH_ACCOUNT, PATH_HISTORY,
         PATH_LEGACY_SYNC, PATH_LEGACY_POINT, PATH_LEGACY_BT
     )
 
