@@ -215,7 +215,10 @@ El móvil lo manda al aceptar un emparejamiento, al entrar y al salir.
 }
 ```
 
-Al cerrar sesión en el móvil:
+`name` es el nombre con el que se registró, **nunca el correo**: el reloj lo usa
+como nombre de la pareja A. Si la cuenta no tiene nombre, va vacío.
+
+Al cerrar sesión en el móvil (el reloj borra también el historial de la cuenta):
 
 ```json
 { "v": 3, "src": "phone", "seq": 43, "action": "signout" }
@@ -248,5 +251,10 @@ una sincronización con la nube y al guardar un partido.
 
 - `played` y `won` cuentan todo el historial, no solo lo que viaja.
 - `scoreA`/`scoreB` son sets; `gamesA`/`gamesB`, juegos totales.
+- Con `signedIn: true` el reloj enseña esta lista aunque esté vacía (cuenta
+  nueva): los partidos locales del reloj pueden ser de otra persona.
 - Sin sesión, `matches` va vacío y el reloj vuelve a enseñar los partidos
   jugados con él.
+- En el móvil cada partido guardado lleva `owner` (id de la cuenta). Al cerrar
+  sesión se borran del móvil los de esa cuenta que ya están en la nube, y los
+  partidos jugados sin cuenta se suben a la primera cuenta que entre.

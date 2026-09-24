@@ -15,8 +15,10 @@ import org.json.JSONObject
  * formato que los que guarda el reloj. Asi el Historial de la muñeca es el de
  * la cuenta, y no solo lo que se jugo con este reloj.
  *
- * Si llega vacio -sin sesion o cuenta nueva-, la pantalla vuelve a los
- * partidos locales del reloj.
+ * Con sesion en el movil se ensena la lista de la cuenta aunque este vacia
+ * -cuenta nueva-: los partidos locales del reloj pueden ser de otra persona.
+ * Solo sin sesion, o con un movil antiguo que no manda esto, se vuelve a los
+ * partidos jugados con este reloj.
  */
 object CloudHistory {
 
@@ -31,12 +33,16 @@ object CloudHistory {
         private set
     var won by mutableStateOf(0)
         private set
+    /** El movil tiene sesion y esta lista es la de esa cuenta. */
+    var fromAccount by mutableStateOf(false)
+        private set
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         json = p.getString(KEY, "[]") ?: "[]"
         played = p.getInt("${KEY}_played", 0)
         won = p.getInt("${KEY}_won", 0)
+        fromAccount = p.getBoolean("${KEY}_account", false)
     }
 
     fun applyFromPhone(context: Context, obj: JSONObject) {
@@ -44,10 +50,22 @@ object CloudHistory {
         json = matches.toString()
         played = obj.optInt("played", matches.length())
         won = obj.optInt("won", 0)
+        fromAccount = obj.optBoolean("signedIn", false)
+        save(context)
+    }
+
+    /** Al cerrar sesion: el historial de esa cuenta no se queda en la muñeca. */
+    fun clear(context: Context) {
+        json = "[]"; played = 0; won = 0; fromAccount = false
+        save(context)
+    }
+
+    private fun save(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY, json)
             .putInt("${KEY}_played", played)
             .putInt("${KEY}_won", won)
+            .putBoolean("${KEY}_account", fromAccount)
             .apply()
     }
 

@@ -118,8 +118,8 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
 // Estado del enlace, reutilizado en varias pantallas
 // ─────────────────────────────────────────────────────────────────────
 
-/** Proporcion ancho/alto de res/drawable-nodpi/logo_wordmark (252 x 132). */
-const val LOGO_RATIO = 252f / 132f
+/** Proporcion ancho/alto de res/drawable-nodpi/logo_wordmark (470 x 240). */
+const val LOGO_RATIO = 470f / 240f
 
 @Composable
 fun linkLabel(engine: GameEngine): String {
@@ -1023,8 +1023,8 @@ fun HistoryScreen(
     // con la nube. Si no ha llegado -movil sin actualizar o cuenta nueva-, los
     // partidos jugados con este reloj.
     val cloud = remember(CloudHistory.json) { CloudHistory.matches() }
-    val fromCloud = cloud.isNotEmpty()
-    val matches = remember(CloudHistory.json) {
+    val fromCloud = CloudHistory.fromAccount || cloud.isNotEmpty()
+    val matches = remember(CloudHistory.json, fromCloud) {
         if (fromCloud) cloud else {
             val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
             val json = prefs.getString("match_history", "[]") ?: "[]"
@@ -1037,7 +1037,7 @@ fun HistoryScreen(
             }
         }
     }
-    val summary = remember(CloudHistory.json, CloudHistory.played, CloudHistory.won) {
+    val summary = remember(CloudHistory.json, CloudHistory.played, CloudHistory.won, fromCloud) {
         if (fromCloud) {
             val played = maxOf(CloudHistory.played, cloud.size)
             val won = CloudHistory.won

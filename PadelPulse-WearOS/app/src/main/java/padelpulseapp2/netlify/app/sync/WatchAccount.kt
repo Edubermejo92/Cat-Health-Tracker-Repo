@@ -43,7 +43,7 @@ object WatchAccount {
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         email = p.getString(KEY_EMAIL, "") ?: ""
-        name = p.getString(KEY_NAME, "") ?: ""
+        name = (p.getString(KEY_NAME, "") ?: "").takeUnless { "@" in it }.orEmpty()
         token = p.getString(KEY_TOKEN, "") ?: ""
         expiresAt = p.getLong(KEY_EXPIRES, 0L)
         skipped = p.getBoolean(KEY_SKIPPED, false)
@@ -55,7 +55,9 @@ object WatchAccount {
         when (obj.optString("action", "")) {
             "session" -> {
                 email = obj.optString("email", "")
-                name = obj.optString("name", "").ifEmpty { email.substringBefore("@") }
+                // Un correo no es un nombre: el nombre acaba en el marcador
+                // como el de tu pareja. Moviles antiguos mandaban el correo.
+                name = obj.optString("name", "").takeUnless { "@" in it }.orEmpty()
                 token = obj.optString("token", "")
                 expiresAt = obj.optLong("expires", 0L)
                 signedIn = token.isNotEmpty() && email.isNotEmpty()
@@ -69,6 +71,7 @@ object WatchAccount {
     fun signOut(context: Context) {
         email = ""; name = ""; token = ""; expiresAt = 0L; signedIn = false
         persist(context)
+        CloudHistory.clear(context)
     }
 
     /** Jugar sin cuenta. */
