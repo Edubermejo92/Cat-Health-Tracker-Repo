@@ -664,6 +664,8 @@ fun SettingsScreen(
             }
         }
 
+        item { VoiceVolumeCard(engine, activity, accent) }
+
         item { ToggleRow(ui.voice, engine.voiceEnabled, accent) { engine.voiceEnabled = it; engine.saveState() } }
         item {
             ToggleRow(ui.goldenPt, engine.goldenPoint, accent) {
@@ -769,6 +771,23 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+}
+
+/** Volumen de la voz, en Ajustes y en los controles del marcador. */
+@Composable
+fun VoiceVolumeCard(engine: GameEngine, activity: MainActivity, accent: Color) {
+    val es = engine.lang == "es"
+    PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
+        PPLabel(if (es) "VOLUMEN VOZ" else "VOICE VOLUME", size = PP.Micro)
+        InlineSlider(
+            value = activity.voiceLevel.toFloat(),
+            onValueChange = { activity.setVoiceLevel(Math.round(it)) },
+            valueRange = 0f..5f,
+            steps = 4,
+            increaseIcon = { Text("+", color = accent) },
+            decreaseIcon = { Text("−", color = accent) }
+        )
     }
 }
 

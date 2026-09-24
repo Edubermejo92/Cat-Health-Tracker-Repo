@@ -354,6 +354,8 @@ private fun ControlsPage(
             }
         }
 
+        item { VoiceVolumeCard(engine, activity, accent) }
+
         item {
             ControlChip(if (es) "Restar punto" else "Remove point", engine.nameA) {
                 engine.decreasePoint("A")

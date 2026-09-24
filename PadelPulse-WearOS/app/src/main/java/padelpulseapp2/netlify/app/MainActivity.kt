@@ -6,6 +6,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.AudioManager
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
@@ -50,6 +51,40 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     private var speechResultCallback: ((String) -> Unit)? = null
 
     var sensorsPaused by mutableStateOf(false)
+
+    // ── Volumen de la voz ────────────────────────────────────────────────
+    //
+    // La voz sale por el volumen multimedia del reloj, asi que el control
+    // mueve ese volumen. El parametro de volumen del TTS no vale para esto:
+    // solo puede bajar la voz respecto al volumen del sistema, nunca subirla,
+    // y en una pista con ruido lo que hace falta es mas fuerte.
+
+    private val audio: AudioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
+    /** Nivel de 0 a 5. Se lee del sistema, asi que sigue a los botones fisicos. */
+    var voiceLevel by mutableIntStateOf(3)
+
+    fun refreshVoiceLevel() {
+        runCatching {
+            val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            voiceLevel = Math.round(audio.getStreamVolume(AudioManager.STREAM_MUSIC) * 5f / max)
+        }
+    }
+
+    /** Pone el nivel y lo canta, para oir como queda sin esperar a un punto. */
+    fun setVoiceLevel(level: Int) {
+        val l = level.coerceIn(0, 5)
+        runCatching {
+            val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(l * max / 5f), 0)
+        }
+        voiceLevel = l
+        val engine = gameEngine ?: return
+        if (l > 0 && engine.voiceEnabled) {
+            val v = Translations.vd[engine.lang] ?: Translations.vd["es"]!!
+            speak("${v.fifteen}, ${v.zero}.", engine.lang)
+        }
+    }
 
     // ── Enlace con el movil ─────────────────────────────────────────────
 
@@ -394,6 +429,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     override fun onResume() {
         super.onResume()
+        refreshVoiceLevel()
         registerHeartRateSensor()
         registerStepSensor()
         PhoneLink.addListeners(this, messageListener, capabilityListener)
