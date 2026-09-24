@@ -267,6 +267,18 @@ class GameEngine(context: Context? = null) {
     }
 
     private fun winSet(tw: String) {
+        // Juegos del set con el ganador delante, antes de ponerlos a cero. Un
+        // set de tie-break queda 6-6 en juegos, pero nadie lo gana "seis a
+        // seis": se canta 7-6. El super tie-break va con sus puntos (10-8).
+        val setScore = if (isSuperTbActive()) {
+            "${if (tw == "A") tbPtsA else tbPtsB} - ${if (tw == "A") tbPtsB else tbPtsA}"
+        } else {
+            var gan = if (tw == "A") gamesA else gamesB
+            val per = if (tw == "A") gamesB else gamesA
+            if (gan == per) gan += 1
+            "$gan - $per"
+        }
+
         if (tw == "A") setsA++ else setsB++
         gamesA = 0; gamesB = 0
         ptsA = 0; ptsB = 0
@@ -287,28 +299,48 @@ class GameEngine(context: Context? = null) {
                 tbPtsA = 0; tbPtsB = 0
                 tbSrv = serving; tbN = 0
             }
-            triggerSpeak("set", tw)
+            triggerSpeak("set", tw, setScore)
         }
     }
 
-    private fun triggerSpeak(key: String, t: String) {
+    /**
+     * Lo que se canta tras cada punto. Tiene que sonar igual que en el movil
+     * (marcadorCantado en code.html): si no, con los dos sonando a la vez en la
+     * pista uno dice "quince, cero" y el otro "cero, quince".
+     *
+     * Se canta primero el punto de quien saca, que es como se canta en pista.
+     * Al acabar un juego o un set se dice ademas quien saca ahora, que es lo
+     * que mas se discute entre punto y punto.
+     */
+    private fun triggerSpeak(key: String, t: String, setScore: String = "") {
         if (!voiceEnabled) return
         val v = Translations.vd[lang] ?: Translations.vd["es"]!!
-        val uiStrings = Translations.ui[lang] ?: Translations.ui["es"]!!
         val teamName = if (t == "A") nameA else nameB
-        
+        val nowServes = "${if (serving == "A") nameA else nameB} ${v.serves}."
+
         val text = when (key) {
             "score" -> {
-                val pA = getVScore(ptsA, v)
-                val pB = getVScore(ptsB, v)
-                if (ptsA == ptsB && ptsA > 0) "$pA ${v.all}" else "$pA $pB"
+                // Mismo punto por debajo de 40: "treinta iguales"
+                if (ptsA == ptsB && ptsA < 3) "${getVScore(ptsA, v)} ${v.all}."
+                else {
+                    val saca = if (serving == "A") ptsA else ptsB
+                    val resto = if (serving == "A") ptsB else ptsA
+                    "${getVScore(saca, v)}, ${getVScore(resto, v)}."
+                }
             }
-            "deuce" -> if (goldenPointActive) v.goldenPoint else v.deuce
-            "adv" -> "${v.advantage} $teamName"
-            "game" -> "${v.game} $teamName, $gamesA ${uiStrings.games} $gamesB"
-            "set" -> "${v.set} $teamName, $setsA ${uiStrings.sets} $setsB"
-            "match" -> "${v.game} $teamName"
-            "tb" -> "$tbPtsA $tbPtsB"
+            "deuce" -> (if (goldenPointActive) v.goldenPoint else v.deuce) + "."
+            "adv" -> "${v.advantage} $teamName."
+            "game" -> "${v.game} $teamName. $gamesA - $gamesB." +
+                (if (isTb) " Tie-break." else "") + " $nowServes"
+            "set" -> "${v.set} $teamName. $setScore. $nowServes"
+            "match" -> "${v.game} $teamName."
+            // En el desempate el saque ya ha rotado: se canta desde quien saca
+            // el punto siguiente, igual que el movil.
+            "tb" -> {
+                val saca = if (serving == "A") tbPtsA else tbPtsB
+                val resto = if (serving == "A") tbPtsB else tbPtsA
+                "$saca - $resto."
+            }
             else -> ""
         }
         if (text.isNotEmpty()) onSpeak?.invoke(text)

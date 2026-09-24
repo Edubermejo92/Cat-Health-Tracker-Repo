@@ -2988,19 +2988,19 @@ function testVoice(){
  *   set      se acabo el set
  */
 const VOZ = {
-    es:{ p:['Cero','Quince','Treinta','Cuarenta'], ambos:'iguales', iguales:'Iguales',     ventaja:'Ventaja',     juego:'Juego', set:'Set',     gana:'gana el partido' },
-    en:{ p:['Zero','Fifteen','Thirty','Forty'],    ambos:'all',     iguales:'Deuce',       ventaja:'Advantage',   juego:'Game',  set:'Set',     gana:'wins the match' },
-    it:{ p:['Zero','Quindici','Trenta','Quaranta'],ambos:'pari',    iguales:'Parità',      ventaja:'Vantaggio',   juego:'Gioco', set:'Set',     gana:'vince la partita' },
-    fr:{ p:['Zéro','Quinze','Trente','Quarante'],  ambos:'partout', iguales:'Égalité',     ventaja:'Avantage',    juego:'Jeu',   set:'Set',     gana:'gagne le match' },
-    de:{ p:['Null','Fünfzehn','Dreißig','Vierzig'],ambos:'beide',   iguales:'Einstand',    ventaja:'Vorteil',     juego:'Spiel', set:'Satz',    gana:'gewinnt das Spiel' },
-    fi:{ p:['Nolla','Viisitoista','Kolmekymmentä','Neljäkymmentä'], ambos:'tasan', iguales:'Tasapeli', ventaja:'Etu', juego:'Peli', set:'Erä',   gana:'voittaa ottelun' },
-    zh:{ p:['零','十五','三十','四十'],              ambos:'平',      iguales:'平分',        ventaja:'占先',        juego:'局',    set:'盘',      gana:'赢得比赛' },
-    ja:{ p:['ゼロ','フィフティーン','サーティ','フォーティ'], ambos:'オール', iguales:'デュース', ventaja:'アドバンテージ', juego:'ゲーム', set:'セット', gana:'の試合勝利' },
-    ar:{ p:['صفر','خمسة عشر','ثلاثون','أربعون'],   ambos:'تعادل',   iguales:'تعادل',       ventaja:'أفضلية',      juego:'شوط',   set:'مجموعة', gana:'يفوز بالمباراة' },
-    pt:{ p:['Zero','Quinze','Trinta','Quarenta'],  ambos:'iguais',  iguales:'Iguais',      ventaja:'Vantagem',    juego:'Jogo',  set:'Set',     gana:'ganha o jogo' },
-    nl:{ p:['Nul','Vijftien','Dertig','Veertig'],  ambos:'gelijk',  iguales:'Deuce',       ventaja:'Voordeel',    juego:'Game',  set:'Set',     gana:'wint de wedstrijd' },
-    sv:{ p:['Noll','Femton','Trettio','Fyrtio'],   ambos:'lika',    iguales:'Lika',        ventaja:'Fördel',      juego:'Game',  set:'Set',     gana:'vinner matchen' },
-    ru:{ p:['Ноль','Пятнадцать','Тридцать','Сорок'],ambos:'ровно',  iguales:'Ровно',       ventaja:'Больше',      juego:'Гейм',  set:'Сет',    gana:'выигрывает матч' }
+    es:{ p:['Cero','Quince','Treinta','Cuarenta'], ambos:'iguales', iguales:'Iguales',     ventaja:'Ventaja',     juego:'Juego', set:'Set',     saca:'Saca', gana:'gana el partido' },
+    en:{ p:['Zero','Fifteen','Thirty','Forty'],    ambos:'all',     iguales:'Deuce',       ventaja:'Advantage',   juego:'Game',  set:'Set',     saca:'Serves', gana:'wins the match' },
+    it:{ p:['Zero','Quindici','Trenta','Quaranta'],ambos:'pari',    iguales:'Parità',      ventaja:'Vantaggio',   juego:'Gioco', set:'Set',     saca:'Batte', gana:'vince la partita' },
+    fr:{ p:['Zéro','Quinze','Trente','Quarante'],  ambos:'partout', iguales:'Égalité',     ventaja:'Avantage',    juego:'Jeu',   set:'Set',     saca:'Sert', gana:'gagne le match' },
+    de:{ p:['Null','Fünfzehn','Dreißig','Vierzig'],ambos:'beide',   iguales:'Einstand',    ventaja:'Vorteil',     juego:'Spiel', set:'Satz',    saca:'Aufschlag', gana:'gewinnt das Spiel' },
+    fi:{ p:['Nolla','Viisitoista','Kolmekymmentä','Neljäkymmentä'], ambos:'tasan', iguales:'Tasapeli', ventaja:'Etu', juego:'Peli', set:'Erä',   saca:'Syöttää', gana:'voittaa ottelun' },
+    zh:{ p:['零','十五','三十','四十'],              ambos:'平',      iguales:'平分',        ventaja:'占先',        juego:'局',    set:'盘',      saca:'发球', gana:'赢得比赛' },
+    ja:{ p:['ゼロ','フィフティーン','サーティ','フォーティ'], ambos:'オール', iguales:'デュース', ventaja:'アドバンテージ', juego:'ゲーム', set:'セット', saca:'サーブ', gana:'の試合勝利' },
+    ar:{ p:['صفر','خمسة عشر','ثلاثون','أربعون'],   ambos:'تعادل',   iguales:'تعادل',       ventaja:'أفضلية',      juego:'شوط',   set:'مجموعة', saca:'يرسل', gana:'يفوز بالمباراة' },
+    pt:{ p:['Zero','Quinze','Trinta','Quarenta'],  ambos:'iguais',  iguales:'Iguais',      ventaja:'Vantagem',    juego:'Jogo',  set:'Set',     saca:'Saca', gana:'ganha o jogo' },
+    nl:{ p:['Nul','Vijftien','Dertig','Veertig'],  ambos:'gelijk',  iguales:'Deuce',       ventaja:'Voordeel',    juego:'Game',  set:'Set',     saca:'Serveert', gana:'wint de wedstrijd' },
+    sv:{ p:['Noll','Femton','Trettio','Fyrtio'],   ambos:'lika',    iguales:'Lika',        ventaja:'Fördel',      juego:'Game',  set:'Set',     saca:'Servar', gana:'vinner matchen' },
+    ru:{ p:['Ноль','Пятнадцать','Тридцать','Сорок'],ambos:'ровно',  iguales:'Ровно',       ventaja:'Больше',      juego:'Гейм',  set:'Сет',    saca:'Подаёт', gana:'выигрывает матч' }
 };
 
 function voz(){ return VOZ[S.lang] || VOZ.es; }
@@ -3067,8 +3067,8 @@ function ejemplosDeCanto(codigo){
         [ '30 - 30',     marcadorCantado({pa:2, pb:2, saca:A}, codigo) ],
         [ '40 - 40',     marcadorCantado({deuce:true},        codigo) ],
         [ i2('Ventaja','Advantage'), marcadorCantado({ventaja:'A'}, codigo).replace(' A.', ' ' + i2('(pareja)','(team)') + '.') ],
-        [ i2('Gana el juego','Game won'), `${v.juego} (${i2('pareja','team')}). 1 - 0.` ],
-        [ i2('Gana el set','Set won'),    `${v.set} (${i2('pareja','team')}). 6 - 4.` ],
+        [ i2('Gana el juego','Game won'), `${v.juego} (${i2('pareja','team')}). 1 - 0. (${i2('pareja','team')}) ${v.saca}.` ],
+        [ i2('Gana el set','Set won'),    `${v.set} (${i2('pareja','team')}). 6 - 4. (${i2('pareja','team')}) ${v.saca}.` ],
         [ i2('Tie-break','Tie-break'),    marcadorCantado({tb:true, tbA:5, tbB:3, saca:A}, codigo) ],
         [ i2('Gana el partido','Match won'), `(${i2('pareja','team')}) ${v.gana}. 2 - 0.` ]
     ];
@@ -3191,7 +3191,7 @@ function cantarLoQuePaso(antes){
            aparte, pero nadie gana un set "seis a seis": se canta 7-6. El super
            tie-break guarda sus propios puntos (10-8) y ese si va tal cual. */
         if(gan === per) gan = gan + 1;
-        speak(`${v.set} ${quien}. ${gan} - ${per}.`);
+        speak(`${v.set} ${quien}. ${gan} - ${per}. ${S['team'+S.serving].name} ${v.saca}.`);
         return;
     }
 
@@ -3199,7 +3199,8 @@ function cantarLoQuePaso(antes){
     if(ahora.gA !== antes.gA || ahora.gB !== antes.gB){
         const quien = S['team' + (ahora.gA > antes.gA ? 'A' : 'B')].name;
         const entraTb = ahora.tb && !antes.tb;
-        speak(`${v.juego} ${quien}. ${ahora.gA} - ${ahora.gB}.` + (entraTb ? ` ${i('tiebreak')}.` : ''));
+        speak(`${v.juego} ${quien}. ${ahora.gA} - ${ahora.gB}.` + (entraTb ? ` ${i('tiebreak')}.` : '')
+              + ` ${S['team'+S.serving].name} ${v.saca}.`);
         return;
     }
 
