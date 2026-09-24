@@ -619,6 +619,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         window.attributes = lp
     }
 
+    /** Calla ya: al silenciar la voz desde el marcador. */
+    fun stopSpeaking() {
+        if (ttsReady) runCatching { tts.stop() }
+        voice.onAppDoneSpeaking()
+    }
+
     fun speak(text: String, currentLang: String = "es") {
         if (!ttsReady) return
         val voiceLang = Translations.langs.find { it.id == currentLang }?.voiceLang ?: "es-ES"

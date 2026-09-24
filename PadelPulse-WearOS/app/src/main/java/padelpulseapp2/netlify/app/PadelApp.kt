@@ -686,7 +686,16 @@ fun SettingsScreen(
 
         item { DetectionCard(engine, activity, accent) }
 
-        item { ToggleRow(ui.voice, engine.voiceEnabled, accent) { engine.voiceEnabled = it; engine.saveState() } }
+        // Silenciar la voz que canta los puntos (tambien desde el marcador, 🔊)
+        item {
+            ToggleRow(
+                when (engine.lang) { "es" -> "Voz del marcador"; "en" -> "Scoreboard voice"; else -> ui.voice },
+                engine.voiceEnabled, accent
+            ) {
+                engine.voiceEnabled = it; engine.persist()
+                if (!it) activity.stopSpeaking()
+            }
+        }
         item {
             ToggleRow(ui.goldenPt, engine.goldenPoint, accent) {
                 engine.goldenPoint = it

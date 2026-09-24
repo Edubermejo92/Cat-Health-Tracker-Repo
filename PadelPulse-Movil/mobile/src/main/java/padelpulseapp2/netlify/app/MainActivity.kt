@@ -594,6 +594,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
         }
 
+        /** Corta la frase que se este cantando: al silenciar la voz, calla ya. */
+        @JavascriptInterface
+        fun stopSpeaking() {
+            activity.runOnUiThread { runCatching { activity.tts?.stop() } }
+        }
+
         @JavascriptInterface
         fun speak(text: String) {
             activity.runOnUiThread { activity.decir(text) }

@@ -153,6 +153,12 @@ class GameEngine(context: Context? = null) {
         saveToDisk()
     }
 
+    /**
+     * Guarda sin apuntar una jugada para deshacer. Para ajustes como silenciar
+     * la voz: con saveState() el siguiente "deshacer" no haria nada visible.
+     */
+    fun persist() = saveToDisk()
+
     fun resetMatch() {
         history.clear()
         ptsA = 0; ptsB = 0; gamesA = 0; gamesB = 0; setsA = 0; setsB = 0

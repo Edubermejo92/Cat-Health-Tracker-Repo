@@ -209,7 +209,7 @@ const defaultState = () => ({
     matchOver:false, matchWinner:null,
     gameTime:0, timerRunning:true,
     betweenPoints:false, betweenTimer:0, betweenMax:20,
-    soundEnabled:true, brightness:100, voiceActive:false,
+    soundEnabled:true, voiceMuted:false, brightness:100, voiceActive:false,
     theme:'neon', lang:'es',
     currentView:'home',
     history:[], activityLog:[],
@@ -2391,7 +2391,7 @@ function newMatch(){
         ns.lang=S.lang||'es';
         ns.theme=S.theme||'neon';
         ns.bestOf=(S.bestOf===1||S.bestOf===3||S.bestOf===5)?S.bestOf:3;
-        ns.soundEnabled=S.soundEnabled;
+        ns.soundEnabled=S.soundEnabled; ns.voiceMuted=!!S.voiceMuted;
         ns.goldenPoint=S.goldenPoint;
         // Preservar nombres de equipos/jugadores
         ['teamA','teamB'].forEach(t=>{
@@ -2413,7 +2413,7 @@ function resetMatch(){
         const ns=defaultState();
         ns.lang=S.lang||'es'; ns.theme=S.theme||'neon';
         ['teamA','teamB'].forEach(t=>{ ns[t].name=S[t].name||i('team'+t); ns[t].playerA=S[t].playerA||''; ns[t].playerB=S[t].playerB||''; });
-        ns.soundEnabled=S.soundEnabled; ns.brightness=S.brightness; ns.goldenPoint=S.goldenPoint; ns.bestOf=S.bestOf||3;
+        ns.soundEnabled=S.soundEnabled; ns.voiceMuted=!!S.voiceMuted; ns.brightness=S.brightness; ns.goldenPoint=S.goldenPoint; ns.bestOf=S.bestOf||3;
         S=ns; saveState(); render();
     });
 }
@@ -3303,8 +3303,21 @@ function cantarLoQuePaso(antes){
     cantarMarcador();
 }
 
+/** Silenciar o volver a oir la voz que canta los puntos (marcador y Ajustes). */
+function toggleVoiceMute(){
+    S.voiceMuted = !S.voiceMuted;
+    if(S.voiceMuted){
+        try{ const b=window.AndroidBridge; if(b && b.stopSpeaking) b.stopSpeaking(); }catch(e){}
+        try{ if('speechSynthesis' in window) window.speechSynthesis.cancel(); }catch(e){}
+    }
+    saveState(); render();
+    showToast(S.voiceMuted ? '🔇 '+i2('Voz silenciada','Voice muted') : '🔊 '+i2('Voz activada','Voice on'), 1600);
+    if(!S.voiceMuted) cantarMarcador();
+}
+
 function speak(text){
-    if(!S.soundEnabled || !text) return;
+    // Voz silenciada: los pitidos siguen, lo que no se canta es el marcador
+    if(!S.soundEnabled || S.voiceMuted || !text) return;
 
     // Se apunta lo que vamos a decir para no obedecerlo si el microfono lo oye.
     _ultimoCanto = normalizarVoz(text);
@@ -5960,6 +5973,11 @@ const Header=()=>`
             class="p-2 rounded-xl scale-press ${S.voiceActive?'bg-error/10 border border-error/30':'bg-surface-container border border-outline-variant/30'}">
             <span class="material-symbols-outlined text-[20px] ${S.voiceActive?'text-error filled':'text-on-surface-variant'}">${S.voiceActive?'mic':'mic_off'}</span>
         </button>
+        <!-- Silenciar la voz que canta los puntos -->
+        <button onclick="toggleVoiceMute()" title="${S.voiceMuted?i2('Activar la voz','Turn voice on'):i2('Silenciar la voz','Mute voice')}"
+            class="p-2 rounded-xl scale-press ${S.voiceMuted?'bg-error/10 border border-error/30':'bg-surface-container border border-outline-variant/30'}">
+            <span class="material-symbols-outlined text-[20px] ${S.voiceMuted?'text-error':'text-on-surface-variant'}">${S.voiceMuted?'volume_off':'volume_up'}</span>
+        </button>
         <button onclick="showThemePicker();" class="p-2 rounded-xl scale-press bg-surface-container border border-outline-variant/30" title="Tema">
             <span style="font-size:16px;line-height:1;">${T().emoji}</span>
         </button>
@@ -6923,8 +6941,18 @@ const SettingsView=()=>`
             <div class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px] text-on-surface-variant filled">${S.soundEnabled?'volume_up':'volume_off'}</span><span class="text-sm font-bold text-on-surface">${i('sound')}</span></div>
             <button onclick="S.soundEnabled=!S.soundEnabled;saveState();render();" class="scale-press"><span class="material-symbols-outlined text-[28px] ${S.soundEnabled?'text-primary filled':'text-outline'}">${S.soundEnabled?'toggle_on':'toggle_off'}</span></button>
         </div>
+        <div class="flex items-center justify-between py-2 border-b border-white/5">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-[18px] text-on-surface-variant filled">${S.voiceMuted?'volume_off':'record_voice_over'}</span>
+                <div>
+                    <div class="text-sm font-bold text-on-surface">${i2('Voz del marcador','Scoreboard voice')}</div>
+                    <div class="text-[10px]" style="color:${tc.muted()}">${S.voiceMuted?i2('Silenciada: no se cantan los puntos','Muted: points are not called'):i2('Canta los puntos al sumarlos','Calls the points as they are scored')}</div>
+                </div>
+            </div>
+            <button onclick="toggleVoiceMute()" class="scale-press"><span class="material-symbols-outlined text-[28px] ${!S.voiceMuted?'text-primary filled':'text-outline'}">${!S.voiceMuted?'toggle_on':'toggle_off'}</span></button>
+        </div>
 
-        ${S.soundEnabled?`
+        ${S.soundEnabled && !S.voiceMuted?`
         <div class="pt-3 mt-1" style="border-top:1px solid rgba(255,255,255,0.05)">
             <div class="flex items-center justify-between mb-2">
                 <span class="text-[10px] font-bold uppercase tracking-widest" style="color:${tc.muted()}">${i2('Volumen de la voz','Voice volume')}</span>

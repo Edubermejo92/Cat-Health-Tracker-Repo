@@ -211,45 +211,59 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
         // movil esta enlazado. Cabe entre la hora y los nombres: a -0.34 la
         // esfera mide 0.74 de ancho y el logo solo 0.22.
         val linkOk = PhoneLink.connected && PhoneLink.paired
-        // Tocar la fila del logo enciende o apaga el arbitro por voz: se
-        // cantan los puntos ("punto para Edu", "quince treinta") y se suman.
+        // A los lados del logo, dos botones: a la izquierda el arbitro por voz
+        // (cantas "punto para Edu" y se suma), a la derecha silenciar la voz
+        // que canta los puntos. Cada uno tiene su propia zona para tocar, mas
+        // grande que el circulo que se ve.
         val voice = activity.voice
         val micOn = voice.on
+        val muted = !engine.voiceEnabled
         val micPulse by animateFloatAsState(
             if (voice.state == VoiceReferee.State.PROCESSING) 0.45f else 1f, tween(250), label = "mic"
         )
-        At(w, 0f, -0.34f, 0.5f) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(PP.PillShape)
+        @Composable
+        fun TopButton(glyph: String, active: Boolean, activeColor: Color, pulse: Float, onClick: () -> Unit) {
+            Box(
+                Modifier
+                    .size(w * 0.12f, w * 0.11f)
+                    .clip(CircleShape)
                     .clickable {
-                        voice.toggle()
+                        onClick()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
-                    .padding(horizontal = w * 0.02f, vertical = w * 0.006f)
+                    },
+                contentAlignment = Alignment.Center
             ) {
                 Box(
                     Modifier
-                        .size(w * 0.06f)
+                        .size(w * 0.065f)
                         .clip(CircleShape)
-                        .background(if (micOn) PP.Danger.copy(alpha = 0.25f * micPulse + 0.1f) else PP.SurfaceHigh),
+                        .background(if (active) activeColor.copy(alpha = 0.25f * pulse + 0.1f) else PP.SurfaceHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "🎙", fontSize = sz(0.034f),
-                        color = if (micOn) PP.Danger else PP.TextMuted,
-                        modifier = Modifier.alpha(if (micOn) micPulse else 0.6f)
+                        glyph, fontSize = sz(0.034f),
+                        color = if (active) activeColor else PP.TextMuted,
+                        modifier = Modifier.alpha(if (active) pulse else 0.7f)
                     )
                 }
-                Spacer(Modifier.width(w * 0.015f))
+            }
+        }
+        At(w, 0f, -0.34f, 0.62f) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TopButton("🎙", micOn, PP.Danger, micPulse) { voice.toggle() }
                 Image(
                     painter = painterResource(id = R.drawable.logo_wordmark),
                     contentDescription = "PadelPulse Live",
                     modifier = Modifier.width(w * 0.22f).aspectRatio(LOGO_RATIO)
                 )
-                Spacer(Modifier.width(w * 0.015f))
+                Spacer(Modifier.width(w * 0.01f))
                 Box(Modifier.size(w * 0.02f).clip(CircleShape).background(linkColor(engine)))
+                TopButton(if (muted) "🔇" else "🔊", muted, PP.Danger, 1f) {
+                    engine.voiceEnabled = !engine.voiceEnabled
+                    engine.persist()
+                    // Al silenciar se corta tambien la frase que estuviera sonando
+                    if (!engine.voiceEnabled) activity.stopSpeaking() else engine.speakScore()
+                }
             }
         }
 
@@ -514,7 +528,8 @@ private fun ControlsPage(
                 }
                 RoundAction(if (engine.voiceEnabled) "🔊" else "🔇") {
                     engine.voiceEnabled = !engine.voiceEnabled
-                    engine.saveState()
+                    engine.persist()
+                    if (!engine.voiceEnabled) activity.stopSpeaking()
                 }
                 RoundAction("⚙") { onSettings() }
             }
