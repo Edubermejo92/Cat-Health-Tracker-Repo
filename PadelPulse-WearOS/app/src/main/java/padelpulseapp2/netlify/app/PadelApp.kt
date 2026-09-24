@@ -118,6 +118,9 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
 // Estado del enlace, reutilizado en varias pantallas
 // ─────────────────────────────────────────────────────────────────────
 
+/** Proporcion ancho/alto de res/drawable-nodpi/logo_wordmark (252 x 132). */
+const val LOGO_RATIO = 252f / 132f
+
 @Composable
 fun linkLabel(engine: GameEngine): String {
     val es = engine.lang == "es"
@@ -196,9 +199,9 @@ fun AccountScreen(engine: GameEngine, activity: MainActivity) {
         verticalArrangement = Arrangement.Center
     ) {
         Image(
-            painter = painterResource(id = R.drawable.splash_logo),
-            contentDescription = "PadelPulse",
-            modifier = Modifier.width(44.dp).padding(bottom = 6.dp)
+            painter = painterResource(id = R.drawable.logo_wordmark),
+            contentDescription = "PadelPulse Live",
+            modifier = Modifier.fillMaxWidth(0.62f).aspectRatio(LOGO_RATIO).padding(bottom = 4.dp)
         )
 
         if (WatchAccount.signedIn) {
@@ -257,20 +260,14 @@ fun SplashScreen(engine: GameEngine, activity: MainActivity) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // El mismo logo que la cabecera del movil
         Image(
-            painter = painterResource(id = R.drawable.splash_logo),
-            contentDescription = "PadelPulse",
+            painter = painterResource(id = R.drawable.logo_wordmark),
+            contentDescription = "PadelPulse Live",
             modifier = Modifier
-                .width((66 * logoScale).dp)
-                .padding(bottom = 8.dp)
+                .fillMaxWidth(0.8f * logoScale)
+                .aspectRatio(LOGO_RATIO)
         )
-        Text(
-            "PadelPulse",
-            color = accent,
-            fontWeight = FontWeight.Black,
-            fontSize = PP.Title
-        )
-        PPLabel("LIVE WATCH", color = PP.TextMuted, size = PP.Micro)
 
         Spacer(Modifier.height(14.dp))
         LinkPill(engine)
@@ -687,6 +684,8 @@ fun SettingsScreen(
 
         item { VoiceVolumeCard(engine, activity, accent) }
 
+        item { DetectionCard(engine, activity, accent) }
+
         item { ToggleRow(ui.voice, engine.voiceEnabled, accent) { engine.voiceEnabled = it; engine.saveState() } }
         item {
             ToggleRow(ui.goldenPt, engine.goldenPoint, accent) {
@@ -779,6 +778,8 @@ fun SettingsScreen(
                 Text(ui.newMatch.uppercase(), color = PP.Danger, fontSize = PP.Label, fontWeight = FontWeight.Black)
             }
         }
+
+        item { ExitButton(engine, activity) }
 
         item {
             Button(
@@ -921,6 +922,11 @@ fun ResumeScreen(engine: GameEngine, activity: MainActivity) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Image(
+            painter = painterResource(id = R.drawable.logo_wordmark),
+            contentDescription = "PadelPulse Live",
+            modifier = Modifier.fillMaxWidth(0.5f).aspectRatio(LOGO_RATIO).padding(bottom = 4.dp)
+        )
         PPLabel(
             if (es) "PARTIDO ANTERIOR" else "PREVIOUS MATCH",
             color = accent, size = PP.Label

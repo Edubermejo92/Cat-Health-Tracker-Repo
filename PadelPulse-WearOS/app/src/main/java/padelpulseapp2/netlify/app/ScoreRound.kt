@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +42,7 @@ import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Text
+import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPLabel
 import kotlin.math.cos
@@ -171,11 +174,20 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             Box(Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = tapB, indication = null) { point("B") })
         }
 
-        At(w, 0f, -0.33f, 0.6f) {
-            Text(
-                "● " + linkLabel(engine), color = linkColor(engine), fontSize = sz(0.046f),
-                fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center
-            )
+        // Logo arriba, como la cabecera del movil, con un punto que dice si el
+        // movil esta enlazado. Cabe entre la hora y los nombres: a -0.34 la
+        // esfera mide 0.74 de ancho y el logo solo 0.26.
+        val linkOk = PhoneLink.connected && PhoneLink.paired
+        At(w, 0f, -0.34f, 0.4f) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_wordmark),
+                    contentDescription = "PadelPulse Live",
+                    modifier = Modifier.width(w * 0.26f).aspectRatio(LOGO_RATIO)
+                )
+                Spacer(Modifier.width(w * 0.015f))
+                Box(Modifier.size(w * 0.02f).clip(CircleShape).background(linkColor(engine)))
+            }
         }
 
         At(w, -0.22f, -0.235f, 0.38f) { TeamName(engine.nameA, servingA, accent, sz(0.05f)) }
@@ -212,8 +224,16 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
         At(w, 0f, 0.225f, 0.9f) {
             val phase = if (engine.goldenPointActive) ui.goldenPt.uppercase() else matchPhaseLabel(engine, ui)
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Si el enlace falla, eso va primero: el texto que antes iba
+                // arriba (SIN MOVIL, VINCULANDO…) ocupa el sitio de la fase.
+                if (!linkOk) {
+                    Text(
+                        "● ${linkLabel(engine)} · ", color = linkColor(engine),
+                        fontSize = sz(0.044f), fontWeight = FontWeight.Bold, maxLines = 1
+                    )
+                }
                 Text(
-                    "$phase · ${activity.getTimerDisplay()}", color = PP.TextDim,
+                    (if (linkOk) "$phase · " else "") + activity.getTimerDisplay(), color = PP.TextDim,
                     fontSize = sz(0.044f), fontWeight = FontWeight.Bold, maxLines = 1
                 )
                 if (engine.heartRate > 0) {
@@ -390,6 +410,7 @@ private fun ControlsPage(
                 null
             ) { if (paused) activity.resumeSensors() else activity.pauseSensors() }
         }
+        item { DetectionCard(engine, activity, accent) }
         item {
             ControlChip(ui.newMatch, null, danger = true) {
                 engine.resetMatch()
@@ -398,6 +419,7 @@ private fun ControlsPage(
                 activity.onLocalScoreAction("reset")
             }
         }
+        item { ExitButton(engine, activity) }
     }
 }
 
@@ -482,16 +504,19 @@ private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color
         At(w, -0.16f, 0.215f, 0.3f) { Stat("🔥 KCAL", PP.TextMuted, sz(0.038f), FontWeight.Bold) }
         At(w, 0.16f, 0.215f, 0.3f) { Stat("🏃 KM", PP.TextMuted, sz(0.038f), FontWeight.Bold) }
 
-        val paused = activity.sensorsPaused
+        // Abajo, el bloqueo de la deteccion automatica de ejercicio: es lo que
+        // evita que la app de salud del reloj tape el marcador al moverte.
+        // Pausar sensores sigue en Controles.
+        val (guardText, guardColor) = guardStatus(engine, accent, short = true)
+        val on = WorkoutGuard.enabled
         EdgeBand(
             w = w,
-            label = if (paused) (if (es) "▶ REANUDAR SENSORES" else "▶ RESUME SENSORS")
-                    else (if (es) "⏸ PAUSAR SENSORES" else "⏸ PAUSE SENSORS"),
-            labelColor = if (paused) accent else PP.TextDim,
-            background = if (paused) ThemeUtils.tint(engine.theme, 0.16f) else PP.SurfaceHigh,
-            line = if (paused) accent else PP.Line,
-            labelSize = sz(0.046f)
-        ) { if (paused) activity.resumeSensors() else activity.pauseSensors() }
+            label = guardText,
+            labelColor = guardColor,
+            background = if (on) ThemeUtils.tint(engine.theme, 0.16f) else PP.SurfaceHigh,
+            line = if (on) accent else PP.Line,
+            labelSize = sz(0.04f)
+        ) { WorkoutGuard.setEnabled(activity, !on, activity.timerRunning) }
     }
 }
 

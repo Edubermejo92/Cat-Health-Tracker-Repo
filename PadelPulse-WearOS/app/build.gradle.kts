@@ -83,4 +83,6 @@ dependencies {
     implementation("androidx.wear:wear-ongoing:1.0.0")
     // QR de "Invita a un amigo": solo el codificador, sin camara ni vistas
     implementation("com.google.zxing:core:3.5.3")
+    // Entreno propio mientras se juega: evita la deteccion automatica del reloj
+    implementation("androidx.health:health-services-client:1.0.0-beta03")
 }

@@ -289,6 +289,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         // Publica la actividad en curso: partido en marcha visible desde la
         // esfera del reloj y recientes, con un toque para volver al marcador.
         MatchOngoingService.start(this)
+        // Y le dice al reloj que ya hay un entreno: sin esto, la deteccion
+        // automatica de la app de salud salta encima del marcador.
+        WorkoutGuard.start(this)
         if (timerJob?.isActive == true) return
         timerJob = lifecycleScope.launch {
             while (true) {
@@ -307,10 +310,25 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     fun stopTimer() { timerRunning = false }
 
+    /**
+     * Salir de verdad. El partido queda guardado -al volver se ofrece
+     * continuarlo-, pero se quita de la esfera, se cierra el entreno propio y
+     * la app desaparece tambien de recientes.
+     */
+    fun exitApp() {
+        gameEngine?.clockSeconds = matchTimeSeconds
+        gameEngine?.saveState()
+        timerRunning = false
+        MatchOngoingService.stop(this)
+        WorkoutGuard.stop(this)
+        finishAndRemoveTask()
+    }
+
     fun resetTimer() {
         matchTimeSeconds = 0
         timerRunning = false
         MatchOngoingService.stop(this)
+        WorkoutGuard.stop(this)
     }
 
     /**
@@ -322,6 +340,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         if (engine != null && engine.over) {
             // Partido acabado: ya no hay nada "en curso" que mostrar
             MatchOngoingService.stop(this)
+            WorkoutGuard.stop(this)
             return
         }
         if (timerRunning) MatchOngoingService.start(this)
@@ -344,8 +363,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     fun registerHeartRateSensor() {
         if (isHrRegistered) return
-        if (checkSelfPermission(android.Manifest.permission.BODY_SENSORS) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        if (!WorkoutGuard.hasHeartRatePermission(this)) return
         val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
@@ -414,7 +432,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         permissions.forEachIndexed { i, perm ->
             if (grantResults.getOrNull(i) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 when (perm) {
-                    android.Manifest.permission.BODY_SENSORS -> registerHeartRateSensor()
+                    android.Manifest.permission.BODY_SENSORS,
+                    "android.permission.health.READ_HEART_RATE" -> registerHeartRateSensor()
                     android.Manifest.permission.ACTIVITY_RECOGNITION -> registerStepSensor()
                 }
             }
@@ -441,6 +460,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         WatchAccount.load(this)
         CloudHistory.load(this)
         InviteLink.load(this)
+        WorkoutGuard.load(this)
+        WorkoutGuard.cleanUpIfOrphan(this, timerRunning)
         // La pareja A eres tu, igual que en el movil.
         if (engine.adoptarMiNombre(WatchAccount.name)) engine.saveState()
         if (!WatchAccount.signedIn && !WatchAccount.skipped) {
@@ -453,9 +474,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         PhoneLink.announce(this)
 
         val neededPerms = mutableListOf<String>()
-        if (checkSelfPermission(android.Manifest.permission.BODY_SENSORS) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            neededPerms.add(android.Manifest.permission.BODY_SENSORS)
+        if (!WorkoutGuard.hasHeartRatePermission(this)) {
+            // En Wear OS 6 el pulso va con su propio permiso de salud
+            neededPerms.add(
+                if (android.os.Build.VERSION.SDK_INT >= 36) "android.permission.health.READ_HEART_RATE"
+                else android.Manifest.permission.BODY_SENSORS
+            )
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
             checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) !=

@@ -8,6 +8,8 @@
     <!-- Pulso y podometro: sin ACTIVITY_RECOGNITION Android 10+ no entrega pasos -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Wear OS 6 (Android 16) sustituye BODY_SENSORS por este para el pulso -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
 
     <!-- Actividad en curso del partido (obligatoria en Wear OS): notificacion
          persistente + servicio en primer plano mientras se juega -->
@@ -16,6 +18,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
 
     <uses-feature android:name="android.hardware.type.watch" android:required="true" />
+
+    <queries>
+        <!-- Health Services: el entreno propio que tapa la deteccion automatica -->
+        <package android:name="com.google.android.wearable.healthservices" />
+        <!-- Samsung Health, para abrirlo desde el boton de la deteccion automatica -->
+        <package android:name="com.samsung.android.wear.shealth" />
+    </queries>
 
     <application
         android:label="@string/app_name"
