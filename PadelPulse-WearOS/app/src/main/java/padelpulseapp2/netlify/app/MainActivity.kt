@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.0.1"
+        const val APP_VERSION = "7.0.2"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
     }
