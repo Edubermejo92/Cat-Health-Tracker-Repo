@@ -85,4 +85,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     // Entreno propio mientras se juega: evita la deteccion automatica del reloj
     implementation("androidx.health:health-services-client:1.0.0-beta03")
+    // health-services-client devuelve ListenableFuture pero lo trae como
+    // "implementation" (no "api"): no llega al classpath de quien lo usa.
+    // Este jar solo tiene la interfaz -sin el resto de Guava- y es el mismo
+    // truco que usan Room, WorkManager y CameraX para el mismo caso.
+    implementation("com.google.guava:listenablefuture:1.0")
 }
