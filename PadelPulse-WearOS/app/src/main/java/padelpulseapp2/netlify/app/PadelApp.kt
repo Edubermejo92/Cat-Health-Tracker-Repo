@@ -55,7 +55,15 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
 
     // El indicador sigue a la lista de la pantalla visible. En las pantallas
     // que no tienen scroll (splash, resume, fin) no se muestra ninguno.
-    val activeState = when (engine.currentScreen) {
+    //
+    // Dentro de "score" y "settings" hay listas que se abren encima (el
+    // editor de nombre, el selector de idioma): esas avisan aqui cual es la
+    // suya con onActiveList, y mientras estan abiertas mandan sobre la lista
+    // de la pantalla. Sin este aviso, Play detecta esas listas como "sin
+    // barra de desplazamiento" porque el indicador se quedaba pegado a la de
+    // fuera.
+    var subActive by remember { mutableStateOf<androidx.wear.compose.foundation.lazy.ScalingLazyListState?>(null) }
+    val activeState = subActive ?: when (engine.currentScreen) {
         "lang" -> langState
         "bt" -> pairState
         "score" -> scoreState
@@ -98,11 +106,16 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                         "bt" -> PairScreen(engine, activity, pairState)
                         "score" -> ScoreScreen(
                             engine, activity, scoreState, nameState,
-                            { engine.currentScreen = "settings" },
-                            { engine.currentScreen = "bt" },
-                            { engine.currentScreen = "end" }
+                            onSettings = { engine.currentScreen = "settings" },
+                            onMode = { engine.currentScreen = "bt" },
+                            onEnd = { engine.currentScreen = "end" },
+                            onActiveList = { subActive = it }
                         )
-                        "settings" -> SettingsScreen(engine, activity, settingsState) { engine.currentScreen = "score" }
+                        "settings" -> SettingsScreen(
+                            engine, activity, settingsState,
+                            onBack = { engine.currentScreen = "score" },
+                            onActiveList = { subActive = it }
+                        )
                         "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = "settings" }
                         "invite" -> InviteScreen(engine, activity, inviteState) { engine.currentScreen = "settings" }
                         "end" -> EndScreen(engine, activity)
@@ -554,15 +567,23 @@ fun SettingsScreen(
     engine: GameEngine,
     activity: MainActivity,
     listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onActiveList: (androidx.wear.compose.foundation.lazy.ScalingLazyListState?) -> Unit = {}
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
     val es = engine.lang == "es"
     var showLangPicker by remember { mutableStateOf(false) }
+    val langPickerState = rememberScalingLazyListState()
+
+    // El selector de idioma abre su propia lista, distinta de la de Ajustes.
+    // Sin avisar al indicador de la pantalla de cual es la lista visible de
+    // verdad, Play rechaza la app: "falta la barra de desplazamiento" aqui,
+    // aunque la de Ajustes si la tenga.
+    LaunchedEffect(showLangPicker) { onActiveList(if (showLangPicker) langPickerState else null) }
+    DisposableEffect(Unit) { onDispose { onActiveList(null) } }
 
     if (showLangPicker) {
-        val langPickerState = rememberScalingLazyListState()
         ScalingLazyColumn(
             state = langPickerState,
             modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(langPickerState),

@@ -37,12 +37,20 @@ fun ScoreScreen(
     nameState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
     onSettings: () -> Unit,
     onMode: () -> Unit,
-    onEnd: () -> Unit
+    onEnd: () -> Unit,
+    onActiveList: (androidx.wear.compose.foundation.lazy.ScalingLazyListState?) -> Unit = {}
 ) {
     var showPicker by remember { mutableStateOf<String?>(null) }
     var editingTeam by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(engine.over) { if (engine.over) onEnd() }
+
+    // El editor de nombre tiene su propia lista (nameState), distinta de la
+    // del marcador. Sin avisar al indicador de la pantalla de cual es la
+    // lista visible de verdad, Play rechaza la app: "falta la barra de
+    // desplazamiento" en esta pantalla, aunque la de fuera si la tenga.
+    LaunchedEffect(editingTeam) { onActiveList(if (editingTeam != null) nameState else null) }
+    DisposableEffect(Unit) { onDispose { onActiveList(null) } }
 
     val editing = editingTeam
     val picker = showPicker
