@@ -77,28 +77,38 @@ object WorkoutGuard {
             return
         }
         state = State.STARTING
-        client.getCapabilitiesAsync().onDone(app, { state = State.UNSUPPORTED }) { caps ->
-            // No hay "padel" en Health Services: tenis es lo mas parecido, y
-            // si el reloj no lo tiene vale cualquier deporte de raqueta.
-            val type = listOf(
-                ExerciseType.TENNIS, ExerciseType.SQUASH, ExerciseType.RACQUETBALL,
-                ExerciseType.BADMINTON, ExerciseType.WORKOUT
-            ).firstOrNull { it in caps.supportedExerciseTypes }
-            if (type == null) {
-                state = State.UNSUPPORTED
-                return@onDone
+        // Todo lo sincrono tambien va protegido: llamar a Health Services antes
+        // de que el sistema termine de conectar el servicio puede lanzar en el
+        // sitio, no solo fallar en el futuro. Esto se llama al pulsar Empezar/
+        // Continuar/Nueva partida, asi que un fallo aqui sin red de seguridad
+        // tumbaba la app en la accion mas repetida de todas.
+        runCatching {
+            client.getCapabilitiesAsync().onDone(app, { state = State.UNSUPPORTED }) { caps ->
+                // No hay "padel" en Health Services: tenis es lo mas parecido, y
+                // si el reloj no lo tiene vale cualquier deporte de raqueta.
+                val type = listOf(
+                    ExerciseType.TENNIS, ExerciseType.SQUASH, ExerciseType.RACQUETBALL,
+                    ExerciseType.BADMINTON, ExerciseType.WORKOUT
+                ).firstOrNull { it in caps.supportedExerciseTypes }
+                if (type == null) {
+                    state = State.UNSUPPORTED
+                    return@onDone
+                }
+                // Pulso solo si hay permiso y el reloj lo da para ese deporte. Sin
+                // tipos de datos tambien vale: lo que importa es ocupar el hueco.
+                val hr = DataType.HEART_RATE_BPM
+                val dataTypes: Set<DataType<*, *>> = if (hasHeartRatePermission(app) &&
+                    hr in caps.getExerciseTypeCapabilities(type).supportedDataTypes
+                ) setOf(hr) else emptySet()
+                val config = ExerciseConfig(type, dataTypes, false, false)
+                client.startExerciseAsync(config).onDone(app, { state = State.FAILED }) {
+                    state = State.ACTIVE
+                    Log.i(TAG, "Entreno propio en marcha ($type): sin deteccion automatica")
+                }
             }
-            // Pulso solo si hay permiso y el reloj lo da para ese deporte. Sin
-            // tipos de datos tambien vale: lo que importa es ocupar el hueco.
-            val hr = DataType.HEART_RATE_BPM
-            val dataTypes: Set<DataType<*, *>> = if (hasHeartRatePermission(app) &&
-                hr in caps.getExerciseTypeCapabilities(type).supportedDataTypes
-            ) setOf(hr) else emptySet()
-            val config = ExerciseConfig(type, dataTypes, false, false)
-            client.startExerciseAsync(config).onDone(app, { state = State.FAILED }) {
-                state = State.ACTIVE
-                Log.i(TAG, "Entreno propio en marcha ($type): sin deteccion automatica")
-            }
+        }.onFailure {
+            Log.w(TAG, "Health Services al arrancar", it)
+            state = State.FAILED
         }
     }
 
@@ -154,7 +164,17 @@ object WorkoutGuard {
         context.packageManager.getLaunchIntentForPackage(SAMSUNG_HEALTH)
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-    /** Espera al futuro sin corrutinas ni librerias extra: el aviso llega al hilo principal. */
+    /**
+     * Espera al futuro sin corrutinas ni librerias extra: el aviso llega al
+     * hilo principal.
+     *
+     * onOk tambien va protegido: Result.onSuccess llama al bloque tal cual, sin
+     * envolverlo, asi que un fallo del propio Health Services a mitad de
+     * partido -el reloj se desconecta del sistema, la app de salud le quita el
+     * entreno por su cuenta, etc.- se colaba fuera de cualquier runCatching de
+     * quien llama (esos solo cubren la parte sincrona, no lo que pasa despues,
+     * cuando responde el sistema) y tumbaba la app entera.
+     */
     private fun <T> ListenableFuture<T>.onDone(
         context: Context,
         onError: (Throwable) -> Unit,
@@ -162,7 +182,12 @@ object WorkoutGuard {
     ) {
         addListener({
             runCatching { get() }
-                .onSuccess(onOk)
+                .onSuccess { value ->
+                    runCatching { onOk(value) }.onFailure {
+                        Log.w(TAG, "Health Services (onOk)", it)
+                        onError(it)
+                    }
+                }
                 .onFailure {
                     Log.w(TAG, "Health Services", it)
                     onError(it)

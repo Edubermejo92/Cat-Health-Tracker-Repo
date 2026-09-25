@@ -52,9 +52,12 @@ class VoiceReferee(private val activity: MainActivity) {
 
     val on: Boolean get() = state != State.OFF
 
-    fun parser(): VoiceParser = parser ?: VoiceParser(
-        activity.resources.openRawResource(R.raw.voice_grammar).bufferedReader().use { it.readText() }
-    ).also { parser = it }
+    fun parser(): VoiceParser? = parser ?: runCatching {
+        VoiceParser(
+            activity.resources.openRawResource(R.raw.voice_grammar).bufferedReader().use { it.readText() }
+        )
+    }.onFailure { Log.w(TAG, "No se pudo cargar la gramatica de voz", it) }
+        .getOrNull()?.also { parser = it }
 
     fun toggle() = if (on) stop() else start()
 
@@ -186,7 +189,7 @@ class VoiceReferee(private val activity: MainActivity) {
             "A" to listOf(engine.nameA, engine.playerA1, engine.playerA2).filter { it.isNotBlank() },
             "B" to listOf(engine.nameB, engine.playerB1, engine.playerB2).filter { it.isNotBlank() }
         )
-        val p = parser()
+        val p = parser() ?: return
         fun complete(a: VoiceParser.Action) = !(a.type in listOf("point", "adv", "game", "set") && a.team == null)
         val action = list.asSequence().mapNotNull { p.parse(it, engine.lang, names) }.firstOrNull { complete(it) }
             ?: p.parse(list[0], engine.lang, names)
