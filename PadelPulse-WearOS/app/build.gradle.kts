@@ -85,9 +85,13 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     // Entreno propio mientras se juega: evita la deteccion automatica del reloj
     implementation("androidx.health:health-services-client:1.0.0-beta03")
-    // health-services-client devuelve ListenableFuture pero lo trae como
-    // "implementation" (no "api"): no llega al classpath de quien lo usa.
-    // Este jar solo tiene la interfaz -sin el resto de Guava- y es el mismo
-    // truco que usan Room, WorkManager y CameraX para el mismo caso.
-    implementation("com.google.guava:listenablefuture:1.0")
+    // health-services-client devuelve ListenableFuture pero trae Guava como
+    // "implementation" (no "api"): no llega al classpath de compilacion.
+    // OJO: el jar suelto "listenablefuture:1.0" NO sirve. Guava fija ese
+    // artefacto a la version "9999.0-empty-to-avoid-conflict-with-guava",
+    // un jar VACIO, y el plugin de Android copia las versiones de ejecucion
+    // al classpath de compilacion: el 1.0 se cambia por el vacio y falla
+    // compileReleaseKotlin con "Unresolved reference ListenableFuture".
+    // Guava entera no tiene ese problema, y R8 quita todo lo que no se usa.
+    implementation("com.google.guava:guava:33.3.1-android")
 }
