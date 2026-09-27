@@ -89,6 +89,14 @@ Play ya rechazó una actualización por esto. No lo toques sin saber:
 - **Indicador de scroll**: el `PositionIndicator` va atado al
   `ScalingLazyListState` **de la pantalla visible**, no a uno compartido. Por
   eso cada pantalla tiene el suyo en `PadelApp.kt`.
+- **Tamaño de letra** (rechazo del 27-09-2026): con la letra del sistema al
+  máximo nada puede quedar cortado. Por eso todas las pantallas son
+  `ScalingLazyColumn` con scroll (también cuenta, inicio, reanudar y fin), los
+  botones son `PPChip` -crecen con el texto; nada de `Button`/`CompactChip` de
+  alto fijo con texto dentro- y no hay `maxLines` que corte frases. En las
+  esferas dibujadas a medida (marcador y salud) el texto sigue la letra hasta
+  un 20 % y `FitText` lo encoge para caber. Pruébalo con
+  `adb shell settings put system font_scale 1.3` (y 2.0).
 
 ---
 

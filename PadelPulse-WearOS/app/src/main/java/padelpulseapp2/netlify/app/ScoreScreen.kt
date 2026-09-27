@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,7 +28,9 @@ import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
+import padelpulseapp2.netlify.app.ui.PPChip
 import padelpulseapp2.netlify.app.ui.PPLabel
+import padelpulseapp2.netlify.app.ui.iconSp
 
 @Composable
 fun ScoreScreen(
@@ -42,6 +45,7 @@ fun ScoreScreen(
 ) {
     var showPicker by remember { mutableStateOf<String?>(null) }
     var editingTeam by remember { mutableStateOf<String?>(null) }
+    val pickerState = rememberScalingLazyListState()
 
     LaunchedEffect(engine.over) { if (engine.over) onEnd() }
 
@@ -49,7 +53,17 @@ fun ScoreScreen(
     // del marcador. Sin avisar al indicador de la pantalla de cual es la
     // lista visible de verdad, Play rechaza la app: "falta la barra de
     // desplazamiento" en esta pantalla, aunque la de fuera si la tenga.
-    LaunchedEffect(editingTeam) { onActiveList(if (editingTeam != null) nameState else null) }
+    // Lo mismo con el selector de sets/juegos, que ahora tambien es una lista
+    // para que con la letra grande se pueda desplazar en vez de cortarse.
+    LaunchedEffect(editingTeam, showPicker) {
+        onActiveList(
+            when {
+                editingTeam != null -> nameState
+                showPicker != null -> pickerState
+                else -> null
+            }
+        )
+    }
     DisposableEffect(Unit) { onDispose { onActiveList(null) } }
 
     val editing = editingTeam
@@ -59,7 +73,7 @@ fun ScoreScreen(
         return
     }
     if (picker != null) {
-        ScorePicker(picker, engine, activity) { showPicker = null }
+        ScorePicker(picker, engine, activity, pickerState) { showPicker = null }
         return
     }
 
@@ -127,58 +141,44 @@ fun NameEditorScreen(
         }
 
         item {
-            Chip(
+            PPChip(
+                if (es) "Dictar 🎙" else "Dictate 🎙",
                 onClick = {
                     activity.startSpeechToText { text ->
                         if (text.isNotBlank()) apply(if (isPlayer) text else text.uppercase()) else onClose()
                     }
                 },
-                label = {
-                    Text(
-                        if (es) "Dictar 🎙" else "Dictate 🎙",
-                        fontSize = PP.Body, fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = accent, contentColor = PP.OnAccent
-                ),
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                background = accent, content = PP.OnAccent, fontSize = PP.Body
             )
         }
 
         if (namesHistory.isNotEmpty()) {
             item { PPLabel(if (es) "RECIENTES" else "RECENT", size = PP.Micro) }
             items(namesHistory) { n ->
-                Chip(
-                    onClick = { apply(n) },
-                    label = { Text(n, fontSize = PP.Label) },
-                    colors = ChipDefaults.primaryChipColors(
-                        backgroundColor = PP.Surface, contentColor = Color.LightGray
-                    ),
-                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp)
+                PPChip(
+                    n, onClick = { apply(n) },
+                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp),
+                    content = Color.LightGray, weight = FontWeight.Normal
                 )
             }
         }
 
         item { PPLabel("PRESETS", size = PP.Micro) }
         items(presets) { p ->
-            Chip(
-                onClick = { apply(p) },
-                label = { Text(p, fontSize = PP.Label) },
-                colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = PP.Surface, contentColor = PP.TextBright
-                ),
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp)
+            PPChip(
+                p, onClick = { apply(p) },
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp),
+                weight = FontWeight.Normal
             )
         }
 
         if (isPlayer && engine.getName(team).isNotBlank()) {
             item {
-                Chip(
-                    onClick = { apply("") },
-                    label = { Text(if (es) "Sin jugador" else "No player", fontSize = PP.Label) },
-                    colors = ChipDefaults.primaryChipColors(backgroundColor = PP.Surface, contentColor = PP.Danger),
-                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp)
+                PPChip(
+                    if (es) "Sin jugador" else "No player", onClick = { apply("") },
+                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 1.dp),
+                    content = PP.Danger, weight = FontWeight.Normal
                 )
             }
         }
@@ -188,15 +188,19 @@ fun NameEditorScreen(
             Button(
                 onClick = onClose,
                 colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
-                modifier = Modifier.size(40.dp)
-            ) { Text("✕", color = PP.TextBright, fontWeight = FontWeight.Bold) }
+                modifier = Modifier.size(48.dp)
+            ) { Text("✕", color = PP.TextBright, fontWeight = FontWeight.Bold, fontSize = iconSp(18.dp)) }
         }
     }
 }
 
 @Composable
 fun ScorePicker(
-    type: String, engine: GameEngine, activity: MainActivity, onClose: () -> Unit
+    type: String,
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
+    onClose: () -> Unit
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val options = if (type == "games") 8 else 4
@@ -213,23 +217,36 @@ fun ScorePicker(
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(PP.Bg),
-        contentAlignment = Alignment.Center
+    // Los rodillos se hacen mas altos con la letra: asi el numero elegido
+    // siempre se ve entero, lo ponga el usuario tan grande como lo ponga.
+    val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val pickerW = 52.dp * scale
+    val pickerH = 84.dp * scale
+
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = roundSafePadding()
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            PPLabel(type, color = accent, size = PP.Label)
+        item {
+            val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
+            PPLabel(if (type == "sets") ui.sets else ui.games, color = accent, size = PP.Label)
+        }
+        item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Picker(state = stateA, modifier = Modifier.size(52.dp, 84.dp), contentDescription = null) {
+                Picker(state = stateA, modifier = Modifier.size(pickerW, pickerH), contentDescription = null) {
                     Text("$it", fontSize = 26.sp, color = if (it == stateA.selectedOption) accent else PP.TextMuted)
                 }
                 Text("–", color = PP.TextBright, fontSize = 20.sp)
-                Picker(state = stateB, modifier = Modifier.size(52.dp, 84.dp), contentDescription = null) {
+                Picker(state = stateB, modifier = Modifier.size(pickerW, pickerH), contentDescription = null) {
                     Text("$it", fontSize = 26.sp, color = if (it == stateB.selectedOption) accent else PP.TextMuted)
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Button(
+        }
+        item {
+            PPChip(
+                "OK",
                 onClick = {
                     if (type == "sets") {
                         engine.setsA = stateA.selectedOption
@@ -244,11 +261,10 @@ fun ScorePicker(
                     activity.pushStateToPhone()
                     onClose()
                 },
-                colors = ButtonDefaults.buttonColors(backgroundColor = accent),
-                modifier = Modifier.height(34.dp)
-            ) {
-                Text("OK", color = PP.OnAccent, fontWeight = FontWeight.Black, fontSize = PP.Label)
-            }
+                modifier = Modifier.fillMaxWidth(0.6f).padding(top = 4.dp),
+                background = accent, content = PP.OnAccent,
+                weight = FontWeight.Black, center = true
+            )
         }
     }
 }

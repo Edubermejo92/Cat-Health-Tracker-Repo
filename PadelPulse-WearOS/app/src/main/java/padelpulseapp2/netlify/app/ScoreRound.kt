@@ -52,8 +52,14 @@ import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Text
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.voice.VoiceReferee
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import padelpulseapp2.netlify.app.ui.FitText
 import padelpulseapp2.netlify.app.ui.PP
+import padelpulseapp2.netlify.app.ui.PPChip
 import padelpulseapp2.netlify.app.ui.PPLabel
+import padelpulseapp2.netlify.app.ui.iconSp
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -79,6 +85,15 @@ private const val PAGES = 3
 
 /** Borde inferior de la zona tocable y arranque de la banda de abajo. */
 private const val BAND_TOP = 0.80f
+
+/**
+ * Cuanto sigue la esfera a la letra del sistema. El marcador esta dibujado a
+ * medida -cada cosa en su sitio, sin scroll-, asi que los textos crecen con
+ * la letra del usuario hasta un 20 % y, si aun asi no caben, FitText los
+ * encoge antes que cortarlos. El tanteo grande no crece: ya ocupa todo lo que
+ * la esfera da de si.
+ */
+private const val DIAL_FONT_CAP = 1.2f
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -125,6 +140,9 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     fun sz(frac: Float): TextUnit = with(density) { (w * frac).toSp() }
+    val fs = density.fontScale.coerceIn(1f, DIAL_FONT_CAP)
+    /** Texto que sigue la letra del sistema, con tope. */
+    fun szT(frac: Float): TextUnit = sz(frac) * fs
     val es = engine.lang == "es"
     val v = Translations.vd[engine.lang] ?: Translations.vd["es"]!!
 
@@ -267,8 +285,8 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        At(w, -0.22f, -0.225f, 0.36f) { SideNames(engine, "A", servingA, accent, w, ::sz) }
-        At(w, 0.22f, -0.225f, 0.36f) { SideNames(engine, "B", !servingA, accent, w, ::sz) }
+        At(w, -0.22f, -0.225f, 0.36f) { SideNames(engine, "A", servingA, accent, w, ::szT) }
+        At(w, 0.22f, -0.225f, 0.36f) { SideNames(engine, "B", !servingA, accent, w, ::szT) }
 
         // Estado especial del juego, en una pastilla entre nombres y tanteo
         val tbActive = engine.isTb || engine.isSuperTbActive()
@@ -281,7 +299,7 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             engine.isTb -> "TIE-BREAK" to PP.Warn
             else -> null
         }
-        if (pill != null) At(w, 0f, -0.148f, 0.5f) { Pill(pill.first, pill.second, sz(0.034f), w) }
+        if (pill != null) At(w, 0f, -0.148f, 0.5f) { Pill(pill.first, pill.second, szT(0.034f), w) }
 
         val strA = engine.getScoreStr("A")
         val strB = engine.getScoreStr("B")
@@ -310,14 +328,14 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
         }
 
         // Juegos, y entre ellos los sets ya jugados (6-4 · 3-6)
-        At(w, -0.27f, 0.14f, 0.2f) { Stat(engine.gamesA.toString(), PP.TextBright, sz(0.08f), FontWeight.Black) }
-        At(w, 0.27f, 0.14f, 0.2f) { Stat(engine.gamesB.toString(), PP.TextBright, sz(0.08f), FontWeight.Black) }
+        At(w, -0.27f, 0.14f, 0.2f) { Stat(engine.gamesA.toString(), PP.TextBright, szT(0.08f), FontWeight.Black) }
+        At(w, 0.27f, 0.14f, 0.2f) { Stat(engine.gamesB.toString(), PP.TextBright, szT(0.08f), FontWeight.Black) }
         At(w, 0f, 0.142f, 0.3f) {
             val sets = engine.setScores.takeLast(3)
             if (sets.isEmpty()) {
-                Stat(ui.games.uppercase(), PP.TextMuted, sz(0.038f), FontWeight.Bold)
+                Stat(ui.games.uppercase(), PP.TextMuted, szT(0.038f), FontWeight.Bold)
             } else {
-                Stat(sets.joinToString(" · "), PP.TextDim, sz(if (sets.size > 2) 0.036f else 0.042f), FontWeight.Bold)
+                Stat(sets.joinToString(" · "), PP.TextDim, szT(if (sets.size > 2) 0.036f else 0.042f), FontWeight.Bold)
             }
         }
 
@@ -332,29 +350,19 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
                 now = System.currentTimeMillis()
             }
             val showHeard = micOn && voice.heard.isNotBlank() && now - voice.heardAt < 3000
+            // En el hueco que deja el bisel a esa altura (0.9 del ancho): si
+            // no cabe, la linea se encoge entera en vez de perder el final
             if (showHeard) {
-                Text(
-                    "🎙 «${voice.heard}»", color = PP.Danger, fontSize = sz(0.042f),
-                    fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            } else Row(verticalAlignment = Alignment.CenterVertically) {
-                // Si el enlace falla, eso va primero
-                if (!linkOk) {
-                    Text(
-                        "● ${linkLabel(engine)} · ", color = linkColor(engine),
-                        fontSize = sz(0.044f), fontWeight = FontWeight.Bold, maxLines = 1
-                    )
+                FitText("🎙 «${voice.heard}»", PP.Danger, szT(0.042f))
+            } else {
+                val lc = linkColor(engine)
+                val status = buildAnnotatedString {
+                    // Si el enlace falla, eso va primero
+                    if (!linkOk) withStyle(SpanStyle(color = lc)) { append("● ${linkLabel(engine)} · ") }
+                    append((if (linkOk) "$phase · " else "") + activity.getTimerDisplay())
+                    if (engine.heartRate > 0) withStyle(SpanStyle(color = accent)) { append(" · ♥ ${engine.heartRate}") }
                 }
-                Text(
-                    (if (linkOk) "$phase · " else "") + activity.getTimerDisplay(), color = PP.TextDim,
-                    fontSize = sz(0.044f), fontWeight = FontWeight.Bold, maxLines = 1
-                )
-                if (engine.heartRate > 0) {
-                    Text(
-                        " · ♥ ${engine.heartRate}", color = accent,
-                        fontSize = sz(0.044f), fontWeight = FontWeight.Bold, maxLines = 1
-                    )
-                }
+                FitText(status, PP.TextDim, szT(0.044f))
             }
         }
 
@@ -369,7 +377,7 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             labelColor = if (second) PP.Warn else PP.TextBright,
             background = if (second) PP.Warn.copy(alpha = 0.20f) else PP.SurfaceHigh,
             line = if (second) PP.Warn else PP.Line,
-            labelSize = sz(0.055f)
+            labelSize = szT(0.055f)
         ) {
             engine.handleFault(engine.serving)
             activity.onLocalScoreAction("fault", engine.serving)
@@ -392,23 +400,16 @@ private fun SideNames(engine: GameEngine, team: String, serving: Boolean, accent
             Box(Modifier.size(w * 0.022f).clip(CircleShape).background(BALL))
             Spacer(Modifier.width(w * 0.012f))
         }
+        // Nombres largos: la letra baja hasta que caben, no se cortan
         if (players.size == 2) {
             val size = sz(0.041f)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 players.forEach { p ->
-                    Text(
-                        p.uppercase(), color = color, fontSize = size, fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                        style = TextStyle(lineHeight = size * 1.05f)
-                    )
+                    FitText(p.uppercase(), color, size, style = TextStyle(lineHeight = size * 1.05f))
                 }
             }
         } else {
-            Text(
-                (players.firstOrNull() ?: engine.getName(team)).uppercase(), color = color, fontSize = sz(0.05f),
-                fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
+            FitText((players.firstOrNull() ?: engine.getName(team)).uppercase(), color, sz(0.05f))
         }
     }
 }
@@ -416,9 +417,8 @@ private fun SideNames(engine: GameEngine, team: String, serving: Boolean, accent
 /** Pastilla de estado: iguales, ventaja, punto de oro, tie-break. */
 @Composable
 private fun Pill(text: String, color: Color, size: TextUnit, w: Dp) {
-    Text(
-        text, color = color, fontSize = size, fontWeight = FontWeight.Black,
-        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+    FitText(
+        text, color, size, FontWeight.Black,
         modifier = Modifier
             .clip(PP.PillShape)
             .background(color.copy(alpha = 0.14f))
@@ -451,7 +451,7 @@ private fun BigScore(text: String, color: Color, size: TextUnit, glow: Boolean) 
 
 @Composable
 private fun Stat(text: String, color: Color, size: TextUnit, weight: FontWeight = FontWeight.ExtraBold) {
-    Text(text, color = color, fontSize = size, fontWeight = weight, maxLines = 1, textAlign = TextAlign.Center)
+    FitText(text, color, size, weight)
 }
 
 /**
@@ -607,35 +607,22 @@ private fun RoundAction(glyph: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
-        modifier = Modifier.size(44.dp)
+        modifier = Modifier.size(48.dp)
     ) {
-        Text(glyph, fontSize = 18.sp, color = PP.TextBright)
+        Text(glyph, fontSize = iconSp(18.dp), color = PP.TextBright)
     }
 }
 
 @Composable
 private fun ControlChip(label: String, secondary: String?, danger: Boolean = false, onClick: () -> Unit) {
-    Chip(
-        onClick = onClick,
-        label = {
-            Text(
-                label, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, color = if (danger) PP.Danger else PP.TextBright
-            )
-        },
-        secondaryLabel = if (secondary != null) {
-            {
-                Text(
-                    secondary, fontSize = 12.sp, color = PP.TextDim, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        } else null,
-        colors = ChipDefaults.primaryChipColors(
-            backgroundColor = if (danger) Color(0xFF2A1212) else PP.SurfaceHigh,
-            contentColor = PP.TextBright
-        ),
-        modifier = Modifier.fillMaxWidth()
+    // Crece con la letra del sistema: nada de "…" en los nombres largos
+    PPChip(
+        label, onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        background = if (danger) Color(0xFF2A1212) else PP.SurfaceHigh,
+        content = if (danger) PP.Danger else PP.TextBright,
+        secondary = secondary, secondarySize = 12.sp,
+        fontSize = 14.sp
     )
 }
 
@@ -647,6 +634,8 @@ private fun ControlChip(label: String, secondary: String?, danger: Boolean = fal
 private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color, w: Dp) {
     val density = LocalDensity.current
     fun sz(frac: Float): TextUnit = with(density) { (w * frac).toSp() }
+    val fs = density.fontScale.coerceIn(1f, DIAL_FONT_CAP)
+    fun szT(frac: Float): TextUnit = sz(frac) * fs
     val es = engine.lang == "es"
 
     // Solo lecturas reales del sensor. Sin dato, "–", nunca un numero inventado.
@@ -674,14 +663,14 @@ private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color
             if (fill > 110f) arc(285f, fill - 110f, accent)
         }
 
-        At(w, 0f, -0.31f, 0.6f) { Stat("⏱ " + activity.getTimerDisplay(), PP.TextDim, sz(0.05f), FontWeight.Bold) }
+        At(w, 0f, -0.31f, 0.6f) { Stat("⏱ " + activity.getTimerDisplay(), PP.TextDim, szT(0.05f), FontWeight.Bold) }
         At(w, 0f, -0.205f, 0.3f) { Stat("♥", accent, sz(0.06f)) }
         At(w, 0f, -0.07f, 0.6f) { Stat(hr, PP.TextBright, sz(0.22f), FontWeight.Black) }
-        At(w, 0f, 0.065f, 0.4f) { Stat("PPM", PP.TextMuted, sz(0.042f), FontWeight.Bold) }
-        At(w, -0.16f, 0.15f, 0.3f) { Stat(kcal, PP.TextBright, sz(0.07f)) }
-        At(w, 0.16f, 0.15f, 0.3f) { Stat(km, PP.TextBright, sz(0.07f)) }
-        At(w, -0.16f, 0.215f, 0.3f) { Stat("🔥 KCAL", PP.TextMuted, sz(0.038f), FontWeight.Bold) }
-        At(w, 0.16f, 0.215f, 0.3f) { Stat("🏃 KM", PP.TextMuted, sz(0.038f), FontWeight.Bold) }
+        At(w, 0f, 0.065f, 0.4f) { Stat("PPM", PP.TextMuted, szT(0.042f), FontWeight.Bold) }
+        At(w, -0.16f, 0.15f, 0.3f) { Stat(kcal, PP.TextBright, szT(0.07f)) }
+        At(w, 0.16f, 0.15f, 0.3f) { Stat(km, PP.TextBright, szT(0.07f)) }
+        At(w, -0.16f, 0.215f, 0.28f) { Stat("🔥 KCAL", PP.TextMuted, szT(0.038f), FontWeight.Bold) }
+        At(w, 0.16f, 0.215f, 0.28f) { Stat("🏃 KM", PP.TextMuted, szT(0.038f), FontWeight.Bold) }
 
         // Abajo, el bloqueo de la deteccion automatica de ejercicio: es lo que
         // evita que la app de salud del reloj tape el marcador al moverte.
@@ -694,7 +683,7 @@ private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color
             labelColor = guardColor,
             background = if (on) ThemeUtils.tint(engine.theme, 0.16f) else PP.SurfaceHigh,
             line = if (on) accent else PP.Line,
-            labelSize = sz(0.04f)
+            labelSize = szT(0.04f)
         ) { WorkoutGuard.setEnabled(activity, !on, activity.timerRunning) }
     }
 }
@@ -741,10 +730,9 @@ private fun BoxScope.EdgeBand(
     ) {
         Box(Modifier.fillMaxWidth().height(1.5.dp).background(line))
         Spacer(Modifier.height(w * 0.035f))
-        Text(
-            label, color = labelColor, fontSize = labelSize, fontWeight = FontWeight.Black,
-            maxLines = 1, textAlign = TextAlign.Center
-        )
+        // A esa altura el bisel deja ~0.68 del ancho: el texto se encoge para
+        // caber ahi dentro, sea cual sea la letra del sistema
+        FitText(label, labelColor, labelSize, FontWeight.Black, modifier = Modifier.width(w * 0.62f))
     }
 }
 

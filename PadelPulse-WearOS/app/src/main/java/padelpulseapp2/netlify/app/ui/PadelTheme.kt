@@ -2,22 +2,34 @@ package padelpulseapp2.netlify.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.wear.compose.material.LocalTextStyle
 import androidx.wear.compose.material.Text
 import padelpulseapp2.netlify.app.R
 
@@ -98,6 +110,8 @@ object PP {
     val Micro = 8.sp
 
     val CardShape = RoundedCornerShape(16.dp)
+    /** Estadio con una linea; con dos o tres no se come las esquinas del texto. */
+    val ChipShape = RoundedCornerShape(24.dp)
     val PillShape = RoundedCornerShape(50)
 }
 
@@ -175,3 +189,129 @@ fun PPStatusPill(
 fun accentGlow(accent: Color): Brush = Brush.verticalGradient(
     listOf(accent.copy(alpha = 0.14f), Color.Transparent)
 )
+
+// ─────────────────────────────────────────────────────────────────────
+// Tamaño de letra del sistema
+//
+// Play exige que la app siga el tamaño de fuente que elige el usuario en el
+// reloj y que, con la letra grande, nada quede cortado por los bordes. Por eso
+// ningun texto va en una caja de alto fijo: los botones crecen con su texto,
+// las pantallas son listas con scroll y en las esferas dibujadas a medida (el
+// marcador, la salud) el texto se encoge para caber antes que cortarse.
+// ─────────────────────────────────────────────────────────────────────
+
+/** El usuario ha subido el tamaño de letra: las filas apretadas pasan a columna. */
+@Composable
+fun isLargeFont(): Boolean = LocalDensity.current.fontScale > 1.15f
+
+/**
+ * Tamaño que ignora la letra del sistema. Solo para simbolos dentro de un
+ * circulo de tamaño fijo (↩, ✕, 🔊): son iconos, no texto que leer, y al
+ * crecer se saldrian del circulo.
+ */
+@Composable
+fun iconSp(size: Dp): TextUnit = with(LocalDensity.current) { size.toSp() }
+
+/**
+ * Boton del reloj. Sustituye a Chip, CompactChip y a los Button de alto fijo:
+ * esos tienen la altura clavada y, con la letra grande, cortaban el texto
+ * ("JUGAR SIN CUE…"). Este mide como minimo lo que pide Wear OS para un toque
+ * comodo y crece con el texto, que se parte en lineas en vez de cortarse.
+ */
+@Composable
+fun PPChip(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(0.94f),
+    background: Color = PP.Surface,
+    content: Color = PP.TextBright,
+    secondary: String? = null,
+    secondaryColor: Color = PP.TextDim,
+    secondarySize: TextUnit = PP.Micro,
+    icon: String? = null,
+    fontSize: TextUnit = PP.Label,
+    weight: FontWeight = FontWeight.Bold,
+    center: Boolean = false,
+    enabled: Boolean = true,
+    minHeight: Dp = 48.dp
+) {
+    Row(
+        modifier = modifier
+            .heightIn(min = minHeight)
+            .clip(PP.ChipShape)
+            .background(background)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.5f)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (center) Arrangement.Center else Arrangement.Start
+    ) {
+        if (icon != null) {
+            Text(icon, fontSize = 16.sp)
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(
+            modifier = if (center) Modifier else Modifier.weight(1f),
+            horizontalAlignment = if (center) Alignment.CenterHorizontally else Alignment.Start
+        ) {
+            Text(
+                label, color = content, fontSize = fontSize, fontWeight = weight,
+                textAlign = if (center) TextAlign.Center else TextAlign.Start
+            )
+            if (secondary != null) {
+                Text(
+                    secondary, color = secondaryColor, fontSize = secondarySize,
+                    textAlign = if (center) TextAlign.Center else TextAlign.Start
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Texto de una linea que se encoge hasta caber en su hueco. Para las esferas
+ * dibujadas a medida, donde cada cosa tiene su sitio y no se puede hacer
+ * scroll: antes de cortar una palabra, la letra baja (hasta [minFactor]).
+ */
+@Composable
+fun FitText(
+    text: String,
+    color: Color,
+    size: TextUnit,
+    weight: FontWeight = FontWeight.Bold,
+    modifier: Modifier = Modifier,
+    minFactor: Float = 0.55f,
+    style: TextStyle = TextStyle.Default
+) = FitText(AnnotatedString(text), color, size, weight, modifier, minFactor, style)
+
+/** Igual, con tramos de distinto color (la linea de estado del marcador). */
+@Composable
+fun FitText(
+    text: AnnotatedString,
+    color: Color,
+    size: TextUnit,
+    weight: FontWeight = FontWeight.Bold,
+    modifier: Modifier = Modifier,
+    minFactor: Float = 0.55f,
+    style: TextStyle = TextStyle.Default
+) {
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val measurer = rememberTextMeasurer()
+        val base = LocalTextStyle.current.merge(style).copy(fontWeight = weight)
+        val maxW = constraints.maxWidth
+        val fitted = remember(text, size, maxW, base) {
+            var s = size.value
+            val min = size.value * minFactor
+            while (s > min && measurer.measure(
+                    text, base.copy(fontSize = s.sp), maxLines = 1, softWrap = false
+                ).size.width > maxW
+            ) s *= 0.93f
+            s.coerceAtLeast(min).sp
+        }
+        Text(
+            text, color = color, fontSize = fitted, fontWeight = weight,
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center, style = style
+        )
+    }
+}

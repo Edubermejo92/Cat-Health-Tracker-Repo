@@ -11,6 +11,7 @@ import androidx.wear.compose.material.*
 import kotlinx.coroutines.delay
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
+import padelpulseapp2.netlify.app.ui.PPChip
 import padelpulseapp2.netlify.app.ui.PPLabel
 
 /**
@@ -64,7 +65,7 @@ fun DetectionCard(engine: GameEngine, activity: MainActivity, accent: Color) {
         Spacer(Modifier.height(2.dp))
         Text(
             status, color = color, fontSize = PP.Micro, fontWeight = FontWeight.Bold,
-            maxLines = 3, textAlign = TextAlign.Center
+            textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(4.dp))
         ToggleRow(
@@ -73,15 +74,17 @@ fun DetectionCard(engine: GameEngine, activity: MainActivity, accent: Color) {
         ) { WorkoutGuard.setEnabled(activity, it, activity.timerRunning) }
         if (samsung != null) {
             Spacer(Modifier.height(4.dp))
-            CompactChip(
+            PPChip(
+                "Samsung Health",
                 onClick = { runCatching { activity.startActivity(samsung) } },
-                label = { Text("Samsung Health", fontSize = PP.Micro, maxLines = 1) },
-                colors = ChipDefaults.primaryChipColors(backgroundColor = PP.SurfaceHigh, contentColor = accent)
+                modifier = Modifier.fillMaxWidth(),
+                background = PP.SurfaceHigh, content = accent,
+                fontSize = PP.Micro, center = true, minHeight = 40.dp
             )
             Text(
                 if (es) "Para apagarla siempre: Ajustes › Detectar entrenamientos"
                 else "To turn it off for good: Settings › Workout detection",
-                color = PP.TextMuted, fontSize = PP.Micro, maxLines = 3, textAlign = TextAlign.Center
+                color = PP.TextMuted, fontSize = PP.Micro, textAlign = TextAlign.Center
             )
         }
     }
@@ -102,16 +105,13 @@ fun ExitButton(engine: GameEngine, activity: MainActivity) {
             armed = false
         }
     }
-    Button(
+    PPChip(
+        if (armed) (if (es) "TOCA OTRA VEZ PARA SALIR" else "TAP AGAIN TO EXIT")
+        else (if (es) "⏻ SALIR DE LA APP" else "⏻ EXIT APP"),
         onClick = { if (armed) activity.exitApp() else armed = true },
-        colors = ButtonDefaults.buttonColors(backgroundColor = if (armed) PP.Danger else PP.Surface),
-        modifier = Modifier.fillMaxWidth(0.94f).height(34.dp)
-    ) {
-        Text(
-            if (armed) (if (es) "TOCA OTRA VEZ PARA SALIR" else "TAP AGAIN TO EXIT")
-            else (if (es) "⏻ SALIR DE LA APP" else "⏻ EXIT APP"),
-            color = if (armed) Color.White else PP.Danger,
-            fontSize = PP.Micro, fontWeight = FontWeight.Black, maxLines = 1
-        )
-    }
+        modifier = Modifier.fillMaxWidth(0.94f).padding(top = 2.dp),
+        background = if (armed) PP.Danger else PP.Surface,
+        content = if (armed) Color.White else PP.Danger,
+        fontSize = PP.Micro, weight = FontWeight.Black, center = true
+    )
 }

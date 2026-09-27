@@ -27,6 +27,7 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import padelpulseapp2.netlify.app.sync.PhoneLink
 import padelpulseapp2.netlify.app.ui.PP
+import padelpulseapp2.netlify.app.ui.PPChip
 import padelpulseapp2.netlify.app.ui.PPLabel
 
 /**
@@ -134,13 +135,18 @@ fun InviteScreen(
                 if (es) "Que lo escanee con la camara de su movil"
                 else "Scan it with their phone camera",
                 color = PP.TextDim, fontSize = PP.Micro,
-                textAlign = TextAlign.Center, maxLines = 2,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(0.86f)
             )
         }
         item {
             val paired = PhoneLink.paired
-            Chip(
+            PPChip(
+                when {
+                    !paired -> if (es) "VINCULA EL MOVIL" else "LINK YOUR PHONE"
+                    sent -> if (es) "MIRA EL MOVIL ✓" else "CHECK YOUR PHONE ✓"
+                    else -> if (es) "ENVIAR DESDE EL MOVIL" else "SEND FROM PHONE"
+                },
                 onClick = {
                     if (activity.sendInviteToPhone()) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -148,32 +154,11 @@ fun InviteScreen(
                     }
                 },
                 enabled = paired,
-                label = {
-                    Text(
-                        when {
-                            !paired -> if (es) "VINCULA EL MOVIL" else "LINK YOUR PHONE"
-                            sent -> if (es) "MIRA EL MOVIL ✓" else "CHECK YOUR PHONE ✓"
-                            else -> if (es) "ENVIAR DESDE EL MOVIL" else "SEND FROM PHONE"
-                        },
-                        fontSize = PP.Micro, fontWeight = FontWeight.Black, maxLines = 1
-                    )
-                },
-                icon = { Text("📲", fontSize = PP.Body) },
-                colors = ChipDefaults.primaryChipColors(backgroundColor = accent, contentColor = PP.OnAccent),
-                modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp)
+                modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp),
+                background = accent, content = PP.OnAccent,
+                icon = "📲", fontSize = PP.Micro, weight = FontWeight.Black
             )
         }
-        item {
-            Button(
-                onClick = onBack,
-                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
-                modifier = Modifier.fillMaxWidth(0.94f).height(34.dp).padding(top = 4.dp)
-            ) {
-                Text(
-                    if (es) "‹ VOLVER" else "‹ BACK",
-                    color = accent, fontSize = PP.Label, fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        item { BackChip(engine, accent, onBack) }
     }
 }

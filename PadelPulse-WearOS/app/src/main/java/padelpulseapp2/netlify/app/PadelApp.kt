@@ -33,6 +33,9 @@ import padelpulseapp2.netlify.app.sync.SyncProtocol
 import padelpulseapp2.netlify.app.ui.Lexend
 import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPCard
+import padelpulseapp2.netlify.app.ui.PPChip
+import padelpulseapp2.netlify.app.ui.iconSp
+import padelpulseapp2.netlify.app.ui.isLargeFont
 import padelpulseapp2.netlify.app.ui.PPLabel
 import padelpulseapp2.netlify.app.ui.PPStatusPill
 
@@ -52,9 +55,15 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     val historyState = rememberScalingLazyListState()
     val inviteState = rememberScalingLazyListState()
     val nameState = rememberScalingLazyListState()
+    // Tambien las pantallas cortas son listas: con la letra del sistema al
+    // maximo ya no caben enteras, y Play rechazo la app por texto cortado en
+    // los bordes. Asi se pueden desplazar y llevan su indicador.
+    val accountState = rememberScalingLazyListState()
+    val splashState = rememberScalingLazyListState()
+    val resumeState = rememberScalingLazyListState()
+    val endState = rememberScalingLazyListState()
 
-    // El indicador sigue a la lista de la pantalla visible. En las pantallas
-    // que no tienen scroll (splash, resume, fin) no se muestra ninguno.
+    // El indicador sigue a la lista de la pantalla visible.
     //
     // Dentro de "score" y "settings" hay listas que se abren encima (el
     // editor de nombre, el selector de idioma): esas avisan aqui cual es la
@@ -70,7 +79,10 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
         "settings" -> settingsState
         "history" -> historyState
         "invite" -> inviteState
-        else -> null
+        "account" -> accountState
+        "resume" -> resumeState
+        "end" -> endState
+        else -> splashState
     }
 
     MaterialTheme(
@@ -99,9 +111,9 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
             Box(modifier = Modifier.fillMaxSize().background(PP.Bg)) {
                 Crossfade(targetState = engine.currentScreen, label = "nav") { current ->
                     when (current) {
-                        "account" -> AccountScreen(engine, activity)
-                        "splash" -> SplashScreen(engine, activity)
-                        "resume" -> ResumeScreen(engine, activity)
+                        "account" -> AccountScreen(engine, activity, accountState)
+                        "splash" -> SplashScreen(engine, activity, splashState)
+                        "resume" -> ResumeScreen(engine, activity, resumeState)
                         "lang" -> LangScreen(engine, activity, langState)
                         "bt" -> PairScreen(engine, activity, pairState)
                         "score" -> ScoreScreen(
@@ -118,8 +130,8 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                         )
                         "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = "settings" }
                         "invite" -> InviteScreen(engine, activity, inviteState) { engine.currentScreen = "settings" }
-                        "end" -> EndScreen(engine, activity)
-                        else -> SplashScreen(engine, activity)
+                        "end" -> EndScreen(engine, activity, endState)
+                        else -> SplashScreen(engine, activity, splashState)
                     }
                 }
             }
@@ -194,7 +206,11 @@ fun BackRow(engine: GameEngine, onBack: () -> Unit) {
  * entra sin ella: la cuenta solo sirve para respaldar el historial.
  */
 @Composable
-fun AccountScreen(engine: GameEngine, activity: MainActivity) {
+fun AccountScreen(
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
+) {
     val accent = ThemeUtils.getColor(engine.theme)
     val es = engine.lang == "es"
 
@@ -206,51 +222,59 @@ fun AccountScreen(engine: GameEngine, activity: MainActivity) {
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(roundSafeBoxPadding()),
+    // Lista y no columna fija: con la letra grande el texto ocupa el doble y
+    // una columna centrada se salia por arriba y por abajo, cortada por el
+    // bisel (motivo del rechazo de Play). En la lista se desplaza con el dedo
+    // o la corona y nada queda fuera.
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentPadding = roundSafePadding()
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.logo_wordmark),
-            contentDescription = "PadelPulse Live",
-            modifier = Modifier.fillMaxWidth(0.62f).aspectRatio(LOGO_RATIO).padding(bottom = 4.dp)
-        )
-
-        if (WatchAccount.signedIn) {
-            PPLabel(if (es) "SESION INICIADA" else "SIGNED IN", color = accent, size = PP.Label)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                WatchAccount.name.ifEmpty { WatchAccount.email },
-                color = PP.TextBright, fontSize = PP.Body,
-                fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center
-            )
-        } else {
-            PPLabel(if (es) "TU CUENTA" else "YOUR ACCOUNT", color = accent, size = PP.Label)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (es) "Inicia sesion en PadelPulse del movil y el reloj entra solo."
-                else "Sign in on the phone app and the watch follows automatically.",
-                color = PP.TextDim, fontSize = PP.Micro,
-                textAlign = TextAlign.Center, maxLines = 4
-            )
-            Spacer(Modifier.height(10.dp))
-            LinkPill(engine)
-            Spacer(Modifier.height(10.dp))
-
-            Button(
-                onClick = {
-                    WatchAccount.skip(activity)
-                    engine.currentScreen = "splash"
-                },
-                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
-                modifier = Modifier.height(36.dp).fillMaxWidth(0.9f).clip(RoundedCornerShape(18.dp))
-            ) {
-                Text(
-                    if (es) "JUGAR SIN CUENTA" else "PLAY WITHOUT ACCOUNT",
-                    color = accent, fontSize = PP.Micro, fontWeight = FontWeight.Black
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_wordmark),
+                    contentDescription = "PadelPulse Live",
+                    modifier = Modifier.fillMaxWidth(0.46f).aspectRatio(LOGO_RATIO).padding(bottom = 2.dp)
+                )
+                PPLabel(
+                    if (WatchAccount.signedIn) (if (es) "SESION INICIADA" else "SIGNED IN")
+                    else (if (es) "TU CUENTA" else "YOUR ACCOUNT"),
+                    color = accent, size = PP.Label
                 )
             }
+        }
+
+        if (WatchAccount.signedIn) {
+            item {
+                Text(
+                    WatchAccount.name.ifEmpty { WatchAccount.email },
+                    color = PP.TextBright, fontSize = PP.Body,
+                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            item {
+                Text(
+                    if (es) "Inicia sesion en PadelPulse del movil y el reloj entra solo."
+                    else "Sign in on the phone app and the watch follows automatically.",
+                    color = PP.TextDim, fontSize = PP.Micro, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+            item {
+                PPChip(
+                    if (es) "JUGAR SIN CUENTA" else "PLAY WITHOUT ACCOUNT",
+                    onClick = {
+                        WatchAccount.skip(activity)
+                        engine.currentScreen = "splash"
+                    },
+                    content = accent, weight = FontWeight.Black, center = true
+                )
+            }
+            item { LinkPill(engine, Modifier.padding(top = 4.dp)) }
         }
     }
 }
@@ -260,7 +284,11 @@ fun AccountScreen(engine: GameEngine, activity: MainActivity) {
 // ─────────────────────────────────────────────────────────────────────
 
 @Composable
-fun SplashScreen(engine: GameEngine, activity: MainActivity) {
+fun SplashScreen(
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
+) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
     var visible by remember { mutableStateOf(false) }
@@ -268,36 +296,31 @@ fun SplashScreen(engine: GameEngine, activity: MainActivity) {
     val fade by animateFloatAsState(if (visible) 1f else 0f, tween(700), label = "fade")
     val logoScale by animateFloatAsState(if (visible) 1f else 0.85f, tween(700, easing = FastOutSlowInEasing), label = "scale")
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(roundSafeBoxPadding(square = 18.dp)).alpha(fade),
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().alpha(fade).rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentPadding = roundSafePadding()
     ) {
         // El mismo logo que la cabecera del movil
-        Image(
-            painter = painterResource(id = R.drawable.logo_wordmark),
-            contentDescription = "PadelPulse Live",
-            modifier = Modifier
-                .fillMaxWidth(0.8f * logoScale)
-                .aspectRatio(LOGO_RATIO)
-        )
-
-        Spacer(Modifier.height(14.dp))
-        LinkPill(engine)
-        Spacer(Modifier.height(14.dp))
-
-        Button(
-            onClick = {
-                engine.currentScreen = if (engine.hasSavedMatch()) "resume" else "lang"
-            },
-            colors = ButtonDefaults.buttonColors(backgroundColor = accent),
-            modifier = Modifier.height(40.dp).fillMaxWidth(0.78f).clip(RoundedCornerShape(20.dp))
-        ) {
-            Text(
+        item {
+            Image(
+                painter = painterResource(id = R.drawable.logo_wordmark),
+                contentDescription = "PadelPulse Live",
+                modifier = Modifier
+                    .fillMaxWidth(0.72f * logoScale)
+                    .aspectRatio(LOGO_RATIO)
+                    .padding(bottom = 4.dp)
+            )
+        }
+        item { LinkPill(engine, Modifier.padding(vertical = 4.dp)) }
+        item {
+            PPChip(
                 ui.start.uppercase(),
-                color = PP.OnAccent,
-                fontWeight = FontWeight.Black,
-                fontSize = PP.Body
+                onClick = { engine.currentScreen = if (engine.hasSavedMatch()) "resume" else "lang" },
+                modifier = Modifier.fillMaxWidth(0.84f).padding(top = 4.dp),
+                background = accent, content = PP.OnAccent,
+                fontSize = PP.Body, weight = FontWeight.Black, center = true
             )
         }
     }
@@ -327,37 +350,29 @@ fun LangScreen(
 
         items(Translations.langs) { l ->
             val sel = engine.lang == l.id
-            Chip(
+            PPChip(
+                l.name,
                 onClick = {
                     engine.lang = l.id
                     engine.saveState()
                     activity.sendSettingsToPhone()
                 },
-                label = {
-                    Text(
-                        l.name,
-                        fontSize = PP.Body,
-                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                icon = { Text(l.flag, fontSize = 17.sp) },
-                colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = if (sel) accent.copy(alpha = 0.18f) else PP.Surface,
-                    contentColor = if (sel) accent else PP.TextBright
-                ),
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                background = if (sel) accent.copy(alpha = 0.18f) else PP.Surface,
+                content = if (sel) accent else PP.TextBright,
+                icon = l.flag, fontSize = PP.Body,
+                weight = if (sel) FontWeight.Bold else FontWeight.Normal
             )
         }
 
         item {
-            Spacer(Modifier.height(8.dp))
-            Button(
+            PPChip(
+                ui.done.uppercase(),
                 onClick = { activity.startTimer(); engine.currentScreen = "score" },
-                colors = ButtonDefaults.buttonColors(backgroundColor = accent),
-                modifier = Modifier.fillMaxWidth(0.78f).height(38.dp)
-            ) {
-                Text(ui.done.uppercase(), color = PP.OnAccent, fontWeight = FontWeight.Black, fontSize = PP.Body)
-            }
+                modifier = Modifier.fillMaxWidth(0.84f).padding(top = 8.dp),
+                background = accent, content = PP.OnAccent,
+                fontSize = PP.Body, weight = FontWeight.Black, center = true
+            )
         }
     }
 }
@@ -447,7 +462,7 @@ fun PairScreen(
                     val c = if (filled) accent else PP.Line
                     Box(
                         modifier = Modifier
-                            .size(30.dp, 40.dp)
+                            .defaultMinSize(30.dp, 40.dp)
                             .clip(RoundedCornerShape(9.dp))
                             .background(if (filled) accent.copy(alpha = 0.12f) else PP.Surface)
                             .border(1.dp, c, RoundedCornerShape(9.dp)),
@@ -492,7 +507,7 @@ fun PairScreen(
                             }
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp, 30.dp)
+                                    .defaultMinSize(38.dp, 30.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(bg)
                                     .clickable {
@@ -525,34 +540,25 @@ fun PairScreen(
         // Vincular sin codigo: el emparejado Bluetooth ya lo hizo el sistema,
         // el codigo solo evita confundir dos moviles en la misma pista.
         item {
-            Chip(
+            PPChip(
+                if (es) "Vincular sin codigo" else "Link without code",
                 onClick = { activity.sendPairRequest("AUTO") },
-                label = {
-                    Text(
-                        if (es) "Vincular sin codigo" else "Link without code",
-                        fontSize = PP.Label
-                    )
-                },
-                colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = PP.Surface, contentColor = accent
-                ),
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                content = accent
             )
         }
 
         item {
-            Chip(
+            PPChip(
+                ui.skip,
                 onClick = {
                     // Jugar ya, sin esperar al movil. Si aparece mas tarde, se
                     // vincula solo y el marcador se pone al dia.
                     activity.startTimer()
                     engine.currentScreen = "score"
                 },
-                label = { Text(ui.skip, fontSize = PP.Label) },
-                colors = ChipDefaults.primaryChipColors(
-                    backgroundColor = PP.Surface, contentColor = PP.TextDim
-                ),
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                content = PP.TextDim
             )
         }
     }
@@ -592,28 +598,26 @@ fun SettingsScreen(
         ) {
             item { PPLabel(ui.chooseLang, color = accent, size = PP.Label) }
             items(Translations.langs) { l ->
-                Chip(
+                PPChip(
+                    l.name,
                     onClick = {
                         engine.lang = l.id
                         showLangPicker = false
                         engine.saveState()
                         activity.sendSettingsToPhone()
                     },
-                    label = { Text(l.name, fontSize = PP.Body) },
-                    icon = { Text(l.flag, fontSize = 16.sp) },
-                    colors = ChipDefaults.primaryChipColors(
-                        backgroundColor = if (engine.lang == l.id) accent.copy(alpha = 0.18f) else PP.Surface,
-                        contentColor = if (engine.lang == l.id) accent else PP.TextBright
-                    ),
-                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp)
+                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                    background = if (engine.lang == l.id) accent.copy(alpha = 0.18f) else PP.Surface,
+                    content = if (engine.lang == l.id) accent else PP.TextBright,
+                    icon = l.flag, fontSize = PP.Body, weight = FontWeight.Normal
                 )
             }
             item {
                 Button(
                     onClick = { showLangPicker = false },
                     colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
-                    modifier = Modifier.padding(top = 6.dp).size(40.dp)
-                ) { Text("✕", color = PP.TextBright) }
+                    modifier = Modifier.padding(top = 6.dp).size(48.dp)
+                ) { Text("✕", color = PP.TextBright, fontSize = iconSp(18.dp)) }
             }
         }
         return
@@ -639,30 +643,42 @@ fun SettingsScreen(
                     Text(
                         if (PhoneLink.phoneName.isNotEmpty()) PhoneLink.phoneName
                         else if (es) "Movil vinculado" else "Phone linked",
-                        color = PP.TextMuted, fontSize = PP.Micro, maxLines = 1
+                        color = PP.TextMuted, fontSize = PP.Micro, textAlign = TextAlign.Center
                     )
                 }
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    CompactChip(
+                // Con la letra grande los dos no caben en fila: uno encima del otro
+                val sync: @Composable (Modifier) -> Unit = { m ->
+                    PPChip(
+                        if (es) "Sincronizar" else "Sync",
                         onClick = {
                             activity.sendHello()
                             activity.sendSettingsToPhone()
                             activity.pushStateToPhone()
                             activity.pushHealthToPhone()
                         },
-                        label = { Text(if (es) "Sincronizar" else "Sync", fontSize = PP.Micro) },
-                        colors = ChipDefaults.primaryChipColors(
-                            backgroundColor = accent, contentColor = PP.OnAccent
-                        )
+                        modifier = m, background = accent, content = PP.OnAccent,
+                        fontSize = PP.Micro, center = true, minHeight = 40.dp
                     )
-                    CompactChip(
+                }
+                val phone: @Composable (Modifier) -> Unit = { m ->
+                    PPChip(
+                        if (es) "MOVIL" else "PHONE",
                         onClick = { engine.currentScreen = "bt" },
-                        label = { Text(if (engine.lang == "es") "MOVIL" else "PHONE", fontSize = PP.Micro) },
-                        colors = ChipDefaults.primaryChipColors(
-                            backgroundColor = PP.SurfaceHigh, contentColor = accent
-                        )
+                        modifier = m, background = PP.SurfaceHigh, content = accent,
+                        fontSize = PP.Micro, center = true, minHeight = 40.dp
                     )
+                }
+                if (isLargeFont()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        sync(Modifier.fillMaxWidth())
+                        phone(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        sync(Modifier.weight(1f))
+                        phone(Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -742,7 +758,7 @@ fun SettingsScreen(
                         val sel = engine.bestOf == n
                         Box(
                             modifier = Modifier
-                                .size(34.dp, 26.dp)
+                                .defaultMinSize(38.dp, 30.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (sel) accent else PP.SurfaceHigh)
                                 .clickable {
@@ -794,35 +810,23 @@ fun SettingsScreen(
         }
 
         item {
-            Spacer(Modifier.height(6.dp))
-            Button(
+            PPChip(
+                ui.newMatch.uppercase(),
                 onClick = {
                     engine.resetMatch()
                     activity.resetTimer()
                     activity.onLocalScoreAction("reset")
                     onBack()
                 },
-                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF2A1212)),
-                modifier = Modifier.fillMaxWidth(0.94f).height(34.dp)
-            ) {
-                Text(ui.newMatch.uppercase(), color = PP.Danger, fontSize = PP.Label, fontWeight = FontWeight.Black)
-            }
+                modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp),
+                background = Color(0xFF2A1212), content = PP.Danger,
+                weight = FontWeight.Black, center = true
+            )
         }
 
         item { ExitButton(engine, activity) }
 
-        item {
-            Button(
-                onClick = onBack,
-                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
-                modifier = Modifier.fillMaxWidth(0.94f).height(34.dp).padding(top = 2.dp)
-            ) {
-                Text(
-                    if (es) "‹ VOLVER" else "‹ BACK",
-                    color = accent, fontSize = PP.Label, fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        item { BackChip(engine, accent, onBack) }
     }
 }
 
@@ -845,11 +849,21 @@ fun VoiceVolumeCard(engine: GameEngine, activity: MainActivity, accent: Color) {
 
 @Composable
 fun SettingChip(label: String, accent: Color, onClick: () -> Unit) {
-    Chip(
-        onClick = onClick,
-        label = { Text(label.uppercase(), fontSize = PP.Label) },
-        colors = ChipDefaults.primaryChipColors(backgroundColor = PP.Surface, contentColor = accent),
-        modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)
+    PPChip(
+        label.uppercase(), onClick = onClick,
+        modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+        content = accent, weight = FontWeight.Normal
+    )
+}
+
+/** "‹ VOLVER" al final de las listas, igual en todas. */
+@Composable
+fun BackChip(engine: GameEngine, accent: Color, onBack: () -> Unit) {
+    PPChip(
+        if (engine.lang == "es") "‹ VOLVER" else "‹ BACK",
+        onClick = onBack,
+        modifier = Modifier.fillMaxWidth(0.94f).padding(top = 4.dp),
+        content = accent, center = true
     )
 }
 
@@ -862,6 +876,7 @@ fun ToggleRow(label: String, checked: Boolean, accent: Color, onCheck: (Boolean)
             .clip(PP.CardShape)
             .background(PP.Surface)
             .clickable { onCheck(!checked) }
+            .heightIn(min = 48.dp)
             .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -886,7 +901,11 @@ fun ToggleRow(label: String, checked: Boolean, accent: Color, onCheck: (Boolean)
 // ─────────────────────────────────────────────────────────────────────
 
 @Composable
-fun EndScreen(engine: GameEngine, activity: MainActivity) {
+fun EndScreen(
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
+) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
     val es = engine.lang == "es"
@@ -899,116 +918,128 @@ fun EndScreen(engine: GameEngine, activity: MainActivity) {
         spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "pop"
     )
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(PP.Bg).padding(roundSafeBoxPadding()),
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentPadding = roundSafePadding()
     ) {
-        Text("🏆", fontSize = (34 * scale).sp)
-        Spacer(Modifier.height(2.dp))
-        Text(
-            if (es) "¡GANA ${winName.uppercase()}!" else "${winName.uppercase()} WINS!",
-            color = accent,
-            fontSize = PP.Title,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            maxLines = 2
-        )
-        // Todo visto desde quien gana: 2-0 y 6-0 6-0, no 0-2 y 0-6 0-6
-        val ganaA = engine.winner != "B"
-        Text(
-            if (ganaA) "${engine.setsA} – ${engine.setsB}" else "${engine.setsB} – ${engine.setsA}",
-            color = PP.TextBright,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Black
-        )
-        // El resultado de cada set, que es lo que se cuenta despues
-        if (engine.setScores.isNotEmpty()) {
-            Text(
-                engine.setScores.joinToString("  ·  ") { if (ganaA) "${it.a}-${it.b}" else "${it.b}-${it.a}" },
-                color = PP.TextDim, fontSize = PP.Body, fontWeight = FontWeight.Bold, maxLines = 1
-            )
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("🏆", fontSize = (30 * scale).sp)
+                Text(
+                    if (es) "¡GANA ${winName.uppercase()}!" else "${winName.uppercase()} WINS!",
+                    color = accent,
+                    fontSize = PP.Title,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
-        PPLabel(
-            "${activity.getTimerDisplay()} · ${engine.calories} KCAL",
-            color = PP.TextMuted, size = PP.Micro
-        )
-
-        Spacer(Modifier.height(14.dp))
-        Button(
-            onClick = {
-                engine.resetMatch()
-                activity.resetTimer()
-                activity.startTimer()
-                activity.onLocalScoreAction("reset")
-                engine.currentScreen = "score"
-            },
-            colors = ButtonDefaults.buttonColors(backgroundColor = accent),
-            modifier = Modifier.height(38.dp).fillMaxWidth(0.82f).clip(RoundedCornerShape(19.dp))
-        ) {
-            Text(ui.newMatch.uppercase(), fontSize = PP.Label, color = PP.OnAccent, fontWeight = FontWeight.Black)
+        item {
+            // Todo visto desde quien gana: 2-0 y 6-0 6-0, no 0-2 y 0-6 0-6
+            val ganaA = engine.winner != "B"
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    if (ganaA) "${engine.setsA} – ${engine.setsB}" else "${engine.setsB} – ${engine.setsA}",
+                    color = PP.TextBright,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black
+                )
+                // El resultado de cada set, que es lo que se cuenta despues
+                if (engine.setScores.isNotEmpty()) {
+                    Text(
+                        engine.setScores.joinToString("  ·  ") { if (ganaA) "${it.a}-${it.b}" else "${it.b}-${it.a}" },
+                        color = PP.TextDim, fontSize = PP.Body, fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                PPLabel(
+                    "${activity.getTimerDisplay()} · ${engine.calories} KCAL",
+                    color = PP.TextMuted, size = PP.Micro
+                )
+            }
+        }
+        item {
+            PPChip(
+                ui.newMatch.uppercase(),
+                onClick = {
+                    engine.resetMatch()
+                    activity.resetTimer()
+                    activity.startTimer()
+                    activity.onLocalScoreAction("reset")
+                    engine.currentScreen = "score"
+                },
+                modifier = Modifier.fillMaxWidth(0.88f).padding(top = 8.dp),
+                background = accent, content = PP.OnAccent,
+                weight = FontWeight.Black, center = true
+            )
         }
     }
 }
 
 @Composable
-fun ResumeScreen(engine: GameEngine, activity: MainActivity) {
+fun ResumeScreen(
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
+) {
     val accent = ThemeUtils.getColor(engine.theme)
     val es = engine.lang == "es"
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(roundSafeBoxPadding()),
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().rotaryScroll(listState),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentPadding = roundSafePadding()
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.logo_wordmark),
-            contentDescription = "PadelPulse Live",
-            modifier = Modifier.fillMaxWidth(0.5f).aspectRatio(LOGO_RATIO).padding(bottom = 4.dp)
-        )
-        PPLabel(
-            if (es) "PARTIDO ANTERIOR" else "PREVIOUS MATCH",
-            color = accent, size = PP.Label
-        )
-        Spacer(Modifier.height(6.dp))
-
-        PPCard(modifier = Modifier.fillMaxWidth(0.92f)) {
-            Text(
-                "${engine.nameA} · ${engine.nameB}",
-                color = PP.TextBright, fontSize = PP.Micro,
-                fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                "${engine.setsA}–${engine.setsB}  ·  ${engine.gamesA}–${engine.gamesB}",
-                color = accent, fontSize = PP.Title, fontWeight = FontWeight.Black
-            )
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_wordmark),
+                    contentDescription = "PadelPulse Live",
+                    modifier = Modifier.fillMaxWidth(0.42f).aspectRatio(LOGO_RATIO).padding(bottom = 2.dp)
+                )
+                PPLabel(
+                    if (es) "PARTIDO ANTERIOR" else "PREVIOUS MATCH",
+                    color = accent, size = PP.Label
+                )
+            }
         }
-
-        Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = { activity.startTimer(); engine.currentScreen = "score" },
-            colors = ButtonDefaults.buttonColors(backgroundColor = accent),
-            modifier = Modifier.height(34.dp).fillMaxWidth(0.9f).clip(RoundedCornerShape(17.dp))
-        ) {
-            Text(
+        item {
+            PPCard(modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 4.dp)) {
+                Text(
+                    "${engine.nameA} · ${engine.nameB}",
+                    color = PP.TextBright, fontSize = PP.Micro,
+                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${engine.setsA}–${engine.setsB}  ·  ${engine.gamesA}–${engine.gamesB}",
+                    color = accent, fontSize = PP.Title, fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        item {
+            PPChip(
                 if (es) "CONTINUAR" else "CONTINUE",
-                color = PP.OnAccent, fontWeight = FontWeight.Black, fontSize = PP.Label
+                onClick = { activity.startTimer(); engine.currentScreen = "score" },
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                background = accent, content = PP.OnAccent,
+                weight = FontWeight.Black, center = true
             )
         }
-        Spacer(Modifier.height(4.dp))
-        Button(
-            onClick = {
-                engine.resetMatch()
-                activity.resetTimer()
-                engine.currentScreen = "lang"
-            },
-            colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF2A1212)),
-            modifier = Modifier.height(32.dp).fillMaxWidth(0.9f).clip(RoundedCornerShape(16.dp))
-        ) {
-            Text(
+        item {
+            PPChip(
                 if (es) "NUEVA PARTIDA" else "NEW MATCH",
-                color = PP.Danger, fontWeight = FontWeight.Bold, fontSize = PP.Micro
+                onClick = {
+                    engine.resetMatch()
+                    activity.resetTimer()
+                    engine.currentScreen = "lang"
+                },
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                background = Color(0xFF2A1212), content = PP.Danger, center = true
             )
         }
     }
@@ -1028,32 +1059,27 @@ fun HistoryScreen(
     // no registra a nadie -no se teclean contraseñas en la muñeca-, asi que
     // la sesion tiene que llegar del movil.
     if (!WatchAccount.signedIn) {
-        Column(
-            modifier = Modifier.fillMaxSize().background(PP.Bg).padding(roundSafeBoxPadding(square = 18.dp)),
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            contentPadding = roundSafePadding()
         ) {
-            Text("🔒", fontSize = 22.sp)
-            Spacer(Modifier.height(6.dp))
-            PPLabel(if (es) "HACE FALTA CUENTA" else "ACCOUNT NEEDED", color = accent, size = PP.Label)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (es) "Inicia sesion en PadelPulse del movil y el historial aparece aqui solo."
-                else "Sign in on the phone app and your history shows up here on its own.",
-                color = PP.TextDim, fontSize = PP.Micro,
-                textAlign = TextAlign.Center, maxLines = 4
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = onBack,
-                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
-                modifier = Modifier.height(34.dp).fillMaxWidth(0.8f).clip(RoundedCornerShape(17.dp))
-            ) {
+            item {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("🔒", fontSize = 22.sp)
+                    PPLabel(if (es) "HACE FALTA CUENTA" else "ACCOUNT NEEDED", color = accent, size = PP.Label)
+                }
+            }
+            item {
                 Text(
-                    if (es) "VOLVER" else "BACK",
-                    color = accent, fontSize = PP.Micro, fontWeight = FontWeight.Black
+                    if (es) "Inicia sesion en PadelPulse del movil y el historial aparece aqui solo."
+                    else "Sign in on the phone app and your history shows up here on its own.",
+                    color = PP.TextDim, fontSize = PP.Micro, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
+            item { BackChip(engine, accent, onBack) }
         }
         return
     }
@@ -1115,7 +1141,18 @@ fun HistoryScreen(
             // Balance general: jugados, ganados y porcentaje
             item {
                 PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
-                    Row(
+                    // Con la letra grande las tres cifras no caben en fila sin
+                    // partir las palabras: van una debajo de otra
+                    if (isLargeFont()) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            HistoryStat(summary.first.toString(), if (es) "JUGADOS" else "PLAYED", PP.TextBright)
+                            HistoryStat(summary.second.toString(), if (es) "GANADOS" else "WON", accent)
+                            HistoryStat("${summary.third}%", if (es) "RATIO" else "WIN %", accent)
+                        }
+                    } else Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -1148,17 +1185,19 @@ fun HistoryScreen(
                             Text(
                                 "${m.optString("teamA", "").uppercase()} · ${m.optString("teamB", "").uppercase()}",
                                 color = PP.TextDim, fontSize = PP.Micro,
-                                fontWeight = FontWeight.Bold, maxLines = 1
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "$date · ${formatWatchDuration(dur)}",
-                                color = PP.TextMuted, fontSize = PP.Micro, maxLines = 1
+                                color = PP.TextMuted, fontSize = PP.Micro
                             )
                         }
                         Text(
                             "${m.optInt("scoreA", 0)}–${m.optInt("scoreB", 0)}",
                             color = if (won) accent else PP.TextDim,
-                            fontSize = PP.Title, fontWeight = FontWeight.Black
+                            fontSize = PP.Title, fontWeight = FontWeight.Black,
+                            maxLines = 1, softWrap = false,
+                            modifier = Modifier.padding(start = 4.dp)
                         )
                     }
                     // Juegos y desgaste, si se guardaron
@@ -1174,26 +1213,14 @@ fun HistoryScreen(
                                     append("$kcal kcal")
                                 }
                             },
-                            color = PP.TextMuted, fontSize = PP.Micro, maxLines = 1
+                            color = PP.TextMuted, fontSize = PP.Micro
                         )
                     }
                 }
             }
         }
 
-        item {
-            Spacer(Modifier.height(6.dp))
-            Button(
-                onClick = onBack,
-                colors = ButtonDefaults.buttonColors(backgroundColor = PP.Surface),
-                modifier = Modifier.fillMaxWidth(0.94f).height(34.dp)
-            ) {
-                Text(
-                    if (es) "‹ VOLVER" else "‹ BACK",
-                    color = accent, fontSize = PP.Label, fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        item { BackChip(engine, accent, onBack) }
     }
 }
 
