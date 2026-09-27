@@ -838,7 +838,7 @@ fun VoiceVolumeCard(engine: GameEngine, activity: MainActivity, accent: Color) {
         PPLabel(if (es) "VOLUMEN VOZ" else "VOICE VOLUME", size = PP.Micro)
         InlineSlider(
             value = activity.voiceLevel.toFloat(),
-            onValueChange = { activity.setVoiceLevel(Math.round(it)) },
+            onValueChange = { activity.changeVoiceLevel(Math.round(it)) },
             valueRange = 0f..5f,
             steps = 4,
             increaseIcon = { Text("+", color = accent) },

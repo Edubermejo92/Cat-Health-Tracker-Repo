@@ -78,8 +78,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
 
-    /** Pone el nivel y lo canta, para oir como queda sin esperar a un punto. */
-    fun setVoiceLevel(level: Int) {
+    /**
+     * Pone el nivel y lo canta, para oir como queda sin esperar a un punto.
+     * No puede llamarse setVoiceLevel: esa firma ya la genera Kotlin para el
+     * setter de voiceLevel y la compilacion falla con "Platform declaration
+     * clash".
+     */
+    fun changeVoiceLevel(level: Int) {
         val l = level.coerceIn(0, 5)
         runCatching {
             val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
