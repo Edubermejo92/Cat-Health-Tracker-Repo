@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
@@ -37,7 +38,19 @@ class MatchOngoingService : Service() {
                 return START_NOT_STICKY
             }
             else -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                // El servicio es de tipo "health": desde Android 14 el sistema
+                // exige que el usuario haya concedido antes un permiso de salud
+                // (actividad fisica o pulso). Si los ha denegado, startForeground
+                // lanza SecurityException aqui dentro -no en quien llama a
+                // start()-, y eso cerraba la app al abrir el marcador. Sin
+                // permiso no hay actividad en curso, pero el partido sigue.
+                val ok = runCatching { startForeground(NOTIFICATION_ID, buildNotification()) }
+                    .onFailure { Log.w(TAG, "Sin actividad en curso", it) }
+                    .isSuccess
+                if (!ok) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
             }
         }
         return START_STICKY
@@ -127,6 +140,7 @@ class MatchOngoingService : Service() {
     }
 
     companion object {
+        private const val TAG = "PadelPulseOngoing"
         private const val CHANNEL_ID = "padelpulse_match"
         private const val NOTIFICATION_ID = 4821
         private const val ACTION_STOP = "padelpulse.STOP_ONGOING"

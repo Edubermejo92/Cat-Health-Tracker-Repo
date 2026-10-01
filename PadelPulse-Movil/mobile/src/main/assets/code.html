@@ -287,7 +287,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.0.4';
+const WEB_VERSION = '7.0.5';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -4942,6 +4942,14 @@ function whatsappTo(name, texto){
     window.open(url, '_blank');
 }
 
+/** La politica de privacidad publicada (con la seccion de datos de salud). */
+const PRIVACY_URL = 'https://padelpulselive.com/politica-de-privacidad/';
+function openPrivacyPolicy(){
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if(b && b.openExternal){ b.openExternal(PRIVACY_URL); return; }
+    window.open(PRIVACY_URL, '_blank');
+}
+
 function callTo(name){
     const f = Contacts.find(name);
     if(!f || !f.phone){ showToast(i2('No tienes su telefono guardado','No phone saved for them'), 2500); return; }
@@ -6880,6 +6888,17 @@ const SettingsView=()=>`
                 : i2('Se manda el enlace de la ficha de Play.','The Play listing link is sent.')}
         </div>
     </div>
+
+    <!-- PRIVACIDAD: Play exige enlazar la politica dentro de la app -->
+    <button onclick="openPrivacyPolicy()"
+        class="w-full bg-surface-container rounded-3xl p-4 flex items-center gap-3 text-left scale-press">
+        <span class="material-symbols-outlined text-primary">lock</span>
+        <span class="flex-1 text-left">
+            <span class="block text-[11px] font-bold uppercase tracking-widest" style="color:${tc.text()}">${i2('Politica de privacidad','Privacy policy')}</span>
+            <span class="block text-[9px] mt-1" style="color:${tc.muted()}">${i2('Que datos usa la app (pulso del reloj incluido) y como se guardan','What data the app uses (watch heart rate included) and how it is stored')}</span>
+        </span>
+        <span class="material-symbols-outlined" style="color:${tc.muted()}">ios_share</span>
+    </button>
 
     <!-- IDIOMA -->
     <div class="bg-surface-container rounded-3xl p-4">

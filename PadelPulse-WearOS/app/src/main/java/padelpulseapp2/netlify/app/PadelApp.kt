@@ -72,7 +72,8 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     // barra de desplazamiento" porque el indicador se quedaba pegado a la de
     // fuera.
     var subActive by remember { mutableStateOf<androidx.wear.compose.foundation.lazy.ScalingLazyListState?>(null) }
-    val activeState = subActive ?: when (engine.currentScreen) {
+    val disclosureState = rememberScalingLazyListState()
+    val activeState = if (activity.showHealthDisclosure) disclosureState else subActive ?: when (engine.currentScreen) {
         "lang" -> langState
         "bt" -> pairState
         "score" -> scoreState
@@ -109,7 +110,20 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
             }
         ) {
             Box(modifier = Modifier.fillMaxSize().background(PP.Bg)) {
-                Crossfade(targetState = engine.currentScreen, label = "nav") { current ->
+                // El aviso del pulso va antes que nada y se pide el permiso
+                // solo si la persona acepta.
+                if (activity.showHealthDisclosure) {
+                    HealthDisclosureScreen(
+                        lang = engine.lang,
+                        listState = disclosureState,
+                        onPrivacy = {
+                            runCatching {
+                                activity.startActivity(android.content.Intent(activity, PrivacyPolicyActivity::class.java))
+                            }
+                        },
+                        onAnswer = { activity.answerHealthDisclosure(it) }
+                    )
+                } else Crossfade(targetState = engine.currentScreen, label = "nav") { current ->
                     when (current) {
                         "account" -> AccountScreen(engine, activity, accountState)
                         "splash" -> SplashScreen(engine, activity, splashState)
@@ -698,6 +712,15 @@ fun SettingsScreen(
         item {
             SettingChip(if (es) "INVITA A UN AMIGO" else "INVITE A FRIEND", accent) {
                 engine.currentScreen = "invite"
+            }
+        }
+        // Play exige enlazar la politica de privacidad dentro de la app,
+        // sobre todo con permisos de salud (el pulso)
+        item {
+            SettingChip(if (es) "POLÍTICA DE PRIVACIDAD" else "PRIVACY POLICY", accent) {
+                runCatching {
+                    activity.startActivity(android.content.Intent(activity, PrivacyPolicyActivity::class.java))
+                }
             }
         }
 

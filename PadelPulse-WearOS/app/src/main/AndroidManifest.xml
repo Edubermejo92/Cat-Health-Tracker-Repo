@@ -65,6 +65,29 @@
             </intent-filter>
         </activity>
 
+        <!-- Politica de privacidad de los permisos de salud (el pulso). Play la
+             exige para READ_HEART_RATE: el sistema la abre desde el dialogo del
+             permiso (Android 13 y anterior, ACTION_SHOW_PERMISSIONS_RATIONALE)
+             y desde Ajustes > Privacidad (Android 14+, el alias de abajo). -->
+        <activity
+            android:name=".PrivacyPolicyActivity"
+            android:exported="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".PrivacyPolicyActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Mantiene viva la actividad en curso del partido: es lo que hace que
              el marcador salga en la esfera, en recientes y en el carrusel. -->
         <service
