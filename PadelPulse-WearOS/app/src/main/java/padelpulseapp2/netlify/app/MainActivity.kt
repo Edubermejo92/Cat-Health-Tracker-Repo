@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.0.5"
+        const val APP_VERSION = "7.0.6"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
         private const val KEY_HEALTH_DISCLOSURE = "health_disclosure_seen"
@@ -514,8 +514,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         permissions.forEachIndexed { i, perm ->
             if (grantResults.getOrNull(i) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 when (perm) {
-                    android.Manifest.permission.BODY_SENSORS,
-                    "android.permission.health.READ_HEART_RATE" -> registerHeartRateSensor()
+                    android.Manifest.permission.BODY_SENSORS -> registerHeartRateSensor()
                     android.Manifest.permission.ACTIVITY_RECOGNITION -> registerStepSensor()
                 }
             }
@@ -527,16 +526,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     /** Se ve la explicacion del pulso antes de pedir el permiso. */
     var showHealthDisclosure by mutableStateOf(false)
 
-    private fun heartRatePermission(): String =
-        // En Wear OS 6 el pulso va con su propio permiso de salud
-        if (android.os.Build.VERSION.SDK_INT >= 36) "android.permission.health.READ_HEART_RATE"
-        else android.Manifest.permission.BODY_SENSORS
+    /**
+     * El pulso solo existe hasta Wear OS 5 (BODY_SENSORS). En Wear OS 6 haria
+     * falta el permiso de Salud conectada READ_HEART_RATE, que Play no admite
+     * para un marcador; ahi la app funciona sin pulso y no pregunta nada.
+     */
+    private val heartRateAvailable: Boolean
+        get() = android.os.Build.VERSION.SDK_INT <= 35
+
+    private fun heartRatePermission(): String = android.Manifest.permission.BODY_SENSORS
 
     fun answerHealthDisclosure(accept: Boolean) {
         getSharedPreferences("padel_prefs", Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_HEALTH_DISCLOSURE, true).apply()
         showHealthDisclosure = false
-        if (accept && !WorkoutGuard.hasHeartRatePermission(this)) {
+        if (accept && heartRateAvailable && !WorkoutGuard.hasHeartRatePermission(this)) {
             requestPermissions(arrayOf(heartRatePermission()), 101)
         }
     }
@@ -578,7 +582,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         // El pulso no se pide en frio: antes se explica para que se usa
         // (requisito de la politica de permisos de salud de Play). Solo una
         // vez; si dice que no, no se vuelve a insistir.
-        if (!WorkoutGuard.hasHeartRatePermission(this) &&
+        if (heartRateAvailable && !WorkoutGuard.hasHeartRatePermission(this) &&
             !getSharedPreferences("padel_prefs", Context.MODE_PRIVATE).getBoolean(KEY_HEALTH_DISCLOSURE, false)) {
             showHealthDisclosure = true
         }

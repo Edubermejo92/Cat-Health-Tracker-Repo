@@ -155,8 +155,8 @@ object WorkoutGuard {
 
     fun hasHeartRatePermission(context: Context): Boolean {
         val granted = { p: String -> context.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED }
-        return granted(android.Manifest.permission.BODY_SENSORS) ||
-            (Build.VERSION.SDK_INT >= 36 && granted("android.permission.health.READ_HEART_RATE"))
+        // Solo hasta Wear OS 5: en Wear OS 6 la app no usa el pulso (ver manifiesto)
+        return Build.VERSION.SDK_INT <= 35 && granted(android.Manifest.permission.BODY_SENSORS)
     }
 
     /** Abre Samsung Health, donde se apaga la deteccion automatica del todo. */

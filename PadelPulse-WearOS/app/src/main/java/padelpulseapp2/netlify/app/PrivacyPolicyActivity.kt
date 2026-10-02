@@ -20,13 +20,9 @@ import padelpulseapp2.netlify.app.ui.PPChip
 import padelpulseapp2.netlify.app.ui.PPLabel
 
 /**
- * Politica de privacidad dentro del reloj.
- *
- * Es requisito de los permisos de salud (el pulso, READ_HEART_RATE en Wear OS
- * 6): el sistema abre esta pantalla desde el dialogo del permiso y desde
- * Ajustes > Privacidad, y Play rechaza la app si no existe. La declaran el
- * manifiesto -intent ACTION_SHOW_PERMISSIONS_RATIONALE y el alias con
- * VIEW_PERMISSION_USAGE / HEALTH_PERMISSIONS- y Ajustes de la propia app.
+ * Politica de privacidad dentro del reloj, desde Ajustes y desde el aviso
+ * previo al permiso del pulso (solo hasta Wear OS 5). Play exige poder verla
+ * dentro de la app.
  *
  * El texto es el resumen de la seccion de salud de la politica publicada; el
  * QR lleva a la politica completa, porque en el reloj no hay navegador.
