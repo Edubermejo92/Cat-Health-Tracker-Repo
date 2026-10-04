@@ -65,7 +65,7 @@ Google".
 Si hay algún fallo, **no compiles**. El script mira:
 
 - Que `code.html` es el actual, por marcas que sólo tiene la versión nueva
-  (`syncRev`, `showWheel`, `marcadorCantado`, `APP_EN_PRUEBAS`) y por lo que ya
+  (`syncRev`, `showWheel`, `marcadorCantado`, `shareInvite`) y por lo que ya
   no puede tener (entrar con Google, árbitro IA).
 - Que en `assets/` no sobra nada. `index.html`, `netlify.toml`, `_headers` o
   `watch_code.html` ahí son restos de un montaje antiguo, y su presencia

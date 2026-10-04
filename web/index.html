@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="PadelPulse">
 <!-- Todo local: la app funciona sin conexion (pista sin cobertura) -->
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="tailwind.css?v=7.0.9">
+<link rel="stylesheet" href="tailwind.css?v=7.1.0">
 <style>
 *{-webkit-tap-highlight-color:transparent;user-select:none;box-sizing:border-box;}
 html{height:100%;touch-action:manipulation;background:#000;overflow:hidden;}
@@ -287,7 +287,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.0.9';
+const WEB_VERSION = '7.1.0';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -6290,33 +6290,14 @@ ${BottomNav('history')}`;
 // ═══════════════════════════════════════════
 
 /**
- * Enlace de descarga.
- *
- * Por defecto va el de **invitacion a la prueba**, porque es el que funciona
- * mientras la app este en pruebas cerradas: la ficha normal de Play le dice a
- * quien no sea tester que no esta disponible.
- *
- * Los dos se deducen del applicationId, asi que no pueden estar mal escritos.
- * Cuando la app se publique, se cambia desde Ajustes por el de la ficha (o se
- * vacia el campo de Ajustes y se cambia aqui).
+ * Enlace de descarga: la ficha de Play. Se deduce del applicationId, asi que no
+ * puede estar mal escrito. El mismo enlace lo pinta el QR del reloj.
  */
 const APP_ID = 'padelpulseapp2.netlify.app';
-const INVITE_URL_PRUEBA = 'https://play.google.com/apps/testing/' + APP_ID;
-const INVITE_URL_TIENDA = 'https://play.google.com/store/apps/details?id=' + APP_ID;
+const INVITE_URL = 'https://play.google.com/store/apps/details?id=' + APP_ID;
 
-/**
- * Fase de la app en Google Play. Es el UNICO sitio donde se decide que enlace
- * se manda al invitar, y no se pregunta al usuario: elegirlo no es cosa suya.
- *
- *   true  -> pruebas cerradas. Va el enlace de la prueba, porque la ficha
- *            normal le dice a quien no sea tester que no esta disponible.
- *   false -> publicada. Va la ficha de Play.
- *
- * El dia que se publique, se pone a false y se sube version. Nada mas.
- */
-const APP_EN_PRUEBAS = true;
-
-function inviteUrl(){ return APP_EN_PRUEBAS ? INVITE_URL_PRUEBA : INVITE_URL_TIENDA; }
+/** El enlace que se manda al invitar: siempre la ficha de Play. */
+function inviteUrl(){ return INVITE_URL; }
 
 /** El mensaje que se manda. Corto, que se lee en una notificacion. */
 function inviteText(nombre){
@@ -6329,13 +6310,23 @@ function inviteText(nombre){
     ) + inviteUrl() + firma;
 }
 
-/** Invitacion general: se elige a quien mandarsela en la hoja de compartir. */
+/**
+ * Invitacion general: el mensaje con el logo, y se elige a quien mandarsela en
+ * la hoja de compartir. En la app el logo viaja como imagen (el texto es su pie);
+ * en el navegador no hay forma de adjuntarlo y va solo el texto.
+ */
 function inviteFriends(){
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    if (b && b.shareInvite) { b.shareInvite(inviteText(), 'PadelPulse Live', ''); return; }
     shareResult(inviteText());
 }
 
 /** Invitacion a alguien concreto de la agenda, directa a su WhatsApp. */
 function inviteTo(nombre){
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    const f = Contacts.find(nombre);
+    const num = f ? Contacts.waNumber(f.phone) : '';
+    if (b && b.shareInvite && num) { b.shareInvite(inviteText(nombre), 'PadelPulse Live', num); return; }
     whatsappTo(nombre, inviteText(nombre));
 }
 
@@ -7079,10 +7070,7 @@ const SettingsView=()=>`
             ${i2('Compartir la app','Share the app')}
         </button>
         <div class="text-[9px] mt-3 leading-relaxed" style="color:${tc.muted()}">
-            ${APP_EN_PRUEBAS
-                ? i2('La app esta en pruebas cerradas, asi que se manda el enlace de la prueba. Quien lo abra tiene que estar en tu lista de testers de Play Console o no podra instalarla.',
-                      'The app is in closed testing, so the testing link is sent. Whoever opens it must be on your Play Console tester list or they will not be able to install it.')
-                : i2('Se manda el enlace de la ficha de Play.','The Play listing link is sent.')}
+            ${i2('Se manda el enlace de la ficha de Play, con el logo.','The Play listing link is sent, with the logo.')}
         </div>
     </div>
 

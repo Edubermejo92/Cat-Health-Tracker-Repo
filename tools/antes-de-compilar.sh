@@ -39,7 +39,7 @@ else
         verde "code.html no tiene rastro del arbitro IA"
     fi
 
-    for marca in syncRev showWheel marcadorCantado APP_EN_PRUEBAS; do
+    for marca in syncRev showWheel marcadorCantado shareInvite; do
         if grep -q "$marca" "$A/code.html"; then
             verde "code.html tiene $marca"
         else

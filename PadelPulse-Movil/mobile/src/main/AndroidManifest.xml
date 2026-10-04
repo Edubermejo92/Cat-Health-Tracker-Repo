@@ -15,6 +15,12 @@
     <!-- La app funciona igual en movil, tablet y Chromebook -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <!-- Ver si WhatsApp esta instalado, para mandar la invitacion directa a un chat -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -63,6 +69,17 @@
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/padel" />
             </intent-filter>
         </service>
+
+        <!-- Para adjuntar el logo en las invitaciones (cache/share/) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <uses-library android:name="wear-sdk" tools:node="remove" />
     </application>

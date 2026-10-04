@@ -178,7 +178,7 @@ la hoja de compartir desde segundo plano.
 { "v": 3, "src": "phone", "lang": "es", "theme": "neon", "color": "#00FD87",
   "goldenPoint": false, "superTieBreak": true, "bestOf": 3,
   "nameA": "NOSOTROS", "nameB": "ELLOS", "mode": "PHONE",
-  "inviteUrl": "https://play.google.com/apps/testing/padelpulseapp2.netlify.app" }
+  "inviteUrl": "https://play.google.com/store/apps/details?id=padelpulseapp2.netlify.app" }
 ```
 
 `playerA1`, `playerA2`, `playerB1`, `playerB2` (desde 7.0.0) son los dos jugadores de
@@ -187,8 +187,7 @@ cada pareja, en los dos sentidos. Pueden llegar vacíos (jugador borrado). En el
 encima del otro, y la voz los reconoce ("punto para Juan").
 
 `inviteUrl` solo lo manda el móvil: es el enlace que pinta el QR de «Invita a un
-amigo» en el reloj, el mismo que manda el móvil al invitar (prueba cerrada o ficha de
-Play, según `APP_EN_PRUEBAS`). El reloj solo acepta enlaces de `play.google.com` y,
+amigo» en el reloj, el mismo que manda el móvil al invitar (la ficha de Play). El reloj solo acepta enlaces de `play.google.com` y,
 si no le llega, usa la ficha de Play.
 
 Los ajustes se propagan en los dos sentidos y en cualquier modo: idioma, tema y nombres

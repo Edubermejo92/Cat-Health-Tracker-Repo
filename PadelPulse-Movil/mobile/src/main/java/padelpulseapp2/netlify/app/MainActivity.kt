@@ -25,6 +25,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.MessageClient
 import org.json.JSONObject
@@ -38,7 +39,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "7.0.9"
+        const val APP_VERSION = "7.1.0"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -506,6 +507,47 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }.onFailure {
                     Toast.makeText(activity, "No se pudo compartir", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+
+        /**
+         * Invitacion con el logo: la imagen va adjunta y el mensaje (con el enlace
+         * de Play) es su pie. Con [phone] va directa al chat de esa persona en
+         * WhatsApp; sin el, a la hoja de compartir. Si algo falla cae en el texto
+         * solo, para que invitar nunca se quede en un boton mudo.
+         */
+        @JavascriptInterface
+        fun shareInvite(text: String, subject: String, phone: String) {
+            activity.runOnUiThread {
+                val uri = runCatching {
+                    val dir = java.io.File(activity.cacheDir, "share").apply { mkdirs() }
+                    val file = java.io.File(dir, "padelpulse-logo.png")
+                    activity.resources.openRawResource(R.drawable.logo).use { input ->
+                        file.outputStream().use { input.copyTo(it) }
+                    }
+                    FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", file)
+                }.getOrNull()
+                if (uri == null) { shareText(text, subject); return@runOnUiThread }
+
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_TEXT, text)
+                    if (subject.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, subject)
+                    clipData = android.content.ClipData.newRawUri("PadelPulse", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                if (phone.isNotEmpty()) {
+                    for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+                        val direct = Intent(send).setPackage(pkg)
+                            .putExtra("jid", "$phone@s.whatsapp.net")
+                        if (runCatching { activity.startActivity(direct); true }.getOrDefault(false)) return@runOnUiThread
+                    }
+                }
+                runCatching {
+                    activity.startActivity(Intent.createChooser(send, subject.ifEmpty { "PadelPulse" }))
+                }.onFailure { shareText(text, subject) }
             }
         }
 

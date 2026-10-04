@@ -33,9 +33,8 @@ import padelpulseapp2.netlify.app.ui.PPLabel
 /**
  * Enlace para invitar a un amigo.
  *
- * Por defecto, la ficha de Play. El movil manda el suyo con los ajustes
- * -mientras la app esta en prueba cerrada es el enlace de la prueba-, asi que
- * el QR del reloj y el mensaje del movil llevan siempre al mismo sitio.
+ * La ficha de Play. El movil manda la suya con los ajustes, asi que el QR del
+ * reloj y el mensaje del movil llevan siempre al mismo sitio.
  */
 object InviteLink {
 
@@ -47,13 +46,15 @@ object InviteLink {
         private set
 
     fun load(context: Context) {
-        url = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val saved = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY, DEFAULT) ?: DEFAULT
+        // Las versiones anteriores guardaban el enlace de la prueba cerrada
+        url = if (saved.contains("/apps/testing/")) DEFAULT else saved
     }
 
     fun applyFromPhone(context: Context, value: String) {
         // Solo enlaces de Play: el QR lo va a escanear otra persona
-        if (!value.startsWith("https://play.google.com/") || value == url) return
+        if (!value.startsWith("https://play.google.com/") || value.contains("/apps/testing/") || value == url) return
         url = value
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, value).apply()
     }
