@@ -23,6 +23,17 @@ html{height:100%;touch-action:manipulation;background:#000;overflow:hidden;}
 body{margin:0;padding:0;background:#000;height:100vh;height:100dvh;width:100vw;overflow:hidden;font-family:'Lexend',sans-serif;}
 
 /* Mobile: full screen */
+:root{ --ver-h:16px; }
+/* Version, abajo del todo en todas las pantallas. Va fuera de #app para que
+   ningun render() la borre; la barra de navegacion se sube encima de ella. */
+#ver-tag{
+    position:fixed;left:0;right:0;bottom:0;z-index:101;
+    height:calc(var(--ver-h) + env(safe-area-inset-bottom,0px));
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;letter-spacing:.08em;pointer-events:none;
+    color:rgba(255,255,255,.45);background:#0b0b0b;
+}
 .watch-frame{
     width:100vw;height:100vh;height:100dvh;
     background:transparent;
@@ -30,7 +41,7 @@ body{margin:0;padding:0;background:#000;height:100vh;height:100dvh;width:100vw;o
     display:flex;flex-direction:column;
     overflow-y:auto;
     /* deja sitio a la barra fija de abajo, contando el gesto del sistema */
-    padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));
+    padding-bottom:calc(76px + var(--ver-h) + env(safe-area-inset-bottom,0px));
 }
 
 /* Responsive: adapt fluidly without mobile frame */
@@ -165,6 +176,7 @@ input[type=text]{-webkit-user-select:text;user-select:text;}
 <div id="app" style="width:100vw;min-height:100vh;min-height:100dvh;background:transparent;display:flex;align-items:center;justify-content:center;font-family:'Lexend',sans-serif;z-index:10;position:relative;">
     <div style="width:44px;height:44px;border:3px solid #1a1a1a;border-top-color:#00fd87;border-radius:50%;animation:_spin 1s linear infinite;"></div>
 </div>
+<div id="ver-tag"></div>
 <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>
 <script>
 // Logo horizontal con fondo transparente: se ve igual sobre cualquier tema y
@@ -287,7 +299,17 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.1.0';
+const WEB_VERSION = '7.1.1';
+
+/** "7.1.0" en la app (la version instalada); "7.1.0 · web" en el navegador. */
+function versionLabel(){
+    const b = (typeof window!=='undefined') ? window.AndroidBridge : null;
+    return (b && b.appVersion) ? b.appVersion() : WEB_VERSION + ' · web';
+}
+(function(){
+    const pintar = ()=>{ const el=document.getElementById('ver-tag'); if(el) el.textContent = 'PadelPulse Live ' + versionLabel(); };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', pintar); else pintar();
+})();
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -1821,7 +1843,7 @@ function showBetweenTimerEl(max){
     const el=document.createElement('div');
     el.id='between-timer';
     const r=28,circ=2*Math.PI*r;
-    el.style.cssText='position:fixed;z-index:99;bottom:90px;right:16px;z-index:50;';
+    el.style.cssText='position:fixed;z-index:99;bottom:calc(90px + var(--ver-h));right:16px;z-index:50;';
     el.innerHTML=`<div class="relative flex items-center justify-center w-16 h-16">
         <svg width="64" height="64" viewBox="0 0 64 64">
             <circle cx="32" cy="32" r="${r}" fill="none" stroke="#262626" stroke-width="4"/>
@@ -6150,7 +6172,7 @@ let toastTimeout;
 function showToast(msg, dur=2000, isError=false){
     let el=document.getElementById('toast');
     if(!el){ el=document.createElement('div'); el.id='toast'; document.body.appendChild(el); }
-    el.style.cssText=`position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+    el.style.cssText=`position:fixed;bottom:calc(80px + var(--ver-h));left:50%;transform:translateX(-50%);
         background:${isError?'#1a0000':'#1a1919'};
         border:1px solid ${isError?'#ff716c60':'#494847'};
         color:${isError?'#ff716c':tc.primary()};
@@ -6331,7 +6353,7 @@ function inviteTo(nombre){
 }
 
 const BottomNav=(active)=>`
-<nav class="bg-surface-container-lowest border-t border-white/5 flex justify-center w-full" style="position:fixed;bottom:0;left:0;right:0;z-index:100;padding-bottom:env(safe-area-inset-bottom,0)">
+<nav class="bg-surface-container-lowest border-t border-white/5 flex justify-center w-full" style="position:fixed;bottom:calc(var(--ver-h) + env(safe-area-inset-bottom,0px));left:0;right:0;z-index:100">
     <div class="dk-nav grid grid-cols-5 gap-0 px-1 py-1 w-full max-w-5xl">
     ${[
         {id:'home',    icon:'scoreboard', label:'Marcador'},
@@ -7242,7 +7264,7 @@ const SettingsView=()=>`
          forma de saber si el movil tiene la compilacion nueva o una vieja, y
          se pierde mucho tiempo persiguiendo fallos ya arreglados. -->
     <div class="text-center pt-1 pb-2 text-[10px]" style="color:${tc.muted()};opacity:.6">
-        PadelPulse Live ${(typeof window!=='undefined' && window.AndroidBridge && window.AndroidBridge.appVersion) ? window.AndroidBridge.appVersion() : WEB_VERSION + ' · web'}
+        PadelPulse Live ${versionLabel()}
     </div>
 </div>
 
