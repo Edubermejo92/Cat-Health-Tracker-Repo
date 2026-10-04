@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="PadelPulse">
 <!-- Todo local: la app funciona sin conexion (pista sin cobertura) -->
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="tailwind.css?v=7.0.8">
+<link rel="stylesheet" href="tailwind.css?v=7.0.9">
 <style>
 *{-webkit-tap-highlight-color:transparent;user-select:none;box-sizing:border-box;}
 html{height:100%;touch-action:manipulation;background:#000;overflow:hidden;}
@@ -287,7 +287,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.0.8';
+const WEB_VERSION = '7.0.9';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -4240,7 +4240,9 @@ const Auth = {
 
         // Confirmacion de cuenta: ya esta dentro.
         this.pendingEmail = '';
-        showToast(i2('Cuenta confirmada','Account confirmed'), 2500);
+        showToast(data.type === 'login'
+            ? i2('Sesion iniciada','Signed in')
+            : i2('Cuenta confirmada','Account confirmed'), 2500);
         this.syncNow(true).catch(()=>{});
         render();
     },
@@ -4380,6 +4382,25 @@ const Auth = {
 
     /** Enlace que abre la app de Android con la sesion del correo. */
     appLink(){ return 'padelpulse://auth#' + (this.linkFrag || ''); },
+
+    /** La sesion actual, en el formato del enlace que abre la app. */
+    sessionFrag(type){
+        const s = this.session; if(!s) return '';
+        const resta = Math.max(60, Math.floor(((s.expires_at||0) - Date.now()) / 1000));
+        return 'access_token=' + encodeURIComponent(s.access_token) +
+            '&refresh_token=' + encodeURIComponent(s.refresh_token || '') +
+            '&expires_in=' + resta + '&token_type=bearer&type=' + encodeURIComponent(type);
+    },
+
+    /**
+     * La web suelta la sesion SIN avisar al servidor: la sesion se la queda la
+     * app. Si las dos siguieran con el mismo token de refresco, cuando una lo
+     * renovara la otra lo usaria ya gastado y Supabase cerraria la sesion de
+     * las dos.
+     */
+    dropWebSession(){
+        this.session = null; this.user = null; this.persist();
+    },
 
     /** Nombre con el que se registro. Si solo hay correo, vacio: no es un nombre. */
     myName(){
@@ -4582,12 +4603,19 @@ const Auth = {
         this.status='busy'; this.lastError=null; this.errorHint=null; render();
         try{
             await this.api('/auth/v1/user', { method:'PUT', body:{ password: nueva } });
-            this.status='in';
             _authForm.pass = '';
             const enLaWeb = !(typeof window!=='undefined' && window.AndroidBridge);
-            showToast(enLaWeb
-                ? i2('Contraseña cambiada. Ya puedes entrar en la app con ella.','Password changed. You can now sign in to the app with it.')
-                : i2('Contraseña cambiada','Password changed'), enLaWeb ? 5000 : 2500);
+            if(enLaWeb){
+                // En el navegador no se queda nada abierto: se pasa a la app,
+                // con la sesion ya puesta, y la web la suelta.
+                this.linkFrag = this.sessionFrag('login');
+                this.dropWebSession();
+                this.status = 'passdone';
+                render();
+                return true;
+            }
+            this.status='in';
+            showToast(i2('Contraseña cambiada','Password changed'), 2500);
             if(S.currentView==='auth'){
                 S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
             }
@@ -5271,20 +5299,25 @@ const AuthView = () => {
 </div>`;
     }
 
-    // Enlace de confirmacion abierto en el navegador: la cuenta ya esta lista.
-    // Solo se ofrece volver a la app (con la sesion ya puesta): la cuenta es de
-    // la app, la web no es donde se va a jugar.
-    if(Auth.status === 'linked'){
+    // Vuelta del correo en el navegador (cuenta confirmada o contraseña
+    // cambiada). Solo se ofrece volver a la app, con la sesion ya puesta: la
+    // cuenta es de la app, la web no es donde se va a jugar.
+    if(Auth.status === 'linked' || Auth.status === 'passdone'){
         const android = /android/i.test(navigator.userAgent||'');
+        const pass = Auth.status === 'passdone';
         return `
 <div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
     <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
         <div style="font-size:40px;line-height:1;margin-bottom:10px">✅</div>
-        <div class="text-base font-black mb-2" style="color:${te}">${i2('Cuenta confirmada','Account confirmed')}</div>
+        <div class="text-base font-black mb-2" style="color:${te}">
+            ${pass ? i2('Contraseña cambiada','Password changed') : i2('Cuenta confirmada','Account confirmed')}
+        </div>
         ${android?`
         <div class="text-[12px] leading-relaxed mb-5" style="color:${mu}">
-            ${i2('Tu correo ya esta confirmado. Abre la app y entras directamente.',
-                  'Your email is confirmed. Open the app and you are signed in.')}
+            ${pass ? i2('Tu contraseña nueva ya esta guardada. Abre la app y entras directamente.',
+                         'Your new password is saved. Open the app and you are signed in.')
+                   : i2('Tu correo ya esta confirmado. Abre la app y entras directamente.',
+                         'Your email is confirmed. Open the app and you are signed in.')}
         </div>
         <a href="${esc(Auth.appLink())}"
             class="block w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
@@ -5294,8 +5327,10 @@ const AuthView = () => {
                   'If it does not open, open PadelPulse yourself and sign in with your email and password.')}
         </div>`:`
         <div class="text-[12px] leading-relaxed" style="color:${mu}">
-            ${i2('Tu correo ya esta confirmado. Abre la app PadelPulse en tu movil Android y entra con tu correo y tu contraseña.',
-                  'Your email is confirmed. Open the PadelPulse app on your Android phone and sign in with your email and password.')}
+            ${pass ? i2('Tu contraseña nueva ya esta guardada. Abre la app PadelPulse en tu movil Android y entra con tu correo y tu contraseña.',
+                         'Your new password is saved. Open the PadelPulse app on your Android phone and sign in with your email and password.')
+                   : i2('Tu correo ya esta confirmado. Abre la app PadelPulse en tu movil Android y entra con tu correo y tu contraseña.',
+                         'Your email is confirmed. Open the PadelPulse app on your Android phone and sign in with your email and password.')}
         </div>`}
     </div>
 </div>`;

@@ -182,7 +182,11 @@ a enviar un correo de contraseña nueva.
   (`?token_hash=...&type=email|recovery`). La web lo valida con
   `POST /auth/v1/verify` **solo al pulsar su boton**, asi que el antivirus del
   correo no lo gasta. Tampoco depende de la Site URL.
-- Contraseña nueva: se escribe en la web y vale para la app y la web.
+- Contraseña nueva: se escribe en la web y vale para la app y la web. Al
+  guardarla, la web no deja la sesion abierta: muestra "Contraseña cambiada"
+  con un unico **Abrir la app** (`padelpulse://auth#...&type=login`) y la app
+  entra ya con sesion. Un navegador no puede abrir la app sin que se pulse un
+  boton, por eso no se abre sola.
 - Cuenta confirmada: la web solo ofrece **Abrir la app** (Android; pasa la
   sesion por `padelpulse://auth#...` y la app entra sola). No hay boton de
   "entrar en la web": la cuenta es de la app. En otros moviles se explica que
