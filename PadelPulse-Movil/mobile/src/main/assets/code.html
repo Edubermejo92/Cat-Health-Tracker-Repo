@@ -39,6 +39,10 @@ body{margin:0;padding:0;background:#000;height:100vh;height:100dvh;width:100vw;o
     background:transparent;
     position:relative;
     display:flex;flex-direction:column;
+    /* Arriba, no centrado: si el contenido no cabe, un marco centrado y con
+       scroll recorta la parte de arriba y no hay forma de llegar a ella (el
+       logo salia cortado). Lo que debe ir centrado se centra solo con flex-1. */
+    justify-content:flex-start !important;
     overflow-y:auto;
     /* deja sitio a la barra fija de abajo, contando el gesto del sistema */
     padding-bottom:calc(76px + var(--ver-h) + env(safe-area-inset-bottom,0px));
@@ -299,7 +303,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.1.1';
+const WEB_VERSION = '7.1.2';
 
 /** "7.1.0" en la app (la version instalada); "7.1.0 · web" en el navegador. */
 function versionLabel(){
@@ -5257,7 +5261,7 @@ const AuthView = () => {
     // Enlace de recuperacion abierto: toca escribir la contraseña nueva.
     if(Auth.status === 'newpass'){
         return `
-<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+<div class="flex-1 flex flex-col items-center justify-center px-6 py-6 w-full max-w-md mx-auto">
     <div class="w-full rounded-3xl p-6" style="background:${su}">
         <div class="text-base font-black mb-1 text-center" style="color:${te}">
             ${i2('Nueva contraseña','New password')}
@@ -5302,7 +5306,7 @@ const AuthView = () => {
     if(Auth.status === 'verify' || (busy && Auth.pendingLink)){
         const rec = Auth.pendingLink && Auth.pendingLink.type === 'recovery';
         return `
-<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+<div class="flex-1 flex flex-col items-center justify-center px-6 py-6 w-full max-w-md mx-auto">
     <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
         <div style="font-size:40px;line-height:1;margin-bottom:10px">${rec?'🔑':'📬'}</div>
         <div class="text-base font-black mb-2" style="color:${te}">
@@ -5328,7 +5332,7 @@ const AuthView = () => {
         const android = /android/i.test(navigator.userAgent||'');
         const pass = Auth.status === 'passdone';
         return `
-<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+<div class="flex-1 flex flex-col items-center justify-center px-6 py-6 w-full max-w-md mx-auto">
     <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
         <div style="font-size:40px;line-height:1;margin-bottom:10px">✅</div>
         <div class="text-base font-black mb-2" style="color:${te}">
@@ -5361,7 +5365,7 @@ const AuthView = () => {
     // Correo de recuperacion enviado.
     if(Auth.status === 'reset'){
         return `
-<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+<div class="flex-1 flex flex-col items-center justify-center px-6 py-6 w-full max-w-md mx-auto">
     <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
         <div style="font-size:40px;line-height:1;margin-bottom:10px">🔑</div>
         <div class="text-base font-black mb-2" style="color:${te}">${i2('Mira tu correo','Check your email')}</div>
@@ -5386,7 +5390,7 @@ const AuthView = () => {
     // Pantalla aparte: la cuenta existe pero falta confirmar el correo.
     if(Auth.status === 'confirm'){
         return `
-<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+<div class="flex-1 flex flex-col items-center justify-center px-6 py-6 w-full max-w-md mx-auto">
     <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
         <div style="font-size:40px;line-height:1;margin-bottom:10px">📬</div>
         <div class="text-base font-black mb-2" style="color:${te}">${i2('Confirma tu correo','Confirm your email')}</div>
@@ -5421,7 +5425,7 @@ const AuthView = () => {
     }
 
     return `
-<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+<div class="flex-1 flex flex-col items-center justify-center px-6 py-6 w-full max-w-md mx-auto">
     <img src="${LOGO_WORDMARK}" alt="PadelPulse Live" class="w-64 max-w-[75%] mb-3" style="object-fit:contain">
     <div class="text-[13px] font-bold text-center leading-snug mb-3" style="color:${te}">
         ${i2('El marcador de pádel, del reloj al móvil','The padel scoreboard, from watch to phone')}
