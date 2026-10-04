@@ -287,7 +287,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.0.7';
+const WEB_VERSION = '7.0.8';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -4378,19 +4378,6 @@ const Auth = {
         }
     },
 
-    /** "Entrar aqui" desde la pantalla de cuenta confirmada. */
-    async continueOnWeb(){
-        const frag = this.linkFrag; this.linkFrag = '';
-        if(!frag){ this.backToForm(); return; }
-        this.status = 'busy'; render();
-        if(await this.useLinkSession(frag)){
-            S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
-            showToast(i2('Cuenta confirmada','Account confirmed'), 2500);
-            this.syncNow(true).catch(()=>{});
-            render();
-        }
-    },
-
     /** Enlace que abre la app de Android con la sesion del correo. */
     appLink(){ return 'padelpulse://auth#' + (this.linkFrag || ''); },
 
@@ -5202,6 +5189,15 @@ function lastSyncLabel(){
     return i2(`Sincronizado hace ${h} h`,`Synced ${h} h ago`);
 }
 
+/** "Jugar sin cuenta": boton de verdad, no un enlace perdido debajo del formulario. */
+const skipAuthButton = (p) => `
+    <button onclick="skipAuth()"
+        class="w-full mt-4 py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press flex items-center justify-center gap-2"
+        style="background:${p}22;border:1.5px solid ${p};color:${p}">
+        <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+        ${i2('Jugar sin cuenta','Play without an account')}
+    </button>`;
+
 const AuthView = () => {
     const p = tc.primary(), mu = tc.muted(), su = tc.surf2(), te = tc.text();
     const busy = Auth.status==='busy';
@@ -5276,6 +5272,8 @@ const AuthView = () => {
     }
 
     // Enlace de confirmacion abierto en el navegador: la cuenta ya esta lista.
+    // Solo se ofrece volver a la app (con la sesion ya puesta): la cuenta es de
+    // la app, la web no es donde se va a jugar.
     if(Auth.status === 'linked'){
         const android = /android/i.test(navigator.userAgent||'');
         return `
@@ -5283,22 +5281,22 @@ const AuthView = () => {
     <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
         <div style="font-size:40px;line-height:1;margin-bottom:10px">✅</div>
         <div class="text-base font-black mb-2" style="color:${te}">${i2('Cuenta confirmada','Account confirmed')}</div>
-        <div class="text-[12px] leading-relaxed mb-5" style="color:${mu}">
-            ${i2('Tu correo ya esta confirmado. Vuelve a la app PadelPulse y entra con tu correo y tu contraseña.',
-                  'Your email is confirmed. Go back to the PadelPulse app and sign in with your email and password.')}
-        </div>
         ${android?`
+        <div class="text-[12px] leading-relaxed mb-5" style="color:${mu}">
+            ${i2('Tu correo ya esta confirmado. Abre la app y entras directamente.',
+                  'Your email is confirmed. Open the app and you are signed in.')}
+        </div>
         <a href="${esc(Auth.appLink())}"
             class="block w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
             style="background:${p};color:#04120B;text-decoration:none">${i2('Abrir la app','Open the app')}</a>
-        <div class="text-[10px] mt-2 mb-3" style="color:${mu}">
-            ${i2('Si no se abre, abre PadelPulse tu mismo y entra.','If it does not open, open PadelPulse yourself and sign in.')}
-        </div>`:''}
-        <button onclick="Auth.continueOnWeb()" ${busy?'disabled':''}
-            class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
-            style="${android?`background:transparent;border:1px solid ${p};color:${p}`:`background:${p};color:#04120B`};opacity:${busy?.6:1}">
-            ${i2('Entrar en la version web','Sign in on the web version')}
-        </button>
+        <div class="text-[10px] mt-3" style="color:${mu}">
+            ${i2('Si no se abre, abre PadelPulse tu mismo y entra con tu correo y tu contraseña.',
+                  'If it does not open, open PadelPulse yourself and sign in with your email and password.')}
+        </div>`:`
+        <div class="text-[12px] leading-relaxed" style="color:${mu}">
+            ${i2('Tu correo ya esta confirmado. Abre la app PadelPulse en tu movil Android y entra con tu correo y tu contraseña.',
+                  'Your email is confirmed. Open the PadelPulse app on your Android phone and sign in with your email and password.')}
+        </div>`}
     </div>
 </div>`;
     }
@@ -5361,9 +5359,7 @@ const AuthView = () => {
             ${i2('Usar otro correo','Use another email')}
         </button>
     </div>
-    <button onclick="skipAuth()" class="mt-5 text-[11px] font-bold underline" style="color:${mu}">
-        ${i2('Jugar sin cuenta','Play without an account')}
-    </button>
+    ${skipAuthButton(p)}
 </div>`;
     }
 
@@ -5441,10 +5437,8 @@ const AuthView = () => {
         </button>`}
     </div>
 
-    <button onclick="skipAuth()" class="mt-5 text-[11px] font-bold underline" style="color:${mu}">
-        ${i2('Jugar sin cuenta','Play without an account')}
-    </button>
-    <div class="text-[9px] text-center mt-2 px-6 leading-relaxed" style="color:${mu};opacity:.7">
+    ${skipAuthButton(p)}
+    <div class="text-[9px] text-center mt-3 px-6 leading-relaxed" style="color:${mu};opacity:.7">
         ${i2('Sin cuenta se juega igual: la cuenta solo sirve para guardar el historial y verlo en otro movil.',
               'You can play without an account: it only backs up your history and syncs it to another phone.')}
     </div>

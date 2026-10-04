@@ -183,10 +183,10 @@ a enviar un correo de contraseña nueva.
   `POST /auth/v1/verify` **solo al pulsar su boton**, asi que el antivirus del
   correo no lo gasta. Tampoco depende de la Site URL.
 - Contraseña nueva: se escribe en la web y vale para la app y la web.
-- Cuenta confirmada: la web ofrece **Abrir la app** (Android, pasa la sesion
-  por `padelpulse://auth#...`) o **Entrar en la version web**. No entra sola:
-  si la web y la app usaran la misma sesion, al renovarla una le tiraria la
-  sesion a la otra.
+- Cuenta confirmada: la web solo ofrece **Abrir la app** (Android; pasa la
+  sesion por `padelpulse://auth#...` y la app entra sola). No hay boton de
+  "entrar en la web": la cuenta es de la app. En otros moviles se explica que
+  hay que abrir la app en Android.
 - Los enlaces con error (`#error=...`) muestran el motivo en vez de dejar la
   pantalla en blanco.
 
