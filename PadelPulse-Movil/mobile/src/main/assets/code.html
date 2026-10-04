@@ -287,7 +287,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.0.6';
+const WEB_VERSION = '7.0.7';
 const PP_PATH = {
     hello:'/padel/hello', pair:'/padel/pair', state:'/padel/state',
     cmd:'/padel/cmd', settings:'/padel/settings', health:'/padel/health',
@@ -4064,6 +4064,8 @@ function deleteMatchFromHistory(id){
 // ═══════════════════════════════════════════════════════════════════
 const SUPA_URL = 'https://fdlcdzlvvxqhzougcjwd.supabase.co';
 const SUPA_KEY = 'sb_publishable_Q7D-EMj-MW4df-VzAbSNmg_eumYPvtM';
+/** Pagina a la que vuelven los enlaces del correo (confirmar cuenta, contraseña nueva). */
+const EMAIL_RETURN = 'https://padelpulselive.netlify.app/';
 
 const Auth = {
     user: null,            // { id, email, display_name }
@@ -4117,28 +4119,43 @@ const Auth = {
     },
 
     /**
-     * A donde tiene que volver el usuario desde un enlace del correo.
+     * A donde vuelve el usuario desde un enlace del correo: siempre a la web,
+     * tambien desde la app.
      *
-     * En la app, al esquema propio, que reabre PadelPulse. En la web, al
-     * propio sitio. Las dos direcciones tienen que estar dadas de alta en
-     * Supabase (Authentication › URL Configuration › Additional Redirect URLs)
-     * o el servidor las rechaza y manda al usuario a la direccion por defecto.
+     * Antes la app usaba su esquema propio (padelpulse://auth), pero el enlace
+     * se abre en el navegador del gestor de correo (Gmail, Outlook) y la
+     * redireccion del servidor a un esquema propio muchas veces no hace nada.
+     * La web siempre carga: confirma la cuenta o deja poner la contraseña
+     * nueva, y desde ahi un boton abre la app con la sesion (eso si funciona,
+     * porque lo pulsa el usuario).
+     *
+     * Tiene que estar dada de alta en Supabase (Authentication › URL
+     * Configuration): si no, el servidor la ignora y manda al usuario a la
+     * Site URL, que por defecto es http://localhost:3000. Eso es justo lo que
+     * pasaba (registros del 3-10-2026).
      */
-    returnUrl(){
-        const enLaApp = (typeof window!=='undefined') && !!window.AndroidBridge;
-        return enLaApp ? 'padelpulse://auth' : (location.origin + location.pathname);
+    returnUrl(){ return EMAIL_RETURN; },
+
+    /**
+     * Pone la vuelta como parametro de la URL, que es donde la lee Supabase
+     * (asi lo hace su libreria oficial). Antes iba en una cabecera.
+     */
+    withReturn(path){
+        return path + (path.indexOf('?')>=0 ? '&' : '?') + 'redirect_to=' + encodeURIComponent(this.returnUrl());
     },
+
+    /** Datos de un enlace del correo abierto en la web, a la espera de decidir. */
+    linkFrag: '',
 
     // ── Registro / entrada / salida ──
     async signUp(email, password, displayName){
         this.status='busy'; this.lastError=null; this.errorHint=null; render();
         try{
-            const data = await this.api('/auth/v1/signup', {
+            // Sin redirect_to, el enlace del correo de confirmacion apunta a la
+            // direccion por defecto del proyecto (localhost:3000), que en un
+            // movil no lleva a ninguna parte.
+            const data = await this.api(this.withReturn('/auth/v1/signup'), {
                 method:'POST', auth:false,
-                // Sin redirect_to, el enlace del correo de confirmacion apunta
-                // a la direccion por defecto del proyecto (localhost:3000) y en
-                // el movil no lleva a ninguna parte.
-                headers:{ 'redirect_to': this.returnUrl() },
                 body:{ email, password, data:{ display_name: displayName || email.split('@')[0] } }
             });
             // Si el correo YA tiene cuenta, Supabase contesta que si -para no
@@ -4229,21 +4246,115 @@ const Auth = {
     },
 
     /**
-     * Version web: el enlace de "he perdido la contraseña" vuelve al propio
-     * sitio con la sesion detras de la almohadilla. Se limpia la barra de
-     * direcciones en cuanto se lee, que ahi va el token.
+     * Version web: vuelta de un enlace del correo. Supabase deja la sesion (o
+     * el error) detras de la almohadilla; se limpia la barra de direcciones en
+     * cuanto se lee, que ahi va el token.
+     *
+     * - Error (enlace usado o caducado): se explica, sin dejar la pantalla en
+     *   blanco como antes.
+     * - Contraseña nueva: se pide aqui mismo, sin depender de la app.
+     * - Cuenta confirmada: la cuenta ya esta lista. No se entra solo: quien se
+     *   registro en la app quiere volver a la app, y si entraran las dos con
+     *   la misma sesion, al renovarla una le tiraria la sesion a la otra.
+     *   Se ofrece abrir la app o entrar aqui.
      */
     async catchWebRedirect(){
         const h = location.hash || '';
-        if(h.indexOf('access_token=') < 0) return false;
+        if(h.indexOf('access_token=') < 0 && h.indexOf('error') < 0) return false;
+        const frag = h.replace(/^#/,'');
         const d = {};
-        h.replace(/^#/,'').split('&').forEach(par=>{
-            const [k,v] = par.split('=');
-            if(k) d[k] = decodeURIComponent(v||'');
+        frag.split('&').forEach(par=>{
+            const i = par.indexOf('=');
+            if(i > 0) d[par.slice(0,i)] = decodeURIComponent((par.slice(i+1)||'').replace(/\+/g,' '));
         });
-        if(!d.access_token) return false;
-        const esRecuperacion = (d.type === 'recovery');
         history.replaceState(null, '', location.pathname + location.search);
+        S.currentView = 'auth';
+
+        if(!d.access_token){
+            this.status = 'anon';
+            this.lastError = this.human(d.error_description || d.error || 'el enlace no vale');
+            if(!this.errorHint){
+                this.errorHint = i2('Los enlaces caducan y valen una sola vez. Pide otro.',
+                                     'Links expire and work once. Ask for another one.');
+            }
+            render();
+            return false;
+        }
+
+        if(d.type === 'recovery'){
+            const ok = await this.useLinkSession(frag);
+            if(ok){ this.status = 'newpass'; render(); }
+            return ok;
+        }
+
+        this.linkFrag = frag;
+        this.status = 'linked';
+        render();
+        return true;
+    },
+
+    /**
+     * Enlace de las plantillas de correo nuevas: ?token_hash=...&type=...
+     *
+     * Se valida SOLO cuando la persona pulsa el boton. Si se validara al
+     * cargar, el antivirus del correo (Outlook/Hotmail abre los enlaces para
+     * revisarlos) gastaria el enlace de un solo uso antes que ella, y al
+     * pulsarlo veria "el enlace ha caducado".
+     */
+    pendingLink: null,
+
+    catchTokenLink(){
+        const q = new URLSearchParams(location.search || '');
+        const th = q.get('token_hash'), type = q.get('type');
+        if(!th || !type) return false;
+        history.replaceState(null, '', location.pathname + location.hash);
+        this.pendingLink = { token_hash: th, type };
+        this.status = 'verify';
+        this.lastError = null; this.errorHint = null;
+        S.currentView = 'auth';
+        render();
+        return true;
+    },
+
+    async verifyLink(){
+        const l = this.pendingLink;
+        if(!l){ this.backToForm(); return; }
+        this.status = 'busy'; this.lastError = null; this.errorHint = null; render();
+        try{
+            const data = await this.api('/auth/v1/verify', {
+                method:'POST', auth:false, body:{ type: l.type, token_hash: l.token_hash }
+            });
+            this.pendingLink = null;
+            if(!data || !data.access_token) throw new Error('el enlace no vale');
+            const frag = 'access_token=' + encodeURIComponent(data.access_token) +
+                '&refresh_token=' + encodeURIComponent(data.refresh_token || '') +
+                '&expires_in=' + (data.expires_in || 3600) +
+                '&token_type=bearer&type=' + encodeURIComponent(l.type);
+            if(l.type === 'recovery'){
+                if(await this.useLinkSession(frag)){ this.status = 'newpass'; render(); }
+                return;
+            }
+            this.linkFrag = frag;
+            this.status = 'linked';
+        }catch(e){
+            this.pendingLink = null;
+            this.status = 'anon';
+            this.lastError = this.human(e.message);
+            if(!this.errorHint){
+                this.errorHint = i2('Los enlaces caducan y valen una sola vez. Pide otro.',
+                                     'Links expire and work once. Ask for another one.');
+            }
+        }
+        render();
+    },
+
+    /** Entra en la web con la sesion del enlace del correo. */
+    async useLinkSession(frag){
+        const d = {};
+        (frag||'').split('&').forEach(par=>{
+            const i = par.indexOf('=');
+            if(i > 0) d[par.slice(0,i)] = decodeURIComponent(par.slice(i+1)||'');
+        });
         this.session = {
             access_token: d.access_token,
             refresh_token: d.refresh_token || '',
@@ -4257,25 +4368,31 @@ const Auth = {
             this.persist();
             this.adoptName();
             PPSync.sendAccountToWatch();
-            if(esRecuperacion){
-                this.status = 'newpass';
-                S.currentView = 'auth';
-                render();
-                return true;
-            }
-            if(S.currentView === 'auth'){
-                S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
-            }
-            this.syncNow(true).catch(()=>{});
-            render();
             return true;
         }catch(e){
             this.session = null;
+            this.status = 'anon';
             this.lastError = this.human(e.message);
             render();
             return false;
         }
     },
+
+    /** "Entrar aqui" desde la pantalla de cuenta confirmada. */
+    async continueOnWeb(){
+        const frag = this.linkFrag; this.linkFrag = '';
+        if(!frag){ this.backToForm(); return; }
+        this.status = 'busy'; render();
+        if(await this.useLinkSession(frag)){
+            S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
+            showToast(i2('Cuenta confirmada','Account confirmed'), 2500);
+            this.syncNow(true).catch(()=>{});
+            render();
+        }
+    },
+
+    /** Enlace que abre la app de Android con la sesion del correo. */
+    appLink(){ return 'padelpulse://auth#' + (this.linkFrag || ''); },
 
     /** Nombre con el que se registro. Si solo hay correo, vacio: no es un nombre. */
     myName(){
@@ -4452,11 +4569,9 @@ const Auth = {
         }
         this.status='busy'; this.lastError=null; this.errorHint=null; render();
         try{
-            const vuelta = this.returnUrl();
-            await this.api('/auth/v1/recover', {
+            await this.api(this.withReturn('/auth/v1/recover'), {
                 method:'POST', auth:false,
-                body:{ email: correo },
-                headers:{ 'redirect_to': vuelta }
+                body:{ email: correo }
             });
             this.pendingEmail = correo;
             this.status = 'reset';
@@ -4482,7 +4597,10 @@ const Auth = {
             await this.api('/auth/v1/user', { method:'PUT', body:{ password: nueva } });
             this.status='in';
             _authForm.pass = '';
-            showToast(i2('Contraseña cambiada','Password changed'), 2500);
+            const enLaWeb = !(typeof window!=='undefined' && window.AndroidBridge);
+            showToast(enLaWeb
+                ? i2('Contraseña cambiada. Ya puedes entrar en la app con ella.','Password changed. You can now sign in to the app with it.')
+                : i2('Contraseña cambiada','Password changed'), enLaWeb ? 5000 : 2500);
             if(S.currentView==='auth'){
                 S.currentView = sessionStorage.getItem('pp_setup_done') ? 'home' : 'setup';
             }
@@ -4501,9 +4619,8 @@ const Auth = {
         if(!this.pendingEmail){ this.backToForm(); return; }
         this.status='busy'; this.lastError=null; this.errorHint=null; render();
         try{
-            await this.api('/auth/v1/resend', {
+            await this.api(this.withReturn('/auth/v1/resend'), {
                 method:'POST', auth:false,
-                headers:{ 'redirect_to': this.returnUrl() },
                 body:{ type:'signup', email:this.pendingEmail }
             });
             showToast(i2('Correo reenviado','Email resent'), 2500);
@@ -5130,6 +5247,57 @@ const AuthView = () => {
             class="w-full mt-3 py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
             style="background:${p};color:#04120B;opacity:${busy?.6:1}">
             ${busy ? i2('Guardando…','Saving…') : i2('Guardar y entrar','Save and sign in')}
+        </button>
+    </div>
+</div>`;
+    }
+
+    // Enlace del correo abierto: se valida al pulsar, no al cargar.
+    if(Auth.status === 'verify' || (busy && Auth.pendingLink)){
+        const rec = Auth.pendingLink && Auth.pendingLink.type === 'recovery';
+        return `
+<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+    <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
+        <div style="font-size:40px;line-height:1;margin-bottom:10px">${rec?'🔑':'📬'}</div>
+        <div class="text-base font-black mb-2" style="color:${te}">
+            ${rec ? i2('Contraseña nueva','New password') : i2('Confirma tu cuenta','Confirm your account')}
+        </div>
+        <div class="text-[12px] leading-relaxed mb-5" style="color:${mu}">
+            ${rec ? i2('Pulsa para continuar y escribir tu contraseña nueva.','Tap to continue and type your new password.')
+                  : i2('Pulsa para confirmar tu correo y activar tu cuenta de PadelPulse.','Tap to confirm your email and activate your PadelPulse account.')}
+        </div>
+        <button onclick="Auth.verifyLink()" ${busy?'disabled':''}
+            class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="background:${p};color:#04120B;opacity:${busy?.6:1}">
+            ${busy ? i2('Comprobando…','Checking…') : (rec ? i2('Continuar','Continue') : i2('Confirmar mi cuenta','Confirm my account'))}
+        </button>
+    </div>
+</div>`;
+    }
+
+    // Enlace de confirmacion abierto en el navegador: la cuenta ya esta lista.
+    if(Auth.status === 'linked'){
+        const android = /android/i.test(navigator.userAgent||'');
+        return `
+<div class="flex-1 flex flex-col items-center justify-center px-6 w-full max-w-md mx-auto" style="min-height:100vh">
+    <div class="w-full rounded-3xl p-6 text-center" style="background:${su}">
+        <div style="font-size:40px;line-height:1;margin-bottom:10px">✅</div>
+        <div class="text-base font-black mb-2" style="color:${te}">${i2('Cuenta confirmada','Account confirmed')}</div>
+        <div class="text-[12px] leading-relaxed mb-5" style="color:${mu}">
+            ${i2('Tu correo ya esta confirmado. Vuelve a la app PadelPulse y entra con tu correo y tu contraseña.',
+                  'Your email is confirmed. Go back to the PadelPulse app and sign in with your email and password.')}
+        </div>
+        ${android?`
+        <a href="${esc(Auth.appLink())}"
+            class="block w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="background:${p};color:#04120B;text-decoration:none">${i2('Abrir la app','Open the app')}</a>
+        <div class="text-[10px] mt-2 mb-3" style="color:${mu}">
+            ${i2('Si no se abre, abre PadelPulse tu mismo y entra.','If it does not open, open PadelPulse yourself and sign in.')}
+        </div>`:''}
+        <button onclick="Auth.continueOnWeb()" ${busy?'disabled':''}
+            class="w-full py-3.5 rounded-2xl text-[12px] font-black uppercase tracking-wider scale-press"
+            style="${android?`background:transparent;border:1px solid ${p};color:${p}`:`background:${p};color:#04120B`};opacity:${busy?.6:1}">
+            ${i2('Entrar en la version web','Sign in on the web version')}
         </button>
     </div>
 </div>`;
@@ -7230,8 +7398,12 @@ Contacts.load();
 // que tu perfil esta cargado, la pareja A puede coger tu nombre.
 initTeamNames();
 // Version web: vuelta del enlace de "he perdido la contraseña"
-const _vuelveDelCorreo = (typeof location!=='undefined') && (location.hash||'').indexOf('access_token=')>=0;
-if (_vuelveDelCorreo) setTimeout(()=>Auth.catchWebRedirect().catch(()=>{}), 50);
+const _vuelveDelCorreo = (typeof location!=='undefined') &&
+    (/(^|[#&])(access_token|error|error_description)=/.test(location.hash||'') ||
+     /[?&]token_hash=/.test(location.search||''));
+if (_vuelveDelCorreo) setTimeout(()=>{
+    if(!Auth.catchTokenLink()) Auth.catchWebRedirect().catch(()=>{});
+}, 50);
 if (!SPECTATOR && !_vuelveDelCorreo) {
     if (!Auth.isIn && !authWasSkipped()) {
         S.currentView = 'auth';

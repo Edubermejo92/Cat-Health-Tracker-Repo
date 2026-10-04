@@ -1,7 +1,12 @@
 <!-- PadelPulse Live · He perdido la contraseña
      Asunto sugerido:  Tu nueva contraseña · PadelPulse Live
 
-     Se pega en Supabase: Authentication › Emails › Reset password. -->
+     Se pega en Supabase: Authentication › Emails › Reset password.
+     El enlace va a la web de PadelPulse con el token, no al enlace de confirmacion
+     de Supabase. Asi el enlace no se gasta si el antivirus del correo
+     (Outlook/Hotmail lo hace) lo abre antes que la persona: la web solo lo
+     valida cuando se pulsa su boton. Y no depende de la Site URL ni de la
+     lista de direcciones de vuelta de Supabase. -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
        style="background:#06100c;margin:0;padding:0;width:100%">
   <tr>
@@ -42,7 +47,7 @@
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td align="center" bgcolor="#00FD87" style="border-radius:14px">
-                  <a href="{{ .ConfirmationURL }}"
+                  <a href="https://padelpulselive.netlify.app/?token_hash={{ .TokenHash }}&amp;type=recovery"
                      style="display:inline-block;padding:15px 34px;font-family:'Trebuchet MS',Helvetica,Arial,sans-serif;
                             font-size:14px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;
                             color:#04120b;text-decoration:none;border-radius:14px">
@@ -67,7 +72,7 @@
                      font-size:12px;color:#5f6b67;line-height:1.7">
             Si el boton no te funciona, copia esta direccion en el navegador:
             <br>
-            <a href="{{ .ConfirmationURL }}" style="color:#00FD87;word-break:break-all">{{ .ConfirmationURL }}</a>
+            <a href="https://padelpulselive.netlify.app/?token_hash={{ .TokenHash }}&amp;type=recovery" style="color:#00FD87;word-break:break-all">https://padelpulselive.netlify.app/?token_hash={{ .TokenHash }}&amp;type=recovery</a>
           </td>
         </tr>
 

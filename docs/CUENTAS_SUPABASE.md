@@ -154,27 +154,59 @@ from auth.users order by created_at desc;
 Si `email_confirmed_at` tiene fecha, la cuenta esta lista y solo hay que
 entrar con la contraseña.
 
-## El enlace del correo tiene que volver a la app
+## Los enlaces del correo (confirmar cuenta y contraseña nueva)
 
-Este es el fallo que se vio en pruebas: el usuario se registra, le llega el
-correo *"Confirm your email address"*, pulsa el enlace y **no pasa nada**.
+### Que fallaba (registros del 3-10-2026)
 
-La causa es que Supabase, si no le dices otra cosa, manda al usuario a la
-**Site URL** del proyecto, que por defecto es `http://localhost:3000`. En un
-movil eso no existe.
+Una tester se registro desde la web en un iPhone. El enlace del correo era
+`.../auth/v1/verify?...&redirect_to=http://localhost:3000`: Supabase habia
+ignorado la vuelta que mandaba la app y uso la **Site URL**, que seguia en
+`http://localhost:3000`. La cuenta se confirmo al primer clic, pero la
+pagina de destino no existia; volvio a pulsar dos veces y le salio *"Email
+link is invalid or has expired"*. Ademas, Outlook/Hotmail revisa los enlaces
+antes que la persona (peticiones `HEAD` desde IPs de Microsoft): si su
+antivirus los abre con `GET`, gasta el enlace de un solo uso.
 
-La app ya manda la direccion de vuelta correcta (`padelpulse://auth` desde la
-app, la del sitio desde la web) en el registro, en el reenvio y en la
-recuperacion de contraseña. Pero **Supabase rechaza cualquier direccion que no
-tenga dada de alta** y, cuando la rechaza, usa la de por defecto. Asi que hay
-que ponerla:
+`recovery_sent_at` estaba vacio en todas las cuentas: nunca se habia llegado
+a enviar un correo de contraseña nueva.
+
+### Como funciona ahora
+
+- Los enlaces vuelven **siempre a la web** (`https://padelpulselive.netlify.app/`),
+  tambien desde la app. Un enlace a `padelpulse://auth` se abre en el
+  navegador del gestor de correo y la redireccion del servidor a un esquema
+  propio muchas veces no hace nada.
+- La app manda la vuelta como parametro de la URL (`?redirect_to=`), que es
+  donde la lee Supabase. Antes iba en una cabecera.
+- **Plantillas** (`docs/emails/`): el enlace lleva el token a la web
+  (`?token_hash=...&type=email|recovery`). La web lo valida con
+  `POST /auth/v1/verify` **solo al pulsar su boton**, asi que el antivirus del
+  correo no lo gasta. Tampoco depende de la Site URL.
+- Contraseña nueva: se escribe en la web y vale para la app y la web.
+- Cuenta confirmada: la web ofrece **Abrir la app** (Android, pasa la sesion
+  por `padelpulse://auth#...`) o **Entrar en la version web**. No entra sola:
+  si la web y la app usaran la misma sesion, al renovarla una le tiraria la
+  sesion a la otra.
+- Los enlaces con error (`#error=...`) muestran el motivo en vez de dejar la
+  pantalla en blanco.
+
+### Lo que hay que configurar en Supabase (una vez)
 
 **Authentication › URL Configuration**
 
 | Campo | Valor |
 |-------|-------|
-| Site URL | la direccion de la web, o `padelpulse://auth` si no hay web |
-| Additional Redirect URLs | `padelpulse://auth` (una por linea, y tambien la de la web) |
+| Site URL | `https://padelpulselive.netlify.app` |
+| Redirect URLs | `https://padelpulselive.netlify.app/**` y `padelpulse://auth` |
+
+**Authentication › Emails › Templates**: pegar `docs/emails/confirmar-cuenta.html`
+en *Confirm signup* y `docs/emails/recuperar-contrasena.html` en *Reset
+password*, con el asunto que indica cada una.
+
+**Authentication › Emails › SMTP Settings**: el correo integrado
+(`noreply@mail.app.supabase.io`) deja muy pocos envios por hora y acaba en
+spam. Para usuarios reales hace falta un SMTP propio (Brevo, Resend o Gmail
+con contraseña de aplicacion).
 
 ### La alternativa: no pedir confirmacion
 
@@ -282,12 +314,13 @@ Lo que sí existe es ponerse una nueva.
 En la pantalla de entrar, debajo de "Crear una cuenta nueva".
 
 1. El usuario escribe su correo y pulsa el enlace.
-2. La app llama a `POST /auth/v1/recover` con la dirección de vuelta
-   (`padelpulse://auth` en la app, la del sitio en la web).
-3. Supabase manda el correo con un enlace **de un solo uso**.
-4. Al abrirlo, la app detecta que la sesión viene marcada como `recovery` y,
-   en vez de entrar sin más, pide la contraseña nueva dos veces.
-5. Se guarda con `PUT /auth/v1/user` y a partir de ahí la vieja no vale.
+2. La app llama a `POST /auth/v1/recover?redirect_to=https://padelpulselive.netlify.app/`.
+3. Supabase manda el correo con un enlace **de un solo uso** a la web
+   (`?token_hash=...&type=recovery`, con la plantilla de `docs/emails/`).
+4. La web pide pulsar **Continuar** (valida el enlace en ese momento) y luego
+   la contraseña nueva dos veces.
+5. Se guarda con `PUT /auth/v1/user` y a partir de ahí la vieja no vale, en
+   la app y en la web.
 
 **Un correo que no existe recibe la misma respuesta que uno que sí.** Es a
 propósito: si contestáramos distinto, cualquiera podría averiguar qué correos
@@ -295,9 +328,8 @@ están dados de alta probando uno a uno.
 
 ## Requisito en Supabase
 
-Para que salga el correo hace falta que `padelpulse://auth` y la dirección de
-la web estén en **Authentication › URL Configuration › Additional Redirect
-URLs**. Sin eso el correo sale, pero el enlace no vuelve a la app.
+Ver *Lo que hay que configurar en Supabase (una vez)* más arriba: Site URL,
+Redirect URLs, plantillas y SMTP.
 
 ### El límite de correos es un problema real
 
