@@ -23,7 +23,12 @@ class WearListenerService : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         val payload = String(event.data, StandardCharsets.UTF_8)
         val path = event.path
-        mainHandler.post { dispatch(path, payload) }
+        // Un mensaje raro o a medias -llegan por Bluetooth, de un movil que puede
+        // ser de otra version- no puede tumbar el proceso: se descarta y se sigue.
+        mainHandler.post {
+            runCatching { dispatch(path, payload) }
+                .onFailure { Log.e(TAG, "Error atendiendo $path", it) }
+        }
     }
 
     private fun dispatch(path: String, payload: String) {

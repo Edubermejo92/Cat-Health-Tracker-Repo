@@ -74,7 +74,10 @@ class VoiceReferee(private val activity: MainActivity) {
         }
         state = State.LISTENING
         activity.claimVoice()
-        listen()
+        runCatching { listen() }.onFailure {
+            Log.w(TAG, "No se pudo empezar a escuchar", it)
+            stop()
+        }
     }
 
     fun stop() {
@@ -108,16 +111,30 @@ class VoiceReferee(private val activity: MainActivity) {
     }
 
     private fun reopen(delay: Long) {
-        handler.postDelayed({ listen() }, delay.coerceAtLeast(50))
+        handler.postDelayed({
+            runCatching { listen() }.onFailure {
+                Log.w(TAG, "No se pudo reabrir el microfono", it)
+                stop()
+            }
+        }, delay.coerceAtLeast(50))
     }
 
     private fun listen() {
         if (state == State.OFF) return
         val now = System.currentTimeMillis()
         if (now < speakingUntil) { reopen(speakingUntil - now + 250); return }
-        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(activity).also {
-            it.setRecognitionListener(listener)
-            recognizer = it
+        // Crearlo puede lanzar en relojes sin servicio de reconocimiento: sin esta
+        // red el toque en el microfono cerraba la app.
+        val r = recognizer ?: runCatching {
+            SpeechRecognizer.createSpeechRecognizer(activity).also {
+                it.setRecognitionListener(listener)
+                recognizer = it
+            }
+        }.getOrElse {
+            Log.w(TAG, "Reconocimiento de voz no disponible", it)
+            state = State.OFF
+            activity.listenOnce()
+            return
         }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)

@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.1.2"
+        const val APP_VERSION = "7.1.3"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
         private const val KEY_HEALTH_DISCLOSURE = "health_disclosure_seen"
@@ -657,10 +657,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     fun speak(text: String, currentLang: String = "es") {
         if (!ttsReady) return
         val voiceLang = Translations.langs.find { it.id == currentLang }?.voiceLang ?: "es-ES"
-        tts.language = Locale.forLanguageTag(voiceLang)
-        // Que el arbitro por voz no se oiga a si mismo cantar el punto
-        voice.onAppSpeaks(text)
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "padel_voice")
+        // El motor de voz del reloj puede haberse caido o no tener ese idioma:
+        // cantar el punto es un extra y no puede cerrar el marcador.
+        runCatching {
+            tts.language = Locale.forLanguageTag(voiceLang)
+            // Que el arbitro por voz no se oiga a si mismo cantar el punto
+            voice.onAppSpeaks(text)
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "padel_voice")
+        }.onFailure { Log.w(TAG, "No se pudo cantar el punto", it) }
     }
 
     override fun onInit(status: Int) {
@@ -679,8 +683,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
     }
 
     override fun onDestroy() {
-        tts.stop()
-        tts.shutdown()
+        runCatching { tts.stop(); tts.shutdown() }
         timerJob?.cancel()
         helloJob?.cancel()
         (getSystemService(Context.SENSOR_SERVICE) as SensorManager).unregisterListener(this)
