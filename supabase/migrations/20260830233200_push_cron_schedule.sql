@@ -20,7 +20,7 @@ set search_path = ''
 as $$
 declare
   v_secret text := public.get_secret('cron_secret');
-  v_url    text := 'https://vwdnipvfjqeeezuhjstk.supabase.co/functions/v1/send-reminder-pushes';
+  v_url    text := 'https://drlqsrqgvdurrvllyvim.supabase.co/functions/v1/send-reminder-pushes';
 begin
   if v_secret is null then
     raise warning 'trigger_send_reminder_pushes: falta cron_secret en Vault, no se invoca la funcion';
