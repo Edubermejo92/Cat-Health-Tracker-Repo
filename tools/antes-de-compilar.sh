@@ -108,6 +108,13 @@ for g in "$ROOT/PadelPulse-WearOS/app/build.gradle.kts" "$ROOT/PadelPulse-Movil/
       && rojo "isMinifyEnabled = true en $(basename $(dirname $(dirname "$g"))): la version de Play se cierra al abrir" \
       || verde "sin R8 en $(basename $(dirname $(dirname "$g")))"
 done
+# Play exige targetSdk 35 como minimo (rechazo de la 7150, que salio con 34)
+for g in "$ROOT/PadelPulse-WearOS/app/build.gradle.kts" "$ROOT/PadelPulse-Movil/mobile/build.gradle.kts"; do
+    t=$(grep -oE 'targetSdk = [0-9]+' "$g" | grep -oE '[0-9]+')
+    [ "${t:-0}" -ge 35 ] \
+      && verde "targetSdk $t en $(basename $(dirname $(dirname "$g")))" \
+      || rojo "targetSdk ${t:-?} en $(basename $(dirname $(dirname "$g"))): Play exige 35 o mas"
+done
 grep -q 'MatchOngoingService' "$ROOT/PadelPulse-WearOS/app/src/main/AndroidManifest.xml" \
   && verde "MatchOngoingService declarado (calidad Wear OS)" \
   || rojo "falta MatchOngoingService en el manifiesto del reloj"
