@@ -27,8 +27,8 @@ android {
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
         // serie -el del movil x10- y siempre por encima: movil 518, reloj 5180.
-        versionCode = 7130
-        versionName = "7.1.3"
+        versionCode = 7140
+        versionName = "7.1.4"
     }
 
     signingConfigs {
@@ -48,7 +48,13 @@ android {
         }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
+            // SIN R8, igual que el movil. Con la minificacion activada la version
+            // de Play (release) se cerraba nada mas abrirla, mientras que la
+            // instalada desde Android Studio (debug, sin R8) abria bien: el
+            // optimizador quitaba o renombraba algo que se usa al arrancar.
+            // Lo que se ahorra en tamaño no compensa una app que no abre.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -92,6 +98,7 @@ dependencies {
     // un jar VACIO, y el plugin de Android copia las versiones de ejecucion
     // al classpath de compilacion: el 1.0 se cambia por el vacio y falla
     // compileReleaseKotlin con "Unresolved reference ListenableFuture".
-    // Guava entera no tiene ese problema, y R8 quita todo lo que no se usa.
+    // Guava entera no tiene ese problema. Sin R8 ocupa unos MB de mas, que
+    // en el reloj no importan.
     implementation("com.google.guava:guava:33.3.1-android")
 }

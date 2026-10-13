@@ -4169,7 +4169,10 @@ android {
         }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true
+            // Sin R8: con la minificacion activada la version de Play se
+            // cerraba al abrirla (la debug, sin R8, abria bien).
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

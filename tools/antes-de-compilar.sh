@@ -101,6 +101,13 @@ grep -q 'wearable.standalone' "$ROOT/PadelPulse-WearOS/app/src/main/AndroidManif
   && grep -A1 'wearable.standalone' "$ROOT/PadelPulse-WearOS/app/src/main/AndroidManifest.xml" | grep -q 'value="false"' \
   && verde "standalone=false: Play instalara sola la app en el reloj" \
   || rojo "standalone deberia ser false"
+# La release del reloj con R8 se cerraba al abrirla desde Play (la debug, sin
+# R8, abria bien). Las dos apps van sin minificar.
+for g in "$ROOT/PadelPulse-WearOS/app/build.gradle.kts" "$ROOT/PadelPulse-Movil/mobile/build.gradle.kts"; do
+    grep -q 'isMinifyEnabled = true' "$g" \
+      && rojo "isMinifyEnabled = true en $(basename $(dirname $(dirname "$g"))): la version de Play se cierra al abrir" \
+      || verde "sin R8 en $(basename $(dirname $(dirname "$g")))"
+done
 grep -q 'MatchOngoingService' "$ROOT/PadelPulse-WearOS/app/src/main/AndroidManifest.xml" \
   && verde "MatchOngoingService declarado (calidad Wear OS)" \
   || rojo "falta MatchOngoingService en el manifiesto del reloj"
