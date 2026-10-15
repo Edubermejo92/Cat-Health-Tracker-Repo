@@ -51,6 +51,7 @@ import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Text
 import padelpulseapp2.netlify.app.sync.PhoneLink
+import padelpulseapp2.netlify.app.sync.WatchAccount
 import padelpulseapp2.netlify.app.voice.VoiceReferee
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -68,7 +69,9 @@ import kotlin.math.sin
  * Marcador pensado para la esfera redonda.
  *
  * Tres paginas que se pasan deslizando, como las apps de entreno de Wear OS:
- *   0  marcador   lo unico que hace falta en pista: tocar una mitad suma punto
+ *   0  marcador   lo unico que hace falta en pista: tocar una mitad suma punto;
+ *                 debajo del tanteo, "−" de cada pareja y la franja de juegos y
+ *                 sets (tocar para corregirlos); el logo abre el menu del partido
  *   1  controles  todo lo demas, en lista, con la corona
  *   2  salud      pulso, calorias, distancia y la pausa de sensores
  *
@@ -83,8 +86,16 @@ import kotlin.math.sin
 
 private const val PAGES = 3
 
-/** Borde inferior de la zona tocable y arranque de la banda de abajo. */
+/** Arranque de la banda de abajo (FALTA), desde arriba, en fracciones del ancho. */
 private const val BAND_TOP = 0.80f
+
+/**
+ * Fila de control bajo el tanteo (restar punto, juegos y sets), en fracciones
+ * del ancho desde el centro: su centro y su borde de arriba. Las mitades que
+ * suman punto terminan en ese borde.
+ */
+private const val CONTROL_ROW_Y = 0.135f
+private const val CONTROL_ROW_TOP = 0.035f
 
 /**
  * Cuanto sigue la esfera a la letra del sistema. El marcador esta dibujado a
@@ -104,7 +115,10 @@ fun ScorePager(
     onSettings: () -> Unit,
     onMode: () -> Unit,
     onEditName: (String) -> Unit,
-    onPicker: (String) -> Unit
+    onPicker: (String) -> Unit,
+    onMenu: () -> Unit,
+    onNewMatch: () -> Unit,
+    onHistory: () -> Unit
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
@@ -114,8 +128,11 @@ fun ScorePager(
         val w = minOf(maxWidth, maxHeight)
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> ScoreDial(engine, activity, ui, accent, w)
-                1 -> ControlsPage(engine, activity, ui, accent, listState, onSettings, onMode, onEditName, onPicker)
+                0 -> ScoreDial(engine, activity, ui, accent, w, onMenu, onEditScore = { onPicker("all") })
+                1 -> ControlsPage(
+                    engine, activity, ui, accent, listState, onSettings, onMode, onEditName, onPicker,
+                    onNewMatch, onHistory
+                )
                 else -> HealthDial(engine, activity, accent, w)
             }
         }
@@ -136,7 +153,15 @@ fun ScorePager(
 private val BALL = Color(0xFFE8FF3A)
 
 @Composable
-private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings, accent: Color, w: Dp) {
+private fun ScoreDial(
+    engine: GameEngine,
+    activity: MainActivity,
+    ui: UIStrings,
+    accent: Color,
+    w: Dp,
+    onMenu: () -> Unit,
+    onEditScore: () -> Unit
+) {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     fun sz(frac: Float): TextUnit = with(density) { (w * frac).toSp() }
@@ -213,13 +238,15 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        // Mitades tocables: cada una suma a su pareja
+        // Mitades tocables: cada una suma a su pareja. Llegan hasta justo
+        // encima de la fila de control (restar y corregir juegos/sets), que
+        // tiene sus propios botones: asi un toque ahi nunca suma un punto.
         Row(
             Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = w * 0.19f)
                 .fillMaxWidth()
-                .height(w * (BAND_TOP - 0.19f))
+                .height(w * (0.5f + CONTROL_ROW_TOP - 0.19f))
         ) {
             Box(Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = tapA, indication = null) { point("A") })
             Box(Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = tapB, indication = null) { point("B") })
@@ -266,16 +293,33 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
                 }
             }
         }
-        At(w, 0f, -0.34f, 0.62f) {
+        At(w, 0f, -0.34f, 0.66f) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TopButton("🎙", micOn, PP.Danger, micPulse) { voice.toggle() }
-                Image(
-                    painter = painterResource(id = R.drawable.logo_wordmark),
-                    contentDescription = "PadelPulse Live",
-                    modifier = Modifier.width(w * 0.22f).aspectRatio(LOGO_RATIO)
-                )
-                Spacer(Modifier.width(w * 0.01f))
-                Box(Modifier.size(w * 0.02f).clip(CircleShape).background(linkColor(engine)))
+                // El logo es el boton del menu del partido: nuevo partido,
+                // historial y corregir el marcador. 48 dp de alto para el dedo.
+                Row(
+                    Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(PP.PillShape)
+                        .clickable {
+                            onMenu()
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        .padding(horizontal = w * 0.01f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_wordmark),
+                        contentDescription = if (es) "Menú del partido" else "Match menu",
+                        modifier = Modifier.width(w * 0.22f).aspectRatio(LOGO_RATIO)
+                    )
+                    Spacer(Modifier.width(w * 0.01f))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(w * 0.02f).clip(CircleShape).background(linkColor(engine)))
+                        Text("≡", fontSize = sz(0.04f), color = PP.TextMuted, fontWeight = FontWeight.Bold)
+                    }
+                }
                 TopButton(if (muted) "🔇" else "🔊", muted, PP.Danger, 1f) {
                     engine.voiceEnabled = !engine.voiceEnabled
                     engine.persist()
@@ -285,8 +329,8 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        At(w, -0.22f, -0.225f, 0.36f) { SideNames(engine, "A", servingA, accent, w, ::szT) }
-        At(w, 0.22f, -0.225f, 0.36f) { SideNames(engine, "B", !servingA, accent, w, ::szT) }
+        At(w, -0.22f, -0.235f, 0.36f) { SideNames(engine, "A", servingA, accent, w, ::szT) }
+        At(w, 0.22f, -0.235f, 0.36f) { SideNames(engine, "B", !servingA, accent, w, ::szT) }
 
         // Estado especial del juego, en una pastilla entre nombres y tanteo
         val tbActive = engine.isTb || engine.isSuperTbActive()
@@ -299,16 +343,17 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             engine.isTb -> "TIE-BREAK" to PP.Warn
             else -> null
         }
-        if (pill != null) At(w, 0f, -0.148f, 0.5f) { Pill(pill.first, pill.second, szT(0.034f), w) }
+        if (pill != null) At(w, 0f, -0.16f, 0.5f) { Pill(pill.first, pill.second, szT(0.034f), w) }
 
         val strA = engine.getScoreStr("A")
         val strB = engine.getScoreStr("B")
-        At(w, -0.27f, -0.035f, 0.3f) { BigScore(strA, if (servingA) accent else PP.TextBright, sz(if (strA.length > 1) 0.225f else 0.25f), servingA) }
-        At(w, 0.27f, -0.035f, 0.3f) { BigScore(strB, if (!servingA) accent else PP.TextBright, sz(if (strB.length > 1) 0.225f else 0.25f), !servingA) }
+        // Algo mas pequeño que antes: debajo va la fila de control
+        At(w, -0.26f, -0.07f, 0.3f) { BigScore(strA, if (servingA) accent else PP.TextBright, sz(if (strA.length > 1) 0.19f else 0.21f), servingA) }
+        At(w, 0.26f, -0.07f, 0.3f) { BigScore(strB, if (!servingA) accent else PP.TextBright, sz(if (strB.length > 1) 0.19f else 0.21f), !servingA) }
 
         // Pista vista desde arriba, con la pelota en el cuadro de saque.
         // Tocarla cambia quien saca.
-        At(w, 0f, -0.035f, 0.14f) {
+        At(w, 0f, -0.07f, 0.14f) {
             Box(
                 Modifier
                     .size(w * 0.13f, w * 0.2f)
@@ -327,21 +372,66 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
             }
         }
 
-        // Juegos, y entre ellos los sets ya jugados (6-4 · 3-6)
-        At(w, -0.27f, 0.14f, 0.2f) { Stat(engine.gamesA.toString(), PP.TextBright, szT(0.08f), FontWeight.Black) }
-        At(w, 0.27f, 0.14f, 0.2f) { Stat(engine.gamesB.toString(), PP.TextBright, szT(0.08f), FontWeight.Black) }
-        At(w, 0f, 0.142f, 0.3f) {
-            val sets = engine.setScores.takeLast(3)
-            if (sets.isEmpty()) {
-                Stat(ui.games.uppercase(), PP.TextMuted, szT(0.038f), FontWeight.Bold)
-            } else {
-                Stat(sets.joinToString(" · "), PP.TextDim, szT(if (sets.size > 2) 0.036f else 0.042f), FontWeight.Bold)
+        // Fila de control, justo debajo del tanteo. A los lados, restar un
+        // punto a cada pareja; en medio, juegos y sets: al tocarla se corrigen.
+        // Todos los toques miden 48 dp como minimo, aunque el circulo que se ve
+        // sea mas pequeño, para que se acierten con el dedo en plena pista.
+        val touch = maxOf(48.dp, w * 0.2f)
+        val touchFrac = touch / w
+        At(w, -0.36f, CONTROL_ROW_Y, touchFrac) {
+            MinusButton(w, touch, colA, sz(0.07f), if (es) "Restar punto a ${engine.nameA}" else "Remove point from ${engine.nameA}") {
+                engine.decreasePoint("A")
+                activity.onLocalScoreAction("minus", "A")
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
+        }
+        At(w, 0.36f, CONTROL_ROW_Y, touchFrac) {
+            MinusButton(w, touch, colB, sz(0.07f), if (es) "Restar punto a ${engine.nameB}" else "Remove point from ${engine.nameB}") {
+                engine.decreasePoint("B")
+                activity.onLocalScoreAction("minus", "B")
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
+        }
+        At(w, 0f, CONTROL_ROW_Y, 0.46f) {
+            // Toque de 48 dp como minimo; la pastilla que se ve, algo mas baja
+            // para no pisar la linea de estado en los relojes pequeños.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = touch)
+                    .clip(PP.PillShape)
+                    .clickable(onClickLabel = if (es) "Corregir juegos y sets" else "Fix games and sets") {
+                        onEditScore()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = w * 0.17f)
+                        .clip(PP.PillShape)
+                        .background(PP.Surface)
+                        .border(1.dp, PP.Line, PP.PillShape),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GamesCell(engine.gamesA.toString(), ui.games, szT(0.075f), szT(0.026f), Modifier.weight(1f))
+                    GamesCell("${engine.setsA}-${engine.setsB}", ui.sets, szT(0.05f), szT(0.026f), Modifier.weight(1f), PP.TextDim)
+                    GamesCell(engine.gamesB.toString(), ui.games, szT(0.075f), szT(0.026f), Modifier.weight(1f))
+                }
             }
         }
 
-        At(w, 0f, 0.225f, 0.9f) {
-            val phase = if (tbActive) (if (engine.isTb) "TIE-BREAK" else "SUPER TB")
-                        else matchPhaseLabel(engine, ui)
+        // Por debajo de la fila de control. A esa altura el bisel deja ~0.84
+        // del ancho, y FitText encoge la linea si no cabe.
+        At(w, 0f, 0.268f, 0.78f) {
+            // Los sets ya jugados (6-4 · 3-6) dicen mas que "SET 2/3"
+            val sets = engine.setScores.takeLast(3)
+            val phase = when {
+                tbActive -> if (engine.isTb) "TIE-BREAK" else "SUPER TB"
+                sets.isNotEmpty() -> sets.joinToString(" · ")
+                else -> matchPhaseLabel(engine, ui)
+            }
             // Lo que ha oido la voz, un momento: asi se sabe si ha entendido
             var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
             LaunchedEffect(voice.heardAt) {
@@ -359,7 +449,7 @@ private fun ScoreDial(engine: GameEngine, activity: MainActivity, ui: UIStrings,
                 val status = buildAnnotatedString {
                     // Si el enlace falla, eso va primero
                     if (!linkOk) withStyle(SpanStyle(color = lc)) { append("● ${linkLabel(engine)} · ") }
-                    append((if (linkOk) "$phase · " else "") + activity.getTimerDisplay())
+                    append("$phase · " + activity.getTimerDisplay())
                     if (engine.heartRate > 0) withStyle(SpanStyle(color = accent)) { append(" · ♥ ${engine.heartRate}") }
                 }
                 FitText(status, PP.TextDim, szT(0.044f))
@@ -504,7 +594,9 @@ private fun ControlsPage(
     onSettings: () -> Unit,
     onMode: () -> Unit,
     onEditName: (String) -> Unit,
-    onPicker: (String) -> Unit
+    onPicker: (String) -> Unit,
+    onNewMatch: () -> Unit,
+    onHistory: () -> Unit
 ) {
     val es = engine.lang == "es"
     val servingName = if (engine.serving == "A") engine.nameA else engine.nameB
@@ -519,6 +611,17 @@ private fun ControlsPage(
         contentPadding = roundSafePadding(extraVertical = 10.dp)
     ) {
         item { PPLabel(if (es) "CONTROLES" else "CONTROLS", color = accent, size = PP.Label) }
+
+        // Lo que mas se busca, arriba del todo: empezar de nuevo (pide
+        // confirmacion si hay partido) y el historial por dias.
+        item { ControlChip(ui.newMatch, null, danger = true) { onNewMatch() } }
+        item {
+            ControlChip(
+                if (es) "Historial" else "History",
+                if (WatchAccount.signedIn) (if (es) "Partidos por día" else "Matches by day")
+                else (if (es) "🔒 Hace falta cuenta" else "🔒 Account needed")
+            ) { onHistory() }
+        }
 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -566,8 +669,8 @@ private fun ControlsPage(
                 activity.onLocalScoreAction("serve", next)
             }
         }
-        item { ControlChip(ui.sets, "${engine.setsA} – ${engine.setsB}") { onPicker("sets") } }
         item { ControlChip(ui.games, "${engine.gamesA} – ${engine.gamesB}") { onPicker("games") } }
+        item { ControlChip(ui.sets, "${engine.setsA} – ${engine.setsB}") { onPicker("sets") } }
         // Cada lado es una pareja: su nombre y sus dos jugadores
         for (t in listOf("A", "B")) {
             item { ControlChip(if (t == "A") ui.teamA else ui.teamB, engine.getName(t)) { onEditName(t) } }
@@ -590,14 +693,6 @@ private fun ControlsPage(
             ) { if (paused) activity.resumeSensors() else activity.pauseSensors() }
         }
         item { DetectionCard(engine, activity, accent) }
-        item {
-            ControlChip(ui.newMatch, null, danger = true) {
-                engine.resetMatch()
-                activity.resetTimer()
-                activity.startTimer()
-                activity.onLocalScoreAction("reset")
-            }
-        }
         item { ExitButton(engine, activity) }
     }
 }
@@ -747,6 +842,48 @@ private fun PageDots(current: Int, accent: Color, size: Dp, modifier: Modifier =
                     .background(if (i == current) accent else PP.TextMuted)
             )
         }
+    }
+}
+
+/**
+ * "−" de una pareja. El circulo que se ve es pequeño para no tapar la esfera,
+ * pero el toque ocupa [touch] (48 dp como minimo).
+ */
+@Composable
+private fun MinusButton(w: Dp, touch: Dp, color: Color, glyphSize: TextUnit, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(touch)
+            .clip(CircleShape)
+            .clickable(onClickLabel = description, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier
+                .size(w * 0.14f)
+                .clip(CircleShape)
+                .background(PP.SurfaceHigh)
+                .border(1.5.dp, color.copy(alpha = 0.7f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("−", color = color, fontSize = glyphSize, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+    }
+}
+
+/** Una cifra de la franja de juegos y sets, con su rotulo debajo. */
+@Composable
+private fun GamesCell(
+    value: String,
+    label: String,
+    valueSize: TextUnit,
+    labelSize: TextUnit,
+    modifier: Modifier,
+    color: Color = PP.TextBright
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        FitText(value, color, valueSize, FontWeight.Black, modifier = Modifier.fillMaxWidth())
+        FitText(label.uppercase(), PP.TextMuted, labelSize, FontWeight.Bold, modifier = Modifier.fillMaxWidth())
     }
 }
 

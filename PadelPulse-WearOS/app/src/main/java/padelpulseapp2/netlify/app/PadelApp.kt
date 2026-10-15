@@ -135,6 +135,10 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                             onSettings = { engine.currentScreen = "settings" },
                             onMode = { engine.currentScreen = "bt" },
                             onEnd = { engine.currentScreen = "end" },
+                            onHistory = {
+                                engine.historyBack = "score"
+                                engine.currentScreen = "history"
+                            },
                             onActiveList = { subActive = it }
                         )
                         "settings" -> SettingsScreen(
@@ -142,7 +146,7 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                             onBack = { engine.currentScreen = "score" },
                             onActiveList = { subActive = it }
                         )
-                        "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = "settings" }
+                        "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = engine.historyBack }
                         "invite" -> InviteScreen(engine, activity, inviteState) { engine.currentScreen = "settings" }
                         "end" -> EndScreen(engine, activity, endState)
                         else -> SplashScreen(engine, activity, splashState)
@@ -310,6 +314,23 @@ fun SplashScreen(
     val fade by animateFloatAsState(if (visible) 1f else 0f, tween(700), label = "fade")
     val logoScale by animateFloatAsState(if (visible) 1f else 0.85f, tween(700, easing = FastOutSlowInEasing), label = "scale")
 
+    // Con sesion no se pregunta nada: el logo un momento y al marcador. El
+    // idioma guardado se respeta y se cambia en Ajustes. Si hay un partido a
+    // medias, antes la pantalla de Continuar / Nueva partida. Sin sesion,
+    // todo sigue como antes: boton EMPEZAR y eleccion de idioma.
+    val autoStart = WatchAccount.signedIn
+    LaunchedEffect(autoStart) {
+        if (autoStart) {
+            delay(1400)
+            if (engine.hasSavedMatch()) {
+                engine.currentScreen = "resume"
+            } else {
+                activity.startTimer()
+                engine.currentScreen = "score"
+            }
+        }
+    }
+
     ScalingLazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().alpha(fade).rotaryScroll(listState),
@@ -328,7 +349,7 @@ fun SplashScreen(
             )
         }
         item { LinkPill(engine, Modifier.padding(vertical = 4.dp)) }
-        item {
+        if (!autoStart) item {
             PPChip(
                 ui.start.uppercase(),
                 onClick = { engine.currentScreen = if (engine.hasSavedMatch()) "resume" else "lang" },
@@ -707,7 +728,10 @@ fun SettingsScreen(
                 if (WatchAccount.signedIn) (if (es) "HISTORIAL" else "HISTORY")
                 else (if (es) "HISTORIAL 🔒" else "HISTORY 🔒"),
                 accent
-            ) { engine.currentScreen = "history" }
+            ) {
+                engine.historyBack = "settings"
+                engine.currentScreen = "history"
+            }
         }
         item {
             SettingChip(if (es) "INVITA A UN AMIGO" else "INVITE A FRIEND", accent) {
@@ -1059,7 +1083,14 @@ fun ResumeScreen(
                 onClick = {
                     engine.resetMatch()
                     activity.resetTimer()
-                    engine.currentScreen = "lang"
+                    if (WatchAccount.signedIn) {
+                        // Con sesion no se vuelve a pedir el idioma
+                        activity.startTimer()
+                        activity.onLocalScoreAction("reset")
+                        engine.currentScreen = "score"
+                    } else {
+                        engine.currentScreen = "lang"
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
                 background = Color(0xFF2A1212), content = PP.Danger, center = true
@@ -1125,6 +1156,7 @@ fun HistoryScreen(
             }
         }
     }
+    val porDia = remember(matches, engine.lang) { groupMatchesByDay(matches, engine.lang) }
     val summary = remember(CloudHistory.json, CloudHistory.played, CloudHistory.won, fromCloud) {
         if (fromCloud) {
             val played = maxOf(CloudHistory.played, cloud.size)
@@ -1190,60 +1222,112 @@ fun HistoryScreen(
                 Spacer(Modifier.height(2.dp))
             }
 
-            items(matches) { m ->
-                val won = m.optString("winner", "") == "A"
-                val dur = m.optInt("duration", 0)
-                val date = java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
-                    .format(java.util.Date(m.optLong("date", 0L)))
-                PPCard(
-                    modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                    accent = if (won) accent else null
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "${m.optString("teamA", "").uppercase()} · ${m.optString("teamB", "").uppercase()}",
-                                color = PP.TextDim, fontSize = PP.Micro,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "$date · ${formatWatchDuration(dur)}",
-                                color = PP.TextMuted, fontSize = PP.Micro
-                            )
-                        }
-                        Text(
-                            "${m.optInt("scoreA", 0)}–${m.optInt("scoreB", 0)}",
-                            color = if (won) accent else PP.TextDim,
-                            fontSize = PP.Title, fontWeight = FontWeight.Black,
-                            maxLines = 1, softWrap = false,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                    // Juegos y desgaste, si se guardaron
-                    val games = "${m.optInt("gamesA", 0)}-${m.optInt("gamesB", 0)}"
-                    val kcal = m.optInt("kcal", 0)
-                    if (kcal > 0 || games != "0-0") {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            buildString {
-                                if (games != "0-0") append(if (es) "Juegos $games" else "Games $games")
-                                if (kcal > 0) {
-                                    if (isNotEmpty()) append(" · ")
-                                    append("$kcal kcal")
-                                }
-                            },
-                            color = PP.TextMuted, fontSize = PP.Micro
-                        )
-                    }
+            // Por dias: una cabecera con la fecha y debajo los partidos de ese
+            // dia, del mas reciente al mas antiguo.
+            porDia.forEach { (dia, lista) ->
+                item {
+                    PPLabel(
+                        dia, color = accent, size = PP.Micro,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 1.dp)
+                    )
                 }
+                items(lista) { m -> HistoryMatchCard(m, accent, es) }
             }
         }
 
         item { BackChip(engine, accent, onBack) }
+    }
+}
+
+/**
+ * Agrupa los partidos por dia, del mas reciente al mas antiguo. Cada grupo
+ * lleva su cabecera ya escrita: HOY, AYER o la fecha ("MAR 14 OCT").
+ */
+fun groupMatchesByDay(matches: List<org.json.JSONObject>, lang: String): List<Pair<String, List<org.json.JSONObject>>> {
+    val es = lang == "es"
+    val locale = java.util.Locale.forLanguageTag(lang)
+    val key = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
+    val cal = java.util.Calendar.getInstance()
+    val hoy = key.format(cal.time)
+    cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+    val ayer = key.format(cal.time)
+    val esteAno = java.text.SimpleDateFormat("yyyy", java.util.Locale.ROOT).format(java.util.Date())
+    val conAno = java.text.SimpleDateFormat("EEE d MMM yyyy", locale)
+    val sinAno = java.text.SimpleDateFormat("EEE d MMM", locale)
+
+    return matches
+        .sortedByDescending { it.optLong("date", 0L) }
+        .groupBy { m ->
+            val t = m.optLong("date", 0L)
+            if (t <= 0L) "" else key.format(java.util.Date(t))
+        }
+        .map { (dia, lista) ->
+            val titulo = when {
+                dia.isEmpty() -> if (es) "SIN FECHA" else "NO DATE"
+                dia == hoy -> if (es) "HOY" else "TODAY"
+                dia == ayer -> if (es) "AYER" else "YESTERDAY"
+                else -> {
+                    val d = java.util.Date(lista.first().optLong("date", 0L))
+                    val f = if (dia.startsWith(esteAno)) sinAno else conAno
+                    f.format(d).replace(".", "")
+                }
+            }
+            titulo.uppercase(locale) to lista
+        }
+}
+
+/** Un partido del historial: parejas, resultado, juegos, duracion y kcal. */
+@Composable
+private fun HistoryMatchCard(m: org.json.JSONObject, accent: Color, es: Boolean) {
+    val won = m.optString("winner", "") == "A"
+    val dur = m.optInt("duration", 0)
+    val t = m.optLong("date", 0L)
+    val hora = if (t > 0L) java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(t)) else ""
+    PPCard(
+        modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+        accent = if (won) accent else null
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "${m.optString("teamA", "").uppercase()} · ${m.optString("teamB", "").uppercase()}",
+                    color = PP.TextDim, fontSize = PP.Micro,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    listOf(hora, formatWatchDuration(dur)).filter { it.isNotEmpty() }.joinToString(" · "),
+                    color = PP.TextMuted, fontSize = PP.Micro
+                )
+            }
+            // Resultado en sets
+            Text(
+                "${m.optInt("scoreA", 0)}–${m.optInt("scoreB", 0)}",
+                color = if (won) accent else PP.TextDim,
+                fontSize = PP.Title, fontWeight = FontWeight.Black,
+                maxLines = 1, softWrap = false,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+        // Juegos y desgaste, si se guardaron
+        val games = "${m.optInt("gamesA", 0)}-${m.optInt("gamesB", 0)}"
+        val kcal = m.optInt("kcal", 0)
+        if (kcal > 0 || games != "0-0") {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                buildString {
+                    if (games != "0-0") append(if (es) "Juegos $games" else "Games $games")
+                    if (kcal > 0) {
+                        if (isNotEmpty()) append(" · ")
+                        append("$kcal kcal")
+                    }
+                },
+                color = PP.TextMuted, fontSize = PP.Micro
+            )
+        }
     }
 }
 

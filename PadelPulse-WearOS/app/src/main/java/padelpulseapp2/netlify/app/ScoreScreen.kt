@@ -41,11 +41,30 @@ fun ScoreScreen(
     onSettings: () -> Unit,
     onMode: () -> Unit,
     onEnd: () -> Unit,
+    onHistory: () -> Unit,
     onActiveList: (androidx.wear.compose.foundation.lazy.ScalingLazyListState?) -> Unit = {}
 ) {
     var showPicker by remember { mutableStateOf<String?>(null) }
     var editingTeam by remember { mutableStateOf<String?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+    var confirmNew by remember { mutableStateOf(false) }
     val pickerState = rememberScalingLazyListState()
+    val menuState = rememberScalingLazyListState()
+    val confirmState = rememberScalingLazyListState()
+
+    fun startNewMatch() {
+        engine.resetMatch()
+        activity.resetTimer()
+        activity.startTimer()
+        activity.onLocalScoreAction("reset")
+    }
+
+    // Nuevo partido desde el marcador. Si ya hay algo jugado, se pregunta
+    // antes: un toque sin querer no puede borrar un partido a medias.
+    fun askNewMatch() {
+        showMenu = false
+        if (engine.hasSavedMatch()) confirmNew = true else startNewMatch()
+    }
 
     LaunchedEffect(engine.over) { if (engine.over) onEnd() }
 
@@ -55,11 +74,13 @@ fun ScoreScreen(
     // desplazamiento" en esta pantalla, aunque la de fuera si la tenga.
     // Lo mismo con el selector de sets/juegos, que ahora tambien es una lista
     // para que con la letra grande se pueda desplazar en vez de cortarse.
-    LaunchedEffect(editingTeam, showPicker) {
+    LaunchedEffect(editingTeam, showPicker, showMenu, confirmNew) {
         onActiveList(
             when {
                 editingTeam != null -> nameState
                 showPicker != null -> pickerState
+                confirmNew -> confirmState
+                showMenu -> menuState
                 else -> null
             }
         )
@@ -76,6 +97,25 @@ fun ScoreScreen(
         ScorePicker(picker, engine, activity, pickerState) { showPicker = null }
         return
     }
+    if (confirmNew) {
+        ConfirmNewMatchScreen(
+            engine, confirmState,
+            onConfirm = { confirmNew = false; startNewMatch() },
+            onCancel = { confirmNew = false }
+        )
+        return
+    }
+    if (showMenu) {
+        MatchMenuScreen(
+            engine, menuState,
+            onNewMatch = { askNewMatch() },
+            onHistory = { showMenu = false; onHistory() },
+            onEditScore = { showMenu = false; showPicker = "all" },
+            onSettings = { showMenu = false; onSettings() },
+            onClose = { showMenu = false }
+        )
+        return
+    }
 
     ScorePager(
         engine = engine,
@@ -84,8 +124,131 @@ fun ScoreScreen(
         onSettings = onSettings,
         onMode = onMode,
         onEditName = { editingTeam = it },
-        onPicker = { showPicker = it }
+        onPicker = { showPicker = it },
+        onMenu = { showMenu = true },
+        onNewMatch = { askNewMatch() },
+        onHistory = onHistory
     )
+}
+
+/**
+ * Menu del partido, el que abre el logo del marcador. Lo que no cabe en la
+ * esfera y se busca a menudo, en botones grandes.
+ */
+@Composable
+fun MatchMenuScreen(
+    engine: GameEngine,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
+    onNewMatch: () -> Unit,
+    onHistory: () -> Unit,
+    onEditScore: () -> Unit,
+    onSettings: () -> Unit,
+    onClose: () -> Unit
+) {
+    val accent = ThemeUtils.getColor(engine.theme)
+    val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
+    val es = engine.lang == "es"
+
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = roundSafePadding()
+    ) {
+        item { PPLabel(if (es) "PARTIDO" else "MATCH", color = accent, size = PP.Label) }
+        item {
+            PPChip(
+                ui.newMatch.uppercase(), onClick = onNewMatch,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                background = Color(0xFF2A1212), content = PP.Danger,
+                icon = "↺", weight = FontWeight.Black
+            )
+        }
+        item {
+            PPChip(
+                if (es) "HISTORIAL" else "HISTORY", onClick = onHistory,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                secondary = if (WatchAccount.signedIn) (if (es) "Partidos por día" else "Matches by day")
+                            else (if (es) "🔒 Hace falta cuenta" else "🔒 Account needed"),
+                icon = "📅"
+            )
+        }
+        item {
+            PPChip(
+                if (es) "CORREGIR JUEGOS Y SETS" else "FIX GAMES AND SETS", onClick = onEditScore,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                secondary = "${ui.games} ${engine.gamesA}–${engine.gamesB} · ${ui.sets} ${engine.setsA}–${engine.setsB}",
+                icon = "✎"
+            )
+        }
+        item {
+            PPChip(
+                ui.settings.uppercase(), onClick = onSettings,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                icon = "⚙"
+            )
+        }
+        item {
+            PPChip(
+                if (es) "‹ VOLVER AL MARCADOR" else "‹ BACK TO SCORE", onClick = onClose,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp),
+                content = accent, center = true
+            )
+        }
+    }
+}
+
+/** Confirmacion antes de borrar un partido a medias. */
+@Composable
+fun ConfirmNewMatchScreen(
+    engine: GameEngine,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val accent = ThemeUtils.getColor(engine.theme)
+    val es = engine.lang == "es"
+
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = roundSafePadding()
+    ) {
+        item { PPLabel(if (es) "¿NUEVO PARTIDO?" else "NEW MATCH?", color = PP.Danger, size = PP.Label) }
+        item {
+            Text(
+                "${engine.nameA} · ${engine.nameB}\n" +
+                    "${engine.setsA}–${engine.setsB}  ·  ${engine.gamesA}–${engine.gamesB}",
+                color = PP.TextBright, fontSize = PP.Body, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 4.dp)
+            )
+        }
+        item {
+            Text(
+                if (es) "Se borra el marcador de este partido y no se guarda en el historial."
+                else "This match's score is cleared and not saved to history.",
+                color = PP.TextDim, fontSize = PP.Micro, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(0.9f).padding(bottom = 4.dp)
+            )
+        }
+        item {
+            PPChip(
+                if (es) "SÍ, EMPEZAR DE CERO" else "YES, START OVER", onClick = onConfirm,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                background = Color(0xFF2A1212), content = PP.Danger,
+                weight = FontWeight.Black, center = true
+            )
+        }
+        item {
+            PPChip(
+                if (es) "NO, SEGUIR JUGANDO" else "NO, KEEP PLAYING", onClick = onCancel,
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                background = accent, content = PP.OnAccent,
+                weight = FontWeight.Black, center = true
+            )
+        }
+    }
 }
 
 @Composable
@@ -203,18 +366,23 @@ fun ScorePicker(
     onClose: () -> Unit
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
-    val options = if (type == "games") 8 else 4
-    val stateA = rememberPickerState(initialNumberOfOptions = options)
-    val stateB = rememberPickerState(initialNumberOfOptions = options)
+    val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
+    val es = engine.lang == "es"
+    // "games", "sets" o "all" (los dos, el que abre la franja del marcador)
+    val showGames = type != "sets"
+    val showSets = type != "games"
+    val gameOptions = 8
+    val setOptions = 4
+    val gamesA = rememberPickerState(initialNumberOfOptions = gameOptions)
+    val gamesB = rememberPickerState(initialNumberOfOptions = gameOptions)
+    val setsA = rememberPickerState(initialNumberOfOptions = setOptions)
+    val setsB = rememberPickerState(initialNumberOfOptions = setOptions)
 
     LaunchedEffect(Unit) {
-        if (type == "sets") {
-            stateA.scrollToOption(engine.setsA.coerceIn(0, options - 1))
-            stateB.scrollToOption(engine.setsB.coerceIn(0, options - 1))
-        } else {
-            stateA.scrollToOption(engine.gamesA.coerceIn(0, options - 1))
-            stateB.scrollToOption(engine.gamesB.coerceIn(0, options - 1))
-        }
+        gamesA.scrollToOption(engine.gamesA.coerceIn(0, gameOptions - 1))
+        gamesB.scrollToOption(engine.gamesB.coerceIn(0, gameOptions - 1))
+        setsA.scrollToOption(engine.setsA.coerceIn(0, setOptions - 1))
+        setsB.scrollToOption(engine.setsB.coerceIn(0, setOptions - 1))
     }
 
     // Los rodillos se hacen mas altos con la letra: asi el numero elegido
@@ -223,6 +391,19 @@ fun ScorePicker(
     val pickerW = 52.dp * scale
     val pickerH = 84.dp * scale
 
+    @Composable
+    fun PickerRow(a: PickerState, b: PickerState) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Picker(state = a, modifier = Modifier.size(pickerW, pickerH), contentDescription = engine.nameA) {
+                Text("$it", fontSize = 26.sp, color = if (it == a.selectedOption) accent else PP.TextMuted)
+            }
+            Text("–", color = PP.TextBright, fontSize = 20.sp)
+            Picker(state = b, modifier = Modifier.size(pickerW, pickerH), contentDescription = engine.nameB) {
+                Text("$it", fontSize = 26.sp, color = if (it == b.selectedOption) accent else PP.TextMuted)
+            }
+        }
+    }
+
     ScalingLazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
@@ -230,40 +411,63 @@ fun ScorePicker(
         contentPadding = roundSafePadding()
     ) {
         item {
-            val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-            PPLabel(if (type == "sets") ui.sets else ui.games, color = accent, size = PP.Label)
+            PPLabel(
+                when (type) {
+                    "games" -> ui.games
+                    "sets" -> ui.sets
+                    else -> if (es) "CORREGIR MARCADOR" else "FIX SCORE"
+                },
+                color = accent, size = PP.Label
+            )
         }
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Picker(state = stateA, modifier = Modifier.size(pickerW, pickerH), contentDescription = null) {
-                    Text("$it", fontSize = 26.sp, color = if (it == stateA.selectedOption) accent else PP.TextMuted)
-                }
-                Text("–", color = PP.TextBright, fontSize = 20.sp)
-                Picker(state = stateB, modifier = Modifier.size(pickerW, pickerH), contentDescription = null) {
-                    Text("$it", fontSize = 26.sp, color = if (it == stateB.selectedOption) accent else PP.TextMuted)
-                }
-            }
+            Text(
+                "${engine.nameA}  ·  ${engine.nameB}",
+                color = PP.TextDim, fontSize = PP.Micro, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+        if (showGames) {
+            if (type == "all") item { PPLabel(ui.games, size = PP.Micro) }
+            item { PickerRow(gamesA, gamesB) }
+        }
+        if (showSets) {
+            if (type == "all") item { PPLabel(ui.sets, size = PP.Micro) }
+            item { PickerRow(setsA, setsB) }
         }
         item {
             PPChip(
                 "OK",
                 onClick = {
-                    if (type == "sets") {
-                        engine.setsA = stateA.selectedOption
-                        engine.setsB = stateB.selectedOption
+                    // Antes de tocar nada, como un punto: asi "deshacer" vuelve
+                    // al marcador de antes de corregirlo
+                    engine.saveState()
+                    if (showGames) {
+                        engine.gamesA = gamesA.selectedOption
+                        engine.gamesB = gamesB.selectedOption
+                    }
+                    if (showSets) {
+                        engine.setsA = setsA.selectedOption
+                        engine.setsB = setsB.selectedOption
                         // Sets puestos a mano: sus resultados ya no se saben
                         if (engine.setScores.size != engine.setsA + engine.setsB) engine.setScores = emptyList()
-                    } else {
-                        engine.gamesA = stateA.selectedOption
-                        engine.gamesB = stateB.selectedOption
                     }
-                    engine.saveState()
-                    activity.pushStateToPhone()
+                    engine.persist()
+                    // Como cualquier cambio del marcador: sube la revision y lo
+                    // manda. Sin subirla, el movil ignoraba la correccion.
+                    activity.onLocalScoreAction("edit")
                     onClose()
                 },
                 modifier = Modifier.fillMaxWidth(0.6f).padding(top = 4.dp),
                 background = accent, content = PP.OnAccent,
                 weight = FontWeight.Black, center = true
+            )
+        }
+        item {
+            PPChip(
+                if (es) "CANCELAR" else "CANCEL", onClick = onClose,
+                modifier = Modifier.fillMaxWidth(0.6f).padding(top = 2.dp),
+                content = PP.TextDim, center = true
             )
         }
     }
