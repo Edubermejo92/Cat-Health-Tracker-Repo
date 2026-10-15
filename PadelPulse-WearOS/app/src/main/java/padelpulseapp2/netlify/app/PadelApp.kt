@@ -783,8 +783,6 @@ fun SettingsScreen(
 
         item { VoiceVolumeCard(engine, activity, accent) }
 
-        item { DetectionCard(engine, activity, accent) }
-
         // Silenciar la voz que canta los puntos (tambien desde el marcador, 🔊)
         item {
             ToggleRow(

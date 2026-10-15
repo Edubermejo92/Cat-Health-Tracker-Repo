@@ -293,7 +293,7 @@ private fun ScoreDial(
                 }
             }
         }
-        At(w, 0f, -0.34f, 0.66f) {
+        At(w, 0f, -0.34f, 0.72f) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TopButton("🎙", micOn, PP.Danger, micPulse) { voice.toggle() }
                 // El logo es el boton del menu del partido: nuevo partido,
@@ -325,6 +325,24 @@ private fun ScoreDial(
                     engine.persist()
                     // Al silenciar se corta tambien la frase que estuviera sonando
                     if (!engine.voiceEnabled) activity.stopSpeaking() else engine.speakScore()
+                }
+                // El UNICO interruptor de la deteccion automatica de ejercicio
+                // (la app de salud del reloj que tapa el marcador al moverte).
+                // Encendido por defecto: con el partido en marcha el reloj ya
+                // tiene un entreno y no detecta otro. Aviso ⚠ si el reloj no
+                // deja bloquearla.
+                val guardOn = WorkoutGuard.enabled
+                val guardFails = WorkoutGuard.state == WorkoutGuard.State.UNSUPPORTED ||
+                    WorkoutGuard.state == WorkoutGuard.State.FAILED
+                TopButton(if (guardOn && guardFails) "⚠" else "🛡", guardOn, if (guardFails) PP.Warn else accent, 1f) {
+                    val on = !WorkoutGuard.enabled
+                    WorkoutGuard.setEnabled(activity, on, activity.timerRunning)
+                    android.widget.Toast.makeText(
+                        activity,
+                        if (on) (if (es) "Detección automática bloqueada mientras juegas" else "Auto detection blocked while playing")
+                        else (if (es) "Detección automática permitida" else "Auto detection allowed"),
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
@@ -692,7 +710,6 @@ private fun ControlsPage(
                 null
             ) { if (paused) activity.resumeSensors() else activity.pauseSensors() }
         }
-        item { DetectionCard(engine, activity, accent) }
         item { ExitButton(engine, activity) }
     }
 }
@@ -767,19 +784,8 @@ private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color
         At(w, -0.16f, 0.215f, 0.28f) { Stat("🔥 KCAL", PP.TextMuted, szT(0.038f), FontWeight.Bold) }
         At(w, 0.16f, 0.215f, 0.28f) { Stat("🏃 KM", PP.TextMuted, szT(0.038f), FontWeight.Bold) }
 
-        // Abajo, el bloqueo de la deteccion automatica de ejercicio: es lo que
-        // evita que la app de salud del reloj tape el marcador al moverte.
-        // Pausar sensores sigue en Controles.
-        val (guardText, guardColor) = guardStatus(engine, accent, short = true)
-        val on = WorkoutGuard.enabled
-        EdgeBand(
-            w = w,
-            label = guardText,
-            labelColor = guardColor,
-            background = if (on) ThemeUtils.tint(engine.theme, 0.16f) else PP.SurfaceHigh,
-            line = if (on) accent else PP.Line,
-            labelSize = szT(0.04f)
-        ) { WorkoutGuard.setEnabled(activity, !on, activity.timerRunning) }
+        // El bloqueo de la deteccion automatica ya no esta aqui: hay un solo
+        // interruptor, el 🛡 de arriba del marcador.
     }
 }
 
