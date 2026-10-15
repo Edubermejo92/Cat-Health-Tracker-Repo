@@ -34,7 +34,11 @@ class MatchOngoingService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 stopForegroundCompat()
-                stopSelf()
+                // stopSelf(startId) y no stopSelf(): si justo detras viene otra
+                // orden de arrancar (nuevo partido), el servicio no se cae con
+                // ella pendiente. Con stopSelf() Android cerraba la app entera
+                // ("startForegroundService() did not then call startForeground()").
+                stopSelf(startId)
                 return START_NOT_STICKY
             }
             else -> {
@@ -48,7 +52,7 @@ class MatchOngoingService : Service() {
                     .onFailure { Log.w(TAG, "Sin actividad en curso", it) }
                     .isSuccess
                 if (!ok) {
-                    stopSelf()
+                    stopSelf(startId)
                     return START_NOT_STICKY
                 }
             }
@@ -145,8 +149,22 @@ class MatchOngoingService : Service() {
         private const val NOTIFICATION_ID = 4821
         private const val ACTION_STOP = "padelpulse.STOP_ONGOING"
 
+        /**
+         * El tipo "health" del servicio exige, desde Android 14, un permiso de
+         * salud concedido (actividad fisica, o sensores hasta Wear OS 5). Sin
+         * el, startForeground falla y Android cierra la app por haber pedido un
+         * servicio en primer plano que no llega a mostrarse: mejor no pedirlo.
+         */
+        private fun canRunHealthService(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT < 34) return true
+            fun granted(p: String) = context.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            return granted(android.Manifest.permission.ACTIVITY_RECOGNITION) ||
+                (Build.VERSION.SDK_INT <= 35 && granted(android.Manifest.permission.BODY_SENSORS))
+        }
+
         /** Arranca o refresca la actividad en curso (marcador actualizado). */
         fun start(context: Context) {
+            if (!canRunHealthService(context)) return
             val intent = Intent(context, MatchOngoingService::class.java)
             runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

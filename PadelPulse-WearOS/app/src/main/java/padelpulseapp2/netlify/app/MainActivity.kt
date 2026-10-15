@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.1.7"
+        const val APP_VERSION = "7.1.8"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
         private const val KEY_HEALTH_DISCLOSURE = "health_disclosure_seen"
@@ -385,9 +385,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
                 e.serving = quien; e.faultCount = 0
                 e.speakServe(quien); onLocalScoreAction("serve", quien)
             }
-            "newMatch" -> {
-                e.resetMatch(); resetTimer(); startTimer(); onLocalScoreAction("reset")
-            }
+            "newMatch" -> startNewMatch()
             "query" -> e.speakScore()
         }
     }
@@ -407,6 +405,29 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         timerRunning = false
         MatchOngoingService.stop(this)
         WorkoutGuard.stop(this)
+    }
+
+    /**
+     * Nuevo partido, venga de donde venga (menu, Controles, fin de partido,
+     * Continuar/Nueva, voz). Un solo sitio para que todos hagan lo mismo:
+     *
+     * 1. Si el que habia se llego a jugar, se guarda en el historial con su
+     *    resultado, la fecha y las parejas. Un partido terminado ya se guardo
+     *    al acabar y no se repite.
+     * 2. Marcador a cero y cronometro a cero, SIN parar la actividad en curso
+     *    ni el entreno: pararlos y arrancarlos seguidos cerraba la app (el
+     *    servicio se detenia con la orden de arrancar aun pendiente).
+     * 3. El movil se entera como de cualquier cambio.
+     */
+    fun startNewMatch() {
+        val e = gameEngine ?: return
+        if (matchTimeSeconds > 0) e.clockSeconds = matchTimeSeconds
+        if (e.hasSavedMatch()) e.saveMatchToHistory()
+        e.resetMatch()
+        matchTimeSeconds = 0
+        e.clockSeconds = 0
+        startTimer()
+        onLocalScoreAction("reset")
     }
 
     /**
@@ -531,8 +552,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
      * falta el permiso de Salud conectada READ_HEART_RATE, que Play no admite
      * para un marcador; ahi la app funciona sin pulso y no pregunta nada.
      */
-    private val heartRateAvailable: Boolean
+    val heartRateAvailable: Boolean
         get() = android.os.Build.VERSION.SDK_INT <= 35
+
+    /** Desde Ajustes: explica el pulso y, si acepta, pide el permiso. */
+    fun askHeartRate() {
+        if (heartRateAvailable && !WorkoutGuard.hasHeartRatePermission(this)) showHealthDisclosure = true
+    }
 
     private fun heartRatePermission(): String = android.Manifest.permission.BODY_SENSORS
 
@@ -579,13 +605,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         PhoneLink.announce(this)
 
         val neededPerms = mutableListOf<String>()
-        // El pulso no se pide en frio: antes se explica para que se usa
-        // (requisito de la politica de permisos de salud de Play). Solo una
-        // vez; si dice que no, no se vuelve a insistir.
-        if (heartRateAvailable && !WorkoutGuard.hasHeartRatePermission(this) &&
-            !getSharedPreferences("padel_prefs", Context.MODE_PRIVATE).getBoolean(KEY_HEALTH_DISCLOSURE, false)) {
-            showHealthDisclosure = true
-        }
+        // El pulso ya no se pregunta al arrancar: es una pantalla menos antes
+        // del marcador. Se activa desde Ajustes > Pulso, que enseña primero la
+        // explicacion (requisito de la politica de salud de Play) y despues
+        // pide el permiso.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
             checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) {

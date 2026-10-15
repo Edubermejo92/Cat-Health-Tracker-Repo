@@ -314,20 +314,17 @@ fun SplashScreen(
     val fade by animateFloatAsState(if (visible) 1f else 0f, tween(700), label = "fade")
     val logoScale by animateFloatAsState(if (visible) 1f else 0.85f, tween(700, easing = FastOutSlowInEasing), label = "scale")
 
-    // Con sesion no se pregunta nada: el logo un momento y al marcador. El
-    // idioma guardado se respeta y se cambia en Ajustes. Si hay un partido a
-    // medias, antes la pantalla de Continuar / Nueva partida. Sin sesion,
-    // todo sigue como antes: boton EMPEZAR y eleccion de idioma.
-    val autoStart = WatchAccount.signedIn
-    LaunchedEffect(autoStart) {
-        if (autoStart) {
-            delay(1400)
-            if (engine.hasSavedMatch()) {
-                engine.currentScreen = "resume"
-            } else {
-                activity.startTimer()
-                engine.currentScreen = "score"
-            }
+    // Arranque corto: el logo un momento y al marcador, sin botones ni
+    // preguntas. El idioma es español salvo que se cambie en Ajustes (o llegue
+    // otro del movil), asi que no se pregunta cada vez. Si hay un partido a
+    // medias, antes la pantalla de Continuar / Nueva partida.
+    LaunchedEffect(Unit) {
+        delay(1200)
+        if (engine.hasSavedMatch()) {
+            engine.currentScreen = "resume"
+        } else {
+            activity.startTimer()
+            engine.currentScreen = "score"
         }
     }
 
@@ -349,10 +346,14 @@ fun SplashScreen(
             )
         }
         item { LinkPill(engine, Modifier.padding(vertical = 4.dp)) }
-        if (!autoStart) item {
+        // Por si alguien no quiere esperar el segundo del logo
+        item {
             PPChip(
                 ui.start.uppercase(),
-                onClick = { engine.currentScreen = if (engine.hasSavedMatch()) "resume" else "lang" },
+                onClick = {
+                    if (engine.hasSavedMatch()) engine.currentScreen = "resume"
+                    else { activity.startTimer(); engine.currentScreen = "score" }
+                },
                 modifier = Modifier.fillMaxWidth(0.84f).padding(top = 4.dp),
                 background = accent, content = PP.OnAccent,
                 fontSize = PP.Body, weight = FontWeight.Black, center = true
@@ -738,6 +739,20 @@ fun SettingsScreen(
                 engine.currentScreen = "invite"
             }
         }
+        // El pulso ya no se pregunta al arrancar: se activa aqui. Primero sale
+        // la explicacion de para que se usa (politica de salud de Play) y, si
+        // acepta, el permiso del sistema. Solo existe hasta Wear OS 5.
+        if (activity.heartRateAvailable) item {
+            val on = WorkoutGuard.hasHeartRatePermission(activity)
+            PPChip(
+                if (es) "PULSO ♥" else "HEART RATE ♥",
+                onClick = { if (!on) activity.askHeartRate() },
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                content = accent, weight = FontWeight.Normal,
+                secondary = if (on) (if (es) "Activado" else "On")
+                            else (if (es) "Toca para mostrarlo en el marcador" else "Tap to show it on the scoreboard")
+            )
+        }
         // Play exige enlazar la politica de privacidad dentro de la app,
         // sobre todo con permisos de salud (el pulso)
         item {
@@ -860,9 +875,8 @@ fun SettingsScreen(
             PPChip(
                 ui.newMatch.uppercase(),
                 onClick = {
-                    engine.resetMatch()
-                    activity.resetTimer()
-                    activity.onLocalScoreAction("reset")
+                    // Guarda el partido jugado y empieza otro (ver startNewMatch)
+                    activity.startNewMatch()
                     onBack()
                 },
                 modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp),
@@ -1011,10 +1025,8 @@ fun EndScreen(
             PPChip(
                 ui.newMatch.uppercase(),
                 onClick = {
-                    engine.resetMatch()
-                    activity.resetTimer()
-                    activity.startTimer()
-                    activity.onLocalScoreAction("reset")
+                    // El partido terminado ya se guardo al acabar
+                    activity.startNewMatch()
                     engine.currentScreen = "score"
                 },
                 modifier = Modifier.fillMaxWidth(0.88f).padding(top = 8.dp),
@@ -1081,16 +1093,10 @@ fun ResumeScreen(
             PPChip(
                 if (es) "NUEVA PARTIDA" else "NEW MATCH",
                 onClick = {
-                    engine.resetMatch()
-                    activity.resetTimer()
-                    if (WatchAccount.signedIn) {
-                        // Con sesion no se vuelve a pedir el idioma
-                        activity.startTimer()
-                        activity.onLocalScoreAction("reset")
-                        engine.currentScreen = "score"
-                    } else {
-                        engine.currentScreen = "lang"
-                    }
+                    // El partido a medias se guarda en el historial y se va
+                    // directo al marcador: el idioma ya no se pregunta
+                    activity.startNewMatch()
+                    engine.currentScreen = "score"
                 },
                 modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
                 background = Color(0xFF2A1212), content = PP.Danger, center = true
@@ -1138,32 +1144,35 @@ fun HistoryScreen(
         return
     }
 
-    // Primero el historial de la cuenta, que manda el movil ya sincronizado
-    // con la nube. Si no ha llegado -movil sin actualizar o cuenta nueva-, los
-    // partidos jugados con este reloj.
+    // El historial de la cuenta, que manda el movil ya sincronizado con la
+    // nube, mas los partidos guardados en este reloj que aun no estan en el:
+    // por ejemplo, uno a medias guardado al pulsar Nuevo partido. Si la cuenta
+    // no ha mandado nada todavia, solo los del reloj.
     val cloud = remember(CloudHistory.json) { CloudHistory.matches() }
     val fromCloud = CloudHistory.fromAccount || cloud.isNotEmpty()
-    val matches = remember(CloudHistory.json, fromCloud) {
-        if (fromCloud) cloud else {
-            val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
-            val json = prefs.getString("match_history", "[]") ?: "[]"
-            try {
-                val array = org.json.JSONArray(json)
-                // Ya se guardan con el mas reciente primero
-                (0 until array.length()).map { array.getJSONObject(it) }
-            } catch (e: Exception) {
-                emptyList()
-            }
+    val local = remember {
+        val prefs = activity.getSharedPreferences("padel_prefs", Context.MODE_PRIVATE)
+        try {
+            val array = org.json.JSONArray(prefs.getString("match_history", "[]") ?: "[]")
+            (0 until array.length()).map { array.getJSONObject(it) }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
-    val porDia = remember(matches, engine.lang) { groupMatchesByDay(matches, engine.lang) }
-    val summary = remember(CloudHistory.json, CloudHistory.played, CloudHistory.won, fromCloud) {
+    val soloReloj = remember(cloud, local, fromCloud) {
+        if (fromCloud) local.filter { l -> cloud.none { c -> sameHistoryMatch(c, l) } } else local
+    }
+    val matches = remember(cloud, soloReloj, fromCloud) {
+        if (fromCloud) cloud + soloReloj else local
+    }
+    val summary = remember(CloudHistory.json, CloudHistory.played, CloudHistory.won, fromCloud, soloReloj) {
         if (fromCloud) {
-            val played = maxOf(CloudHistory.played, cloud.size)
-            val won = CloudHistory.won
+            val played = maxOf(CloudHistory.played, cloud.size) + soloReloj.size
+            val won = CloudHistory.won + soloReloj.count { it.optString("winner", "") == "A" }
             Triple(played, won, if (played > 0) won * 100 / played else 0)
         } else engine.historySummary()
     }
+    val porDia = remember(matches, engine.lang) { groupMatchesByDay(matches, engine.lang) }
 
     ScalingLazyColumn(
         state = listState,
@@ -1276,6 +1285,16 @@ fun groupMatchesByDay(matches: List<org.json.JSONObject>, lang: String): List<Pa
         }
 }
 
+/**
+ * El mismo partido visto desde la cuenta y desde el reloj: mismas parejas y
+ * jugado a menos de 20 minutos (cada lado apunta la hora a su manera).
+ */
+fun sameHistoryMatch(a: org.json.JSONObject, b: org.json.JSONObject): Boolean {
+    fun n(o: org.json.JSONObject, k: String) = o.optString(k, "").trim().uppercase()
+    val cerca = kotlin.math.abs(a.optLong("date", 0L) - b.optLong("date", 0L)) <= 20 * 60 * 1000L
+    return cerca && n(a, "teamA") == n(b, "teamA") && n(a, "teamB") == n(b, "teamB")
+}
+
 /** Un partido del historial: parejas, resultado, juegos, duracion y kcal. */
 @Composable
 private fun HistoryMatchCard(m: org.json.JSONObject, accent: Color, es: Boolean) {
@@ -1315,7 +1334,9 @@ private fun HistoryMatchCard(m: org.json.JSONObject, accent: Color, es: Boolean)
         // Juegos y desgaste, si se guardaron
         val games = "${m.optInt("gamesA", 0)}-${m.optInt("gamesB", 0)}"
         val kcal = m.optInt("kcal", 0)
-        if (kcal > 0 || games != "0-0") {
+        // Guardado a medias al empezar otro partido
+        val aMedias = m.has("finished") && !m.optBoolean("finished", true)
+        if (kcal > 0 || games != "0-0" || aMedias) {
             Spacer(Modifier.height(2.dp))
             Text(
                 buildString {
@@ -1323,6 +1344,10 @@ private fun HistoryMatchCard(m: org.json.JSONObject, accent: Color, es: Boolean)
                     if (kcal > 0) {
                         if (isNotEmpty()) append(" · ")
                         append("$kcal kcal")
+                    }
+                    if (aMedias) {
+                        if (isNotEmpty()) append(" · ")
+                        append(if (es) "sin terminar" else "unfinished")
                     }
                 },
                 color = PP.TextMuted, fontSize = PP.Micro

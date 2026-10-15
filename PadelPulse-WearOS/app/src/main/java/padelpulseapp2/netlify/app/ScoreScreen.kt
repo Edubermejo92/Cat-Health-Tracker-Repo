@@ -52,12 +52,8 @@ fun ScoreScreen(
     val menuState = rememberScalingLazyListState()
     val confirmState = rememberScalingLazyListState()
 
-    fun startNewMatch() {
-        engine.resetMatch()
-        activity.resetTimer()
-        activity.startTimer()
-        activity.onLocalScoreAction("reset")
-    }
+    // Guarda el partido jugado en el historial y empieza otro (MainActivity)
+    fun startNewMatch() = activity.startNewMatch()
 
     // Nuevo partido desde el marcador. Si ya hay algo jugado, se pregunta
     // antes: un toque sin querer no puede borrar un partido a medias.
@@ -226,15 +222,15 @@ fun ConfirmNewMatchScreen(
         }
         item {
             Text(
-                if (es) "Se borra el marcador de este partido y no se guarda en el historial."
-                else "This match's score is cleared and not saved to history.",
+                if (es) "Este partido se guarda en el historial con su resultado, la fecha y las parejas, y empieza uno nuevo."
+                else "This match is saved to history with its score, date and teams, and a new one starts.",
                 color = PP.TextDim, fontSize = PP.Micro, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(0.9f).padding(bottom = 4.dp)
             )
         }
         item {
             PPChip(
-                if (es) "SÍ, EMPEZAR DE CERO" else "YES, START OVER", onClick = onConfirm,
+                if (es) "SÍ, GUARDAR Y EMPEZAR" else "YES, SAVE AND START", onClick = onConfirm,
                 modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
                 background = Color(0xFF2A1212), content = PP.Danger,
                 weight = FontWeight.Black, center = true

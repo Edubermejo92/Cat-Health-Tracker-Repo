@@ -784,7 +784,14 @@ class GameEngine(context: Context? = null) {
                 .put("scoreB", setsB)
                 .put("gamesA", gamesA)
                 .put("gamesB", gamesB)
-                .put("winner", winner ?: if (setsA > setsB) "A" else "B")
+                // Un partido guardado a medias no tiene ganador: va quien vaya
+                // por delante en sets, y si no en juegos; empatados, ninguno.
+                .put("winner", winner ?: when {
+                    setsA != setsB -> if (setsA > setsB) "A" else "B"
+                    gamesA != gamesB -> if (gamesA > gamesB) "A" else "B"
+                    else -> ""
+                })
+                .put("finished", over)
                 .put("duration", clockSeconds)
                 .put("kcal", calories)
                 .put("km", distanceKm)
