@@ -37,10 +37,17 @@ class GameEngine(context: Context? = null) {
     var currentScreen by mutableStateOf("splash")
 
     /**
-     * A donde vuelve el Historial: al marcador si se abrio desde el, a Ajustes
-     * si se abrio desde alli. Solo navegacion, no se guarda.
+     * Pagina del marcador a la que hay que ir al volver a el: 0 marcador,
+     * 1 salud, 2 ajustes, 3 sincronizacion. -1 = la que hubiera. Solo
+     * navegacion, no se guarda.
      */
-    var historyBack = "settings"
+    var requestedPage by mutableIntStateOf(-1)
+
+    /** Vuelve al marcador abriendo esa pagina. */
+    fun goToPage(page: Int) {
+        requestedPage = page
+        currentScreen = "score"
+    }
     var theme by mutableStateOf("neon")
     var lang by mutableStateOf("es")
     var voiceEnabled by mutableStateOf(true)

@@ -38,46 +38,45 @@ fun ScoreScreen(
     activity: MainActivity,
     listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
     nameState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
-    onSettings: () -> Unit,
-    onMode: () -> Unit,
+    onPair: () -> Unit,
+    onInvite: () -> Unit,
     onEnd: () -> Unit,
     onHistory: () -> Unit,
     onActiveList: (androidx.wear.compose.foundation.lazy.ScalingLazyListState?) -> Unit = {}
 ) {
     var showPicker by remember { mutableStateOf<String?>(null) }
     var editingTeam by remember { mutableStateOf<String?>(null) }
-    var showMenu by remember { mutableStateOf(false) }
     var confirmNew by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
+    var pageList by remember { mutableStateOf<androidx.wear.compose.foundation.lazy.ScalingLazyListState?>(null) }
     val pickerState = rememberScalingLazyListState()
-    val menuState = rememberScalingLazyListState()
     val confirmState = rememberScalingLazyListState()
+    val languageState = rememberScalingLazyListState()
+    val syncState = rememberScalingLazyListState()
 
     // Guarda el partido jugado en el historial y empieza otro (MainActivity)
     fun startNewMatch() = activity.startNewMatch()
 
-    // Nuevo partido desde el marcador. Si ya hay algo jugado, se pregunta
-    // antes: un toque sin querer no puede borrar un partido a medias.
+    // Nuevo partido. Si ya hay algo jugado, se pregunta antes: un toque sin
+    // querer no puede borrar un partido a medias.
     fun askNewMatch() {
-        showMenu = false
         if (engine.hasSavedMatch()) confirmNew = true else startNewMatch()
     }
 
     LaunchedEffect(engine.over) { if (engine.over) onEnd() }
 
-    // El editor de nombre tiene su propia lista (nameState), distinta de la
-    // del marcador. Sin avisar al indicador de la pantalla de cual es la
-    // lista visible de verdad, Play rechaza la app: "falta la barra de
-    // desplazamiento" en esta pantalla, aunque la de fuera si la tenga.
-    // Lo mismo con el selector de sets/juegos, que ahora tambien es una lista
-    // para que con la letra grande se pueda desplazar en vez de cortarse.
-    LaunchedEffect(editingTeam, showPicker, showMenu, confirmNew) {
+    // Cada subpantalla (nombre, sets/juegos, confirmacion, idioma) tiene su
+    // propia lista, y las paginas de Ajustes y Sincronizacion la suya. Hay que
+    // decirle al indicador de desplazamiento cual es la visible de verdad: sin
+    // esto Play rechaza la app por "falta la barra de desplazamiento".
+    LaunchedEffect(editingTeam, showPicker, confirmNew, showLanguage, pageList) {
         onActiveList(
             when {
                 editingTeam != null -> nameState
                 showPicker != null -> pickerState
                 confirmNew -> confirmState
-                showMenu -> menuState
-                else -> null
+                showLanguage -> languageState
+                else -> pageList
             }
         )
     }
@@ -101,49 +100,40 @@ fun ScoreScreen(
         )
         return
     }
-    if (showMenu) {
-        MatchMenuScreen(
-            engine, menuState,
-            onNewMatch = { askNewMatch() },
-            onHistory = { showMenu = false; onHistory() },
-            onEditScore = { showMenu = false; showPicker = "all" },
-            onSettings = { showMenu = false; onSettings() },
-            onClose = { showMenu = false }
-        )
+    if (showLanguage) {
+        LanguagePickerScreen(engine, activity, languageState) { showLanguage = false }
         return
     }
 
     ScorePager(
         engine = engine,
         activity = activity,
-        listState = listState,
-        onSettings = onSettings,
-        onMode = onMode,
+        settingsState = listState,
+        syncState = syncState,
         onEditName = { editingTeam = it },
         onPicker = { showPicker = it },
-        onMenu = { showMenu = true },
         onNewMatch = { askNewMatch() },
-        onHistory = onHistory
+        onLanguage = { showLanguage = true },
+        onInvite = onInvite,
+        onPair = onPair,
+        onHistory = onHistory,
+        onPageList = { pageList = it }
     )
 }
 
 /**
- * Menu del partido, el que abre el logo del marcador. Lo que no cabe en la
- * esfera y se busca a menudo, en botones grandes.
+ * Idioma, desde Ajustes. Español de serie; aqui se cambia y se manda al
+ * movil, que lo aplica tambien.
  */
 @Composable
-fun MatchMenuScreen(
+fun LanguagePickerScreen(
     engine: GameEngine,
+    activity: MainActivity,
     listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
-    onNewMatch: () -> Unit,
-    onHistory: () -> Unit,
-    onEditScore: () -> Unit,
-    onSettings: () -> Unit,
     onClose: () -> Unit
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-    val es = engine.lang == "es"
 
     ScalingLazyColumn(
         state = listState,
@@ -151,45 +141,30 @@ fun MatchMenuScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = roundSafePadding()
     ) {
-        item { PPLabel(if (es) "PARTIDO" else "MATCH", color = accent, size = PP.Label) }
-        item {
+        item { PPLabel(ui.chooseLang, color = accent, size = PP.Label) }
+        items(Translations.langs) { l ->
+            val sel = engine.lang == l.id
             PPChip(
-                ui.newMatch.uppercase(), onClick = onNewMatch,
-                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                background = Color(0xFF2A1212), content = PP.Danger,
-                icon = "↺", weight = FontWeight.Black
+                l.name,
+                onClick = {
+                    engine.lang = l.id
+                    engine.persist()
+                    activity.sendSettingsToPhone()
+                    onClose()
+                },
+                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
+                background = if (sel) accent.copy(alpha = 0.18f) else PP.Surface,
+                content = if (sel) accent else PP.TextBright,
+                icon = l.flag, fontSize = PP.Body,
+                weight = if (sel) FontWeight.Bold else FontWeight.Normal
             )
         }
         item {
-            PPChip(
-                if (es) "HISTORIAL" else "HISTORY", onClick = onHistory,
-                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                secondary = if (WatchAccount.signedIn) (if (es) "Partidos por día" else "Matches by day")
-                            else (if (es) "🔒 Hace falta cuenta" else "🔒 Account needed"),
-                icon = "📅"
-            )
-        }
-        item {
-            PPChip(
-                if (es) "CORREGIR JUEGOS Y SETS" else "FIX GAMES AND SETS", onClick = onEditScore,
-                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                secondary = "${ui.games} ${engine.gamesA}–${engine.gamesB} · ${ui.sets} ${engine.setsA}–${engine.setsB}",
-                icon = "✎"
-            )
-        }
-        item {
-            PPChip(
-                ui.settings.uppercase(), onClick = onSettings,
-                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                icon = "⚙"
-            )
-        }
-        item {
-            PPChip(
-                if (es) "‹ VOLVER AL MARCADOR" else "‹ BACK TO SCORE", onClick = onClose,
-                modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp),
-                content = accent, center = true
-            )
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
+                modifier = Modifier.padding(top = 6.dp).size(48.dp)
+            ) { Text("✕", color = PP.TextBright, fontSize = iconSp(18.dp)) }
         }
     }
 }

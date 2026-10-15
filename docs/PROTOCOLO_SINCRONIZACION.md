@@ -153,6 +153,13 @@ los guardaba como 6-0. El reloj lo enseña en el marcador entre los juegos.
 | `reset` | — | Partido nuevo |
 | `invite` | — | Solo reloj → móvil: abre la hoja de compartir con la invitación |
 | `voice_owner` | — | Quien lo manda acaba de encender su árbitro por voz: el otro apaga el suyo (si escuchan los dos, cada punto cantado se sumaría dos veces) |
+| `sync` | — | Solo reloj → móvil («Sincronizar ahora»): el móvil contesta con `/padel/settings`, `/padel/account` (con `/padel/history`) y `/padel/state` |
+| `login` | — | Solo reloj → móvil («Iniciar sesión en el móvil»), por si la app del móvil ya está abierta: muestra la pantalla de cuenta. El camino normal es abrir `padelpulse://login` en el móvil con `RemoteActivityHelper` |
+
+`sync` y `login` (desde 7.2.0) tampoco son del marcador. Un móvil anterior no
+los conoce y no hace nada con ellos, sin romper nada. Iniciar sesión siempre se
+hace en el móvil: en el reloj no se escriben contraseñas. Al entrar, el móvil
+manda la sesión (`/padel/account`) y el historial al reloj.
 
 `invite` no es del marcador y sí la usa la versión actual: la pantalla «Invita a
 un amigo» del reloj pide al móvil que mande su invitación de siempre (mismo texto y

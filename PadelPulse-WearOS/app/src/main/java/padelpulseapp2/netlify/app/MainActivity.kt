@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.1.9"
+        const val APP_VERSION = "7.2.0"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
         private const val KEY_HEALTH_DISCLOSURE = "health_disclosure_seen"
@@ -57,8 +57,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     /** Arbitro por voz: canta los puntos y se suman. */
     val voice by lazy { VoiceReferee(this) }
-
-    var sensorsPaused by mutableStateOf(false)
 
     // ── Volumen de la voz ────────────────────────────────────────────────
     //
@@ -228,6 +226,62 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
                 engine.distanceKm, totalSteps
             )
         )
+    }
+
+    /**
+     * "Sincronizar ahora": el reloj se anuncia, manda su marcador y su salud,
+     * y pide al movil todo lo suyo (ajustes con el idioma, la cuenta con el
+     * historial y su marcador). Sin vincular, intenta vincularse primero.
+     */
+    fun syncNow() {
+        val es = gameEngine?.lang != "en"
+        PhoneLink.refreshConnection(this)
+        sendHello()
+        if (PhoneLink.paired) {
+            PhoneLink.send(this, SyncProtocol.PATH_CMD, SyncProtocol.command(PhoneLink.nextSeq(), "sync", null))
+            pushStateToPhone()
+            pushHealthToPhone()
+            toast(if (es) "Sincronizando con el móvil…" else "Syncing with the phone…")
+        } else {
+            autoPairIfNeeded()
+            toast(if (es) "Vinculando con el móvil…" else "Linking with the phone…")
+        }
+    }
+
+    /**
+     * Iniciar sesion "desde el reloj". En la muñeca no se teclean correo ni
+     * contraseña: se abre la pantalla de cuenta en el movil y, al entrar alli,
+     * la sesion y el historial llegan solos al reloj. Si el movil no se puede
+     * abrir asi (app sin instalar o sin conexion), se le pide por mensaje por si
+     * la app ya estuviera abierta.
+     */
+    fun openLoginOnPhone() {
+        val es = gameEngine?.lang != "en"
+        val sendCommand = {
+            PhoneLink.send(this, SyncProtocol.PATH_CMD, SyncProtocol.command(PhoneLink.nextSeq(), "login", null))
+        }
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("padelpulse://login"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        val future = runCatching {
+            androidx.wear.remote.interactions.RemoteActivityHelper(this).startRemoteActivity(intent)
+        }.getOrNull()
+        if (future == null) {
+            sendCommand()
+            toast(if (es) "Abre PadelPulse en el móvil e inicia sesión" else "Open PadelPulse on your phone and sign in")
+            return
+        }
+        future.addListener({
+            val ok = runCatching { future.get() }.isSuccess
+            if (!ok) sendCommand()
+            toast(
+                if (ok) (if (es) "Mira el móvil: inicia sesión allí" else "Check your phone: sign in there")
+                else (if (es) "Abre PadelPulse en el móvil e inicia sesión" else "Open PadelPulse on your phone and sign in")
+            )
+        }, androidx.core.content.ContextCompat.getMainExecutor(this))
+    }
+
+    fun toast(text: String) {
+        runOnUiThread { runCatching { android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show() } }
     }
 
     /** Pide al movil que abra su hoja de compartir con la invitacion. */
@@ -483,28 +537,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
 
-    fun pauseSensors() {
-        if (sensorsPaused) return
-        sensorsPaused = true
-        val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensorManager.unregisterListener(this)
-        isHrRegistered = false
-        isStepRegistered = false
-        Log.i(TAG, "Sensores pausados (actividad automática deshabilitada)")
-    }
-
-    fun resumeSensors() {
-        if (!sensorsPaused) return
-        sensorsPaused = false
-        registerHeartRateSensor()
-        registerStepSensor()
-        Log.i(TAG, "Sensores reanudados")
-    }
-
     override fun onSensorChanged(event: SensorEvent?) {
         val engine = gameEngine ?: return
         if (event == null) return
-        if (sensorsPaused) return
         when (event.sensor.type) {
             Sensor.TYPE_HEART_RATE -> {
                 val hr = event.values.getOrNull(0)?.toInt() ?: 0

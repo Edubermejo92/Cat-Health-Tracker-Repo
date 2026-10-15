@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "7.1.9"
+        const val APP_VERSION = "7.2.0"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     /** Sesion del enlace del correo llegada antes de que el WebView estuviera listo. */
     private var sesionPendiente: String? = null
+    /** El reloj pidio iniciar sesion antes de que la pagina terminara de cargar. */
+    private var loginPendiente = false
 
     /**
      * Volumen de la voz de la app, de 0 a 1.
@@ -129,6 +131,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         evalJs("if(window.PPSync) PPSync.drainNative(${JSONObject.quote(pending)});")
                         // Si el enlace del correo abrio la app desde cero, la
                         // sesion espera aqui a que la pagina este lista.
+                        if (loginPendiente) {
+                            loginPendiente = false
+                            evalJs("if(window.openLoginFromWatch) openLoginFromWatch();")
+                        }
                         sesionPendiente?.let { json ->
                             sesionPendiente = null
                             evalJs("if(window.Auth) Auth.onEmailLink(${JSONObject.quote(json)});")
@@ -170,6 +176,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun manejarEnlaceDelCorreo(intent: Intent?) {
         val uri = intent?.data ?: return
         if (uri.scheme != "padelpulse") return
+        // El reloj pide iniciar sesion: se abre la pantalla de cuenta
+        if (uri.host == "login") {
+            if (webReady && webView != null) evalJs("if(window.openLoginFromWatch) openLoginFromWatch();")
+            else loginPendiente = true
+            return
+        }
         Thread {
             val json = AuthLink.handleCallback(uri, SUPABASE_URL, SUPABASE_KEY)
             if (json == null) {

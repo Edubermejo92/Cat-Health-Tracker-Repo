@@ -51,7 +51,6 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     val langState = rememberScalingLazyListState()
     val pairState = rememberScalingLazyListState()
     val scoreState = rememberScalingLazyListState()
-    val settingsState = rememberScalingLazyListState()
     val historyState = rememberScalingLazyListState()
     val inviteState = rememberScalingLazyListState()
     val nameState = rememberScalingLazyListState()
@@ -65,7 +64,7 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
 
     // El indicador sigue a la lista de la pantalla visible.
     //
-    // Dentro de "score" y "settings" hay listas que se abren encima (el
+    // Dentro de "score" hay listas que se abren encima (el
     // editor de nombre, el selector de idioma): esas avisan aqui cual es la
     // suya con onActiveList, y mientras estan abiertas mandan sobre la lista
     // de la pantalla. Sin este aviso, Play detecta esas listas como "sin
@@ -77,7 +76,6 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
         "lang" -> langState
         "bt" -> pairState
         "score" -> scoreState
-        "settings" -> settingsState
         "history" -> historyState
         "invite" -> inviteState
         "account" -> accountState
@@ -132,22 +130,18 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                         "bt" -> PairScreen(engine, activity, pairState)
                         "score" -> ScoreScreen(
                             engine, activity, scoreState, nameState,
-                            onSettings = { engine.currentScreen = "settings" },
-                            onMode = { engine.currentScreen = "bt" },
+                            onPair = { engine.currentScreen = "bt" },
+                            onInvite = { engine.currentScreen = "invite" },
                             onEnd = { engine.currentScreen = "end" },
-                            onHistory = {
-                                engine.historyBack = "score"
-                                engine.currentScreen = "history"
-                            },
+                            onHistory = { engine.currentScreen = "history" },
                             onActiveList = { subActive = it }
                         )
-                        "settings" -> SettingsScreen(
-                            engine, activity, settingsState,
-                            onBack = { engine.currentScreen = "score" },
-                            onActiveList = { subActive = it }
-                        )
-                        "history" -> HistoryScreen(engine, activity, historyState) { engine.currentScreen = engine.historyBack }
-                        "invite" -> InviteScreen(engine, activity, inviteState) { engine.currentScreen = "settings" }
+                        // Ya no hay pantalla de Ajustes aparte: es la pagina 3
+                        // del marcador. Por si algo antiguo pide "settings".
+                        "settings" -> LaunchedEffect(Unit) { engine.goToPage(2) }
+                        // Cada pantalla vuelve a la pagina desde la que se abrio
+                        "history" -> HistoryScreen(engine, activity, historyState) { engine.goToPage(3) }
+                        "invite" -> InviteScreen(engine, activity, inviteState) { engine.goToPage(2) }
                         "end" -> EndScreen(engine, activity, endState)
                         else -> SplashScreen(engine, activity, splashState)
                     }
@@ -485,7 +479,7 @@ fun PairScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         contentPadding = roundSafePadding(squareHorizontal = 6.dp, squareVertical = 24.dp)
     ) {
-        item { BackRow(engine) { engine.currentScreen = "score" } }
+        item { BackRow(engine) { engine.goToPage(3) } }
 
         item {
             Row(
@@ -600,296 +594,7 @@ fun PairScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Ajustes
-// ─────────────────────────────────────────────────────────────────────
-
-@Composable
-fun SettingsScreen(
-    engine: GameEngine,
-    activity: MainActivity,
-    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
-    onBack: () -> Unit,
-    onActiveList: (androidx.wear.compose.foundation.lazy.ScalingLazyListState?) -> Unit = {}
-) {
-    val accent = ThemeUtils.getColor(engine.theme)
-    val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-    val es = engine.lang == "es"
-    var showLangPicker by remember { mutableStateOf(false) }
-    val langPickerState = rememberScalingLazyListState()
-
-    // El selector de idioma abre su propia lista, distinta de la de Ajustes.
-    // Sin avisar al indicador de la pantalla de cual es la lista visible de
-    // verdad, Play rechaza la app: "falta la barra de desplazamiento" aqui,
-    // aunque la de Ajustes si la tenga.
-    LaunchedEffect(showLangPicker) { onActiveList(if (showLangPicker) langPickerState else null) }
-    DisposableEffect(Unit) { onDispose { onActiveList(null) } }
-
-    if (showLangPicker) {
-        ScalingLazyColumn(
-            state = langPickerState,
-            modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(langPickerState),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = roundSafePadding()
-        ) {
-            item { PPLabel(ui.chooseLang, color = accent, size = PP.Label) }
-            items(Translations.langs) { l ->
-                PPChip(
-                    l.name,
-                    onClick = {
-                        engine.lang = l.id
-                        showLangPicker = false
-                        engine.saveState()
-                        activity.sendSettingsToPhone()
-                    },
-                    modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
-                    background = if (engine.lang == l.id) accent.copy(alpha = 0.18f) else PP.Surface,
-                    content = if (engine.lang == l.id) accent else PP.TextBright,
-                    icon = l.flag, fontSize = PP.Body, weight = FontWeight.Normal
-                )
-            }
-            item {
-                Button(
-                    onClick = { showLangPicker = false },
-                    colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
-                    modifier = Modifier.padding(top = 6.dp).size(48.dp)
-                ) { Text("✕", color = PP.TextBright, fontSize = iconSp(18.dp)) }
-            }
-        }
-        return
-    }
-
-    ScalingLazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().rotaryScroll(listState),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = roundSafePadding()
-    ) {
-        item {
-            PPLabel(ui.settings, color = accent, size = PP.Label)
-            Spacer(Modifier.height(4.dp))
-        }
-
-        // Estado del enlace, primero: es lo que mas se consulta en pista
-        item {
-            PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
-                LinkPill(engine)
-                if (PhoneLink.paired) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (PhoneLink.phoneName.isNotEmpty()) PhoneLink.phoneName
-                        else if (es) "Movil vinculado" else "Phone linked",
-                        color = PP.TextMuted, fontSize = PP.Micro, textAlign = TextAlign.Center
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                // Con la letra grande los dos no caben en fila: uno encima del otro
-                val sync: @Composable (Modifier) -> Unit = { m ->
-                    PPChip(
-                        if (es) "Sincronizar" else "Sync",
-                        onClick = {
-                            activity.sendHello()
-                            activity.sendSettingsToPhone()
-                            activity.pushStateToPhone()
-                            activity.pushHealthToPhone()
-                        },
-                        modifier = m, background = accent, content = PP.OnAccent,
-                        fontSize = PP.Micro, center = true, minHeight = 40.dp
-                    )
-                }
-                val phone: @Composable (Modifier) -> Unit = { m ->
-                    PPChip(
-                        if (es) "MOVIL" else "PHONE",
-                        onClick = { engine.currentScreen = "bt" },
-                        modifier = m, background = PP.SurfaceHigh, content = accent,
-                        fontSize = PP.Micro, center = true, minHeight = 40.dp
-                    )
-                }
-                if (isLargeFont()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        sync(Modifier.fillMaxWidth())
-                        phone(Modifier.fillMaxWidth())
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        sync(Modifier.weight(1f))
-                        phone(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-
-        item {
-            SettingChip(ui.voice + ": " + engine.lang.uppercase(), accent) { showLangPicker = true }
-        }
-        item {
-            // Con candado si no hay sesion: asi se ve antes de entrar por que
-            // no hay nada dentro.
-            SettingChip(
-                if (WatchAccount.signedIn) (if (es) "HISTORIAL" else "HISTORY")
-                else (if (es) "HISTORIAL 🔒" else "HISTORY 🔒"),
-                accent
-            ) {
-                engine.historyBack = "settings"
-                engine.currentScreen = "history"
-            }
-        }
-        item {
-            SettingChip(if (es) "INVITA A UN AMIGO" else "INVITE A FRIEND", accent) {
-                engine.currentScreen = "invite"
-            }
-        }
-        // El pulso ya no se pregunta al arrancar: se activa aqui. Primero sale
-        // la explicacion de para que se usa (politica de salud de Play) y, si
-        // acepta, el permiso del sistema. Solo existe hasta Wear OS 5.
-        if (activity.heartRateAvailable) item {
-            val on = WorkoutGuard.hasHeartRatePermission(activity)
-            PPChip(
-                if (es) "PULSO ♥" else "HEART RATE ♥",
-                onClick = { if (!on) activity.askHeartRate() },
-                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                content = accent, weight = FontWeight.Normal,
-                secondary = if (on) (if (es) "Activado" else "On")
-                            else (if (es) "Toca para mostrarlo en el marcador" else "Tap to show it on the scoreboard")
-            )
-        }
-        // Play exige enlazar la politica de privacidad dentro de la app,
-        // sobre todo con permisos de salud (el pulso)
-        item {
-            SettingChip(if (es) "POLÍTICA DE PRIVACIDAD" else "PRIVACY POLICY", accent) {
-                runCatching {
-                    activity.startActivity(android.content.Intent(activity, PrivacyPolicyActivity::class.java))
-                }
-            }
-        }
-
-        item {
-            PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
-                PPLabel(if (es) "BRILLO" else "BRIGHTNESS", size = PP.Micro)
-                InlineSlider(
-                    value = engine.brightness,
-                    onValueChange = {
-                        engine.brightness = it
-                        activity.updateBrightness(it)
-                        engine.saveState()
-                    },
-                    valueRange = 10f..255f,
-                    steps = 5,
-                    increaseIcon = { Text("+", color = accent) },
-                    decreaseIcon = { Text("−", color = accent) }
-                )
-            }
-        }
-
-        item { VoiceVolumeCard(engine, activity, accent) }
-
-        // Silenciar la voz que canta los puntos (tambien desde el marcador, 🔊)
-        item {
-            ToggleRow(
-                when (engine.lang) { "es" -> "Voz del marcador"; "en" -> "Scoreboard voice"; else -> ui.voice },
-                engine.voiceEnabled, accent
-            ) {
-                engine.voiceEnabled = it; engine.persist()
-                if (!it) activity.stopSpeaking()
-            }
-        }
-        item {
-            ToggleRow(ui.goldenPt, engine.goldenPoint, accent) {
-                engine.goldenPoint = it
-                engine.saveState()
-                activity.sendSettingsToPhone()
-            }
-        }
-        item {
-            ToggleRow(ui.superTB, engine.superTb, accent) {
-                engine.superTb = it
-                engine.saveState()
-                activity.sendSettingsToPhone()
-            }
-        }
-
-        // Mejor de 1 / 3 / 5
-        item {
-            PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
-                PPLabel(ui.bestOf, size = PP.Micro)
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(1, 3, 5).forEach { n ->
-                        val sel = engine.bestOf == n
-                        Box(
-                            modifier = Modifier
-                                .defaultMinSize(38.dp, 30.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) accent else PP.SurfaceHigh)
-                                .clickable {
-                                    engine.bestOf = n
-                                    engine.saveState()
-                                    activity.sendSettingsToPhone()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "$n",
-                                color = if (sel) PP.OnAccent else PP.TextBright,
-                                fontSize = PP.Body,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
-                PPLabel(ui.theme, size = PP.Micro)
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    ThemeUtils.themesList.forEach { th ->
-                        val sel = engine.theme == th
-                        Box(
-                            modifier = Modifier
-                                .size(if (sel) 24.dp else 20.dp)
-                                .clip(CircleShape)
-                                .background(ThemeUtils.getDotColor(th))
-                                .border(
-                                    if (sel) 2.dp else 0.dp, PP.TextBright, CircleShape
-                                )
-                                .clickable {
-                                    engine.theme = th
-                                    engine.saveState()
-                                    activity.sendSettingsToPhone()
-                                }
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            PPChip(
-                ui.newMatch.uppercase(),
-                onClick = {
-                    // Guarda el partido jugado y empieza otro (ver startNewMatch)
-                    activity.startNewMatch()
-                    onBack()
-                },
-                modifier = Modifier.fillMaxWidth(0.94f).padding(top = 6.dp),
-                background = Color(0xFF2A1212), content = PP.Danger,
-                weight = FontWeight.Black, center = true
-            )
-        }
-
-        item { ExitButton(engine, activity) }
-
-        item { BackChip(engine, accent, onBack) }
-    }
-}
-
-/** Volumen de la voz, en Ajustes y en los controles del marcador. */
+/** Volumen de la voz, en Ajustes. */
 @Composable
 fun VoiceVolumeCard(engine: GameEngine, activity: MainActivity, accent: Color) {
     val es = engine.lang == "es"

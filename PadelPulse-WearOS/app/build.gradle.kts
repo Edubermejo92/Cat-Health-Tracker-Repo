@@ -27,8 +27,8 @@ android {
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
         // serie -el del movil x10- y siempre por encima: movil 518, reloj 5180.
-        versionCode = 7190
-        versionName = "7.1.9"
+        versionCode = 7200
+        versionName = "7.2.0"
     }
 
     signingConfigs {
@@ -87,6 +87,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     // Actividad en curso: obligatoria para pasar la revision de Wear OS
     implementation("androidx.wear:wear-ongoing:1.0.0")
+    // Abrir la pantalla de inicio de sesion en el movil desde el reloj
+    // (Sincronizacion > Iniciar sesion): la forma oficial de Wear OS
+    implementation("androidx.wear:wear-remote-interactions:1.0.0")
     // QR de "Invita a un amigo": solo el codificador, sin camara ni vistas
     implementation("com.google.zxing:core:3.5.3")
     // Entreno propio mientras se juega: evita la deteccion automatica del reloj

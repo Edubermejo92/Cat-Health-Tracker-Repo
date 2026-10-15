@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="PadelPulse">
 <!-- Todo local: la app funciona sin conexion (pista sin cobertura) -->
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="tailwind.css?v=7.1.9">
+<link rel="stylesheet" href="tailwind.css?v=7.2.0">
 <style>
 *{-webkit-tap-highlight-color:transparent;user-select:none;box-sizing:border-box;}
 html{height:100%;touch-action:manipulation;background:#000;overflow:hidden;}
@@ -303,7 +303,7 @@ const PP_PROTO = 3;
  * podia distinguir de una vieja y se perdia tiempo persiguiendo fallos ya
  * arreglados.
  */
-const WEB_VERSION = '7.1.9';
+const WEB_VERSION = '7.2.0';
 
 /** "7.1.0" en la app (la version instalada); "7.1.0 · web" en el navegador. */
 function versionLabel(){
@@ -815,6 +815,20 @@ const PPSync = {
         if(obj.action==='invite'){
             showToast(i2('⌚ Invitar a un amigo','⌚ Invite a friend'), 1800);
             if(typeof inviteFriends==='function') inviteFriends();
+            return;
+        }
+        // "Sincronizar ahora" del reloj: se le manda todo lo del movil
+        // (ajustes con el idioma, la cuenta con su historial y el marcador)
+        if(obj.action==='sync'){
+            this.sendSettings();
+            this.sendAccountToWatch();
+            this.pushNow();
+            showToast(i2('⌚ Reloj sincronizado','⌚ Watch synced'), 1500);
+            return;
+        }
+        // "Iniciar sesion" del reloj con la app del movil ya abierta
+        if(obj.action==='login'){
+            if(typeof openLoginFromWatch==='function') openLoginFromWatch();
             return;
         }
         const team = obj.team || (obj.action==='point_B' ? 'B' : 'A');
@@ -5222,6 +5236,21 @@ function saveMe(){
         clearTimeout(_meSyncTimer);
         _meSyncTimer = setTimeout(()=>Contacts.push().catch(()=>{}), 1500);
     }
+}
+
+/**
+ * El reloj pide iniciar sesion (Sincronizacion > Iniciar sesion en el movil).
+ * En el reloj no se teclean contraseñas: se entra aqui y la sesion viaja sola
+ * al reloj, con el historial. Si ya habia sesion, se le vuelve a mandar.
+ */
+function openLoginFromWatch(){
+    if(typeof Auth!=='undefined' && Auth.isIn){
+        showToast(i2('⌚ Ya tienes la sesión iniciada: se la paso al reloj','⌚ Already signed in: sending it to the watch'), 3000);
+        PPSync.sendAccountToWatch();
+        return;
+    }
+    goToAuth();
+    showToast(i2('⌚ Inicia sesión aquí y el reloj entrará solo','⌚ Sign in here and the watch follows'), 3500);
 }
 
 /** Desde ajustes: volver a la pantalla de cuenta para entrar o registrarse. */

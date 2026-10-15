@@ -61,6 +61,7 @@ import padelpulseapp2.netlify.app.ui.PP
 import padelpulseapp2.netlify.app.ui.PPChip
 import padelpulseapp2.netlify.app.ui.PPLabel
 import padelpulseapp2.netlify.app.ui.iconSp
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -68,12 +69,14 @@ import kotlin.math.sin
 /*
  * Marcador pensado para la esfera redonda.
  *
- * Tres paginas que se pasan deslizando, como las apps de entreno de Wear OS:
+ * Cuatro paginas que se pasan deslizando, como las apps de entreno de Wear OS:
  *   0  marcador   lo unico que hace falta en pista: tocar una mitad suma punto;
- *                 debajo del tanteo, "−" de cada pareja y la franja de juegos y
- *                 sets (tocar para corregirlos); el logo abre el menu del partido
- *   1  controles  todo lo demas, en lista, con la corona
- *   2  salud      pulso, calorias, distancia y la pausa de sensores
+ *                 tocar el nombre de una pareja hace que saque ella; debajo del
+ *                 tanteo, "−" de cada pareja y la franja de juegos y sets
+ *                 (tocar para corregirlos); el logo lleva a Ajustes
+ *   1  salud      pulso, calorias y distancia
+ *   2  ajustes    partido, equipos, color, sets, juegos, voz e idioma
+ *   3  sincronizacion  movil, cuenta e historial
  *
  * El marcador va primero a proposito. En la primera pagina, deslizar a la
  * derecha es el gesto del sistema para salir; si los controles fueran la
@@ -84,7 +87,7 @@ import kotlin.math.sin
  * al centro, no al borde de un rectangulo que no existe.
  */
 
-private const val PAGES = 3
+private const val PAGES = 4
 
 /** Arranque de la banda de abajo (FALTA), desde arriba, en fracciones del ancho. */
 private const val BAND_TOP = 0.80f
@@ -111,29 +114,57 @@ private const val DIAL_FONT_CAP = 1.2f
 fun ScorePager(
     engine: GameEngine,
     activity: MainActivity,
-    listState: ScalingLazyListState,
-    onSettings: () -> Unit,
-    onMode: () -> Unit,
+    settingsState: ScalingLazyListState,
+    syncState: ScalingLazyListState,
     onEditName: (String) -> Unit,
     onPicker: (String) -> Unit,
-    onMenu: () -> Unit,
     onNewMatch: () -> Unit,
-    onHistory: () -> Unit
+    onLanguage: () -> Unit,
+    onInvite: () -> Unit,
+    onPair: () -> Unit,
+    onHistory: () -> Unit,
+    onPageList: (ScalingLazyListState?) -> Unit
 ) {
     val accent = ThemeUtils.getColor(engine.theme)
     val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-    val pager = rememberPagerState(pageCount = { PAGES })
+    val pager = rememberPagerState(
+        initialPage = engine.requestedPage.coerceIn(0, PAGES - 1),
+        pageCount = { PAGES }
+    )
+    val scope = rememberCoroutineScope()
+
+    // Volver al marcador en una pagina concreta (p. ej. desde el Historial,
+    // a Sincronizacion)
+    LaunchedEffect(engine.requestedPage) {
+        val p = engine.requestedPage
+        if (p in 0 until PAGES) {
+            pager.scrollToPage(p)
+            engine.requestedPage = -1
+        }
+    }
+    // El indicador de desplazamiento sigue a la lista de la pagina visible
+    LaunchedEffect(pager.currentPage) {
+        onPageList(
+            when (pager.currentPage) {
+                2 -> settingsState
+                3 -> syncState
+                else -> null
+            }
+        )
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(PP.Bg)) {
         val w = minOf(maxWidth, maxHeight)
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> ScoreDial(engine, activity, ui, accent, w, onMenu, onEditScore = { onPicker("all") })
-                1 -> ControlsPage(
-                    engine, activity, ui, accent, listState, onSettings, onMode, onEditName, onPicker,
-                    onNewMatch, onHistory
+                0 -> ScoreDial(
+                    engine, activity, ui, accent, w,
+                    onOpenSettings = { scope.launch { pager.animateScrollToPage(2) } },
+                    onEditScore = { onPicker("all") }
                 )
-                else -> HealthDial(engine, activity, accent, w)
+                1 -> HealthDial(engine, activity, accent, w)
+                2 -> SettingsPage(engine, activity, accent, settingsState, onNewMatch, onEditName, onPicker, onLanguage, onInvite)
+                else -> SyncPage(engine, activity, accent, syncState, onPair, onHistory)
             }
         }
         PageDots(
@@ -159,7 +190,7 @@ private fun ScoreDial(
     ui: UIStrings,
     accent: Color,
     w: Dp,
-    onMenu: () -> Unit,
+    onOpenSettings: () -> Unit,
     onEditScore: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -252,6 +283,31 @@ private fun ScoreDial(
             Box(Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = tapB, indication = null) { point("B") })
         }
 
+        // Quien saca: se elige tocando el nombre de su pareja, que se pone en
+        // verde con la pelota delante. Tambien vale tocar la pista del centro.
+        fun chooseServe(team: String) {
+            if (engine.serving != team) {
+                engine.serving = team
+                engine.faultCount = 0
+                engine.speakServe(team)
+                activity.onLocalScoreAction("serve", team)
+            }
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+        for (team in listOf("A", "B")) {
+            val serves = engine.serving == team
+            At(w, if (team == "A") -0.22f else 0.22f, -0.235f, 0.36f) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = w * 0.16f)
+                        .clip(PP.PillShape)
+                        .clickable(onClickLabel = if (es) "Saca esta pareja" else "This team serves") { chooseServe(team) },
+                    contentAlignment = Alignment.Center
+                ) { SideNames(engine, team, serves, accent, w, ::szT) }
+            }
+        }
+
         // Logo arriba, como la cabecera del movil, con un punto que dice si el
         // movil esta enlazado. Cabe entre la hora y los nombres: a -0.34 la
         // esfera mide 0.74 de ancho y el logo solo 0.22.
@@ -296,14 +352,14 @@ private fun ScoreDial(
         At(w, 0f, -0.34f, 0.72f) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TopButton("🎙", micOn, PP.Danger, micPulse) { voice.toggle() }
-                // El logo es el boton del menu del partido: nuevo partido,
-                // historial y corregir el marcador. 48 dp de alto para el dedo.
+                // El logo lleva a Ajustes (tambien se llega deslizando).
+                // 48 dp de alto para el dedo.
                 Row(
                     Modifier
                         .heightIn(min = 48.dp)
                         .clip(PP.PillShape)
                         .clickable {
-                            onMenu()
+                            onOpenSettings()
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                         .padding(horizontal = w * 0.01f),
@@ -311,7 +367,7 @@ private fun ScoreDial(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.logo_wordmark),
-                        contentDescription = if (es) "Menú del partido" else "Match menu",
+                        contentDescription = if (es) "Ajustes" else "Settings",
                         modifier = Modifier.width(w * 0.22f).aspectRatio(LOGO_RATIO)
                     )
                     Spacer(Modifier.width(w * 0.01f))
@@ -347,8 +403,6 @@ private fun ScoreDial(
             }
         }
 
-        At(w, -0.22f, -0.235f, 0.36f) { SideNames(engine, "A", servingA, accent, w, ::szT) }
-        At(w, 0.22f, -0.235f, 0.36f) { SideNames(engine, "B", !servingA, accent, w, ::szT) }
 
         // Estado especial del juego, en una pastilla entre nombres y tanteo
         val tbActive = engine.isTb || engine.isSuperTbActive()
@@ -599,147 +653,7 @@ private fun CourtMini(serving: String, side: String, accent: Color, w: Dp) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Pagina 1 · controles
-// ─────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ControlsPage(
-    engine: GameEngine,
-    activity: MainActivity,
-    ui: UIStrings,
-    accent: Color,
-    listState: ScalingLazyListState,
-    onSettings: () -> Unit,
-    onMode: () -> Unit,
-    onEditName: (String) -> Unit,
-    onPicker: (String) -> Unit,
-    onNewMatch: () -> Unit,
-    onHistory: () -> Unit
-) {
-    val es = engine.lang == "es"
-    val servingName = if (engine.serving == "A") engine.nameA else engine.nameB
-
-    ScalingLazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        // un poco mas abajo: la ultima fila tiene que poder subir por encima
-        // de los puntos del pager
-        contentPadding = roundSafePadding(extraVertical = 10.dp)
-    ) {
-        item { PPLabel(if (es) "CONTROLES" else "CONTROLS", color = accent, size = PP.Label) }
-
-        // Lo que mas se busca, arriba del todo: empezar de nuevo (pide
-        // confirmacion si hay partido) y el historial por dias.
-        item { ControlChip(ui.newMatch, null, danger = true) { onNewMatch() } }
-        item {
-            ControlChip(
-                if (es) "Historial" else "History",
-                if (WatchAccount.signedIn) (if (es) "Partidos por día" else "Matches by day")
-                else (if (es) "🔒 Hace falta cuenta" else "🔒 Account needed")
-            ) { onHistory() }
-        }
-
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                RoundAction("↩") {
-                    engine.undo()
-                    activity.onLocalScoreAction("undo")
-                }
-                RoundAction(if (engine.voiceEnabled) "🔊" else "🔇") {
-                    engine.voiceEnabled = !engine.voiceEnabled
-                    engine.persist()
-                    if (!engine.voiceEnabled) activity.stopSpeaking()
-                }
-                RoundAction("⚙") { onSettings() }
-            }
-        }
-
-        item {
-            val v = activity.voice
-            ControlChip(
-                if (es) "Árbitro por voz" else "Voice referee",
-                if (v.on) (if (es) "Escuchando · canta los puntos" else "Listening · call the points")
-                else (if (es) "Apagado" else "Off")
-            ) { v.toggle() }
-        }
-        item { VoiceVolumeCard(engine, activity, accent) }
-
-        item {
-            ControlChip(if (es) "Restar punto" else "Remove point", engine.nameA) {
-                engine.decreasePoint("A")
-                activity.onLocalScoreAction("minus", "A")
-            }
-        }
-        item {
-            ControlChip(if (es) "Restar punto" else "Remove point", engine.nameB) {
-                engine.decreasePoint("B")
-                activity.onLocalScoreAction("minus", "B")
-            }
-        }
-        item {
-            ControlChip(if (es) "Cambiar saque" else "Switch serve", "${ui.serves}: $servingName") {
-                val next = if (engine.serving == "A") "B" else "A"
-                engine.serving = next
-                engine.faultCount = 0
-                engine.speakServe(next)
-                activity.onLocalScoreAction("serve", next)
-            }
-        }
-        item { ControlChip(ui.games, "${engine.gamesA} – ${engine.gamesB}") { onPicker("games") } }
-        item { ControlChip(ui.sets, "${engine.setsA} – ${engine.setsB}") { onPicker("sets") } }
-        // Cada lado es una pareja: su nombre y sus dos jugadores
-        for (t in listOf("A", "B")) {
-            item { ControlChip(if (t == "A") ui.teamA else ui.teamB, engine.getName(t)) { onEditName(t) } }
-            for (n in 1..2) {
-                item {
-                    ControlChip(
-                        (if (es) "Jugador " else "Player ") + "$t$n",
-                        engine.getName("$t$n").ifBlank { if (es) "Sin nombre" else "No name" }
-                    ) { onEditName("$t$n") }
-                }
-            }
-        }
-        item { ControlChip(if (es) "Móvil" else "Phone", linkLabel(engine)) { onMode() } }
-        item {
-            val paused = activity.sensorsPaused
-            ControlChip(
-                if (paused) (if (es) "Reanudar sensores" else "Resume sensors")
-                else (if (es) "Pausar sensores" else "Pause sensors"),
-                null
-            ) { if (paused) activity.resumeSensors() else activity.pauseSensors() }
-        }
-        item { ExitButton(engine, activity) }
-    }
-}
-
-@Composable
-private fun RoundAction(glyph: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(backgroundColor = PP.SurfaceHigh),
-        modifier = Modifier.size(48.dp)
-    ) {
-        Text(glyph, fontSize = iconSp(18.dp), color = PP.TextBright)
-    }
-}
-
-@Composable
-private fun ControlChip(label: String, secondary: String?, danger: Boolean = false, onClick: () -> Unit) {
-    // Crece con la letra del sistema: nada de "…" en los nombres largos
-    PPChip(
-        label, onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        background = if (danger) Color(0xFF2A1212) else PP.SurfaceHigh,
-        content = if (danger) PP.Danger else PP.TextBright,
-        secondary = secondary, secondarySize = 12.sp,
-        fontSize = 14.sp
-    )
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Pagina 2 · salud
+// Pagina 1 · salud
 // ─────────────────────────────────────────────────────────────────────
 
 @Composable
