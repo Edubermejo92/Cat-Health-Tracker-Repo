@@ -19,6 +19,7 @@ class PhoneWearableListenerService : WearableListenerService() {
         Log.d(TAG, "Del reloj: $path")
 
         WearLink.setConnected(true)
+        WearLink.setAppOnWatch(true)
 
         val delivered = MainActivity.instance?.deliverToWeb(path, payload) ?: false
         if (!delivered) {

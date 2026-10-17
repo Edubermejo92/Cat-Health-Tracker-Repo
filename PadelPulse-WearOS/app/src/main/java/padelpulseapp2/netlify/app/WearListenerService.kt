@@ -40,6 +40,15 @@ class WearListenerService : WearableListenerService() {
         // Si el movil nos habla, el movil esta ahi
         PhoneLink.setConnected(true)
         PhoneLink.heardFromPhone()
+        // Y si nos manda el marcador, ajustes o la cuenta es que ya nos tiene
+        // como suyo: vinculados sin mas pasos. Wear OS solo entrega mensajes
+        // entre las dos apps del mismo emparejamiento, asi que un codigo no
+        // añade nada.
+        if (!PhoneLink.paired && path != SyncProtocol.PATH_HELLO &&
+            path != SyncProtocol.PATH_PAIR && path != SyncProtocol.PATH_LEGACY_BT) {
+            PhoneLink.paired = true
+            PhoneLink.save(applicationContext)
+        }
 
         if (!PhoneLink.acceptSeq(obj.optLong("seq", 0L))) return
 

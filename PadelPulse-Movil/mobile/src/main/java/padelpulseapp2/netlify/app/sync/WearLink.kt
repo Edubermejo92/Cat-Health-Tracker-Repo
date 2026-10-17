@@ -23,6 +23,22 @@ object WearLink {
     @Volatile var watchName = ""
         private set
 
+    /**
+     * PadelPulse esta instalado en el reloj (se ve su capacidad). null = aun no
+     * se sabe. El enlace (connected) lo da el emparejamiento del sistema; esto
+     * dice si al otro lado hay con quien hablar.
+     */
+    @Volatile var appOnWatch: Boolean? = null
+
+    /** Se avisa a la capa JS cuando se sabe si la app esta en el reloj. */
+    var onWatchApp: ((Boolean?) -> Unit)? = null
+
+    fun setAppOnWatch(value: Boolean?) {
+        if (value == appOnWatch) return
+        appOnWatch = value
+        onWatchApp?.invoke(value)
+    }
+
     /** True mientras aplicamos un estado remoto: impide reemitirlo y crear un bucle. */
     @Volatile var applyingRemote = false
 
@@ -69,6 +85,15 @@ object WearLink {
                 val nodes = Tasks.await(Wearable.getNodeClient(context).connectedNodes)
                 val near = nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull()
                 setConnected(near != null, near?.displayName ?: "")
+                if (near != null) {
+                    runCatching {
+                        val cap = Tasks.await(
+                            Wearable.getCapabilityClient(context)
+                                .getCapability(CAPABILITY_WATCH, CapabilityClient.FILTER_REACHABLE)
+                        )
+                        setAppOnWatch(cap.nodes.isNotEmpty() || appOnWatch == true)
+                    }
+                }
             }.onFailure {
                 setConnected(false)
                 Log.w(TAG, "No hay relojes conectados", it)

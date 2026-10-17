@@ -121,7 +121,6 @@ fun ScorePager(
     onNewMatch: () -> Unit,
     onLanguage: () -> Unit,
     onInvite: () -> Unit,
-    onPair: () -> Unit,
     onHistory: () -> Unit,
     onPageList: (ScalingLazyListState?) -> Unit
 ) {
@@ -164,7 +163,7 @@ fun ScorePager(
                 )
                 1 -> HealthDial(engine, activity, accent, w)
                 2 -> SettingsPage(engine, activity, accent, settingsState, onNewMatch, onEditName, onPicker, onLanguage, onInvite)
-                else -> SyncPage(engine, activity, accent, syncState, onPair, onHistory)
+                else -> SyncPage(engine, activity, accent, syncState, onHistory)
             }
         }
         PageDots(
@@ -311,7 +310,6 @@ private fun ScoreDial(
         // Logo arriba, como la cabecera del movil, con un punto que dice si el
         // movil esta enlazado. Cabe entre la hora y los nombres: a -0.34 la
         // esfera mide 0.74 de ancho y el logo solo 0.22.
-        val linkOk = PhoneLink.connected && PhoneLink.paired
         // A los lados del logo, dos botones: a la izquierda el arbitro por voz
         // (cantas "punto para Edu" y se suma), a la derecha silenciar la voz
         // que canta los puntos. Cada uno tiene su propia zona para tocar, mas
@@ -517,10 +515,9 @@ private fun ScoreDial(
             if (showHeard) {
                 FitText("🎙 «${voice.heard}»", PP.Danger, szT(0.042f))
             } else {
-                val lc = linkColor(engine)
+                // El estado del movil no va aqui: lo dice el punto junto al
+                // logo (verde = sincronizado) y el detalle esta en Sincronizacion
                 val status = buildAnnotatedString {
-                    // Si el enlace falla, eso va primero
-                    if (!linkOk) withStyle(SpanStyle(color = lc)) { append("● ${linkLabel(engine)} · ") }
                     append("$phase · " + activity.getTimerDisplay())
                     if (engine.heartRate > 0) withStyle(SpanStyle(color = accent)) { append(" · ♥ ${engine.heartRate}") }
                 }

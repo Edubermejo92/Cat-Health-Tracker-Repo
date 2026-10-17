@@ -38,7 +38,6 @@ fun ScoreScreen(
     activity: MainActivity,
     listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
     nameState: androidx.wear.compose.foundation.lazy.ScalingLazyListState,
-    onPair: () -> Unit,
     onInvite: () -> Unit,
     onEnd: () -> Unit,
     onHistory: () -> Unit,
@@ -115,7 +114,6 @@ fun ScoreScreen(
         onNewMatch = { askNewMatch() },
         onLanguage = { showLanguage = true },
         onInvite = onInvite,
-        onPair = onPair,
         onHistory = onHistory,
         onPageList = { pageList = it }
     )

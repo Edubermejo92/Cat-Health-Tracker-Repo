@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     companion object {
         const val TAG = "PadelPulse"
-        const val APP_VERSION = "7.2.0"
+        const val APP_VERSION = "7.2.1"
 
         // Los mismos que usa la capa JS. La clave publicable esta pensada para
         // ir en el cliente; lo que protege los datos son las politicas RLS.
@@ -84,11 +84,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     // El contenido lo procesa PhoneWearableListenerService; aqui solo presencia.
     private val messageListener = MessageClient.OnMessageReceivedListener {
         WearLink.setConnected(true)
+        WearLink.setAppOnWatch(true)
     }
 
+    // La capacidad dice si PadelPulse esta en el reloj, no si hay enlace (eso
+    // lo da el sistema): antes se mezclaban y salia "sin reloj" con el
+    // Bluetooth bien.
     private val capabilityListener = CapabilityClient.OnCapabilityChangedListener { info ->
-        val near = info.nodes.firstOrNull { it.isNearby } ?: info.nodes.firstOrNull()
-        WearLink.setConnected(near != null, near?.displayName ?: "")
+        WearLink.setAppOnWatch(info.nodes.isNotEmpty() || WearLink.appOnWatch == true)
+        WearLink.refreshConnection(this)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -153,6 +157,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             WearLink.onConnectionChanged = { connected, name ->
                 runOnUiThread { pushConnectionToWeb(connected, name) }
             }
+            WearLink.onWatchApp = { onWatch ->
+                evalJs("if(window.PPSync && PPSync.onWatchApp) PPSync.onWatchApp(${onWatch ?: "null"});")
+            }
             WearLink.announce(this)
 
             // El enlace del correo puede haber arrancado la app desde cero
@@ -215,6 +222,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts?.shutdown()
         speechRecognizer?.destroy()
         WearLink.onConnectionChanged = null
+        WearLink.onWatchApp = null
         webReady = false
         instance = null
         webView = null
@@ -452,6 +460,42 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
         @JavascriptInterface
         fun isWatchConnected(): Boolean = WearLink.connected
+
+        /** "true", "false" o "null" (aun no se sabe): PadelPulse en el reloj. */
+        @JavascriptInterface
+        fun appOnWatch(): String = WearLink.appOnWatch?.toString() ?: "null"
+
+        /** "Buscar reloj": vuelve a mirar el enlace y si la app esta en el reloj. */
+        @JavascriptInterface
+        fun findWatch() = WearLink.refreshConnection(activity)
+
+        /**
+         * "Instalar en el reloj": abre la ficha de PadelPulse en la Play Store
+         * de cada reloj conectado. Es la forma oficial de Wear OS.
+         */
+        @JavascriptInterface
+        fun installOnWatch() {
+            Thread {
+                val ok = runCatching {
+                    val nodes = com.google.android.gms.tasks.Tasks.await(
+                        com.google.android.gms.wearable.Wearable.getNodeClient(activity).connectedNodes
+                    )
+                    if (nodes.isEmpty()) return@runCatching false
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=${activity.packageName}"))
+                        .addCategory(Intent.CATEGORY_BROWSABLE)
+                    val helper = androidx.wear.remote.interactions.RemoteActivityHelper(activity)
+                    nodes.forEach { n -> helper.startRemoteActivity(intent, n.id).get() }
+                    true
+                }.getOrDefault(false)
+                activity.runOnUiThread {
+                    Toast.makeText(
+                        activity,
+                        if (ok) "Mira el reloj: instala PadelPulse" else "No se pudo abrir la Play Store del reloj",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }.start()
+        }
 
         @JavascriptInterface
         fun watchName(): String = WearLink.watchName

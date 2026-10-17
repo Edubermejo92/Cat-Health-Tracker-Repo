@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.2.0"
+        const val APP_VERSION = "7.2.1"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
         private const val KEY_HEALTH_DISCLOSURE = "health_disclosure_seen"
@@ -104,9 +104,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         PhoneLink.setConnected(true)
     }
 
+    // La capacidad dice si PadelPulse esta en el movil, no si hay enlace: el
+    // enlace lo da el sistema (refreshConnection). Antes se mezclaban y el reloj
+    // decia "sin movil" aunque el Bluetooth estuviera bien.
     private val capabilityListener = CapabilityClient.OnCapabilityChangedListener { info ->
-        val near = info.nodes.firstOrNull { it.isNearby } ?: info.nodes.firstOrNull()
-        PhoneLink.setConnected(near != null, near?.displayName ?: "")
+        PhoneLink.appOnPhone = info.nodes.isNotEmpty() || PhoneLink.lastHeardAt > 0
+        PhoneLink.refreshConnection(this)
     }
 
     /** Modo actual normalizado (SOLO / PHONE / WATCH). Fuente unica: el engine. */
@@ -276,6 +279,57 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
             toast(
                 if (ok) (if (es) "Mira el móvil: inicia sesión allí" else "Check your phone: sign in there")
                 else (if (es) "Abre PadelPulse en el móvil e inicia sesión" else "Open PadelPulse on your phone and sign in")
+            )
+        }, androidx.core.content.ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * "Buscar movil": mira el enlace del sistema, si PadelPulse esta en el
+     * movil, y le saluda. A los 3 s dice que ha encontrado.
+     */
+    fun findPhone() {
+        PhoneLink.refreshConnection(this)
+        sendHello()
+        if (PhoneLink.paired) {
+            PhoneLink.send(this, SyncProtocol.PATH_CMD, SyncProtocol.command(PhoneLink.nextSeq(), "sync", null))
+        } else {
+            PhoneLink.send(
+                this, SyncProtocol.PATH_PAIR,
+                SyncProtocol.pairRequest(PhoneLink.nextSeq(), "AUTO", android.os.Build.MODEL ?: "Wear OS")
+            )
+        }
+        val es = gameEngine?.lang != "en"
+        toast(if (es) "Buscando el móvil…" else "Looking for the phone…")
+        lifecycleScope.launch {
+            delay(3000)
+            toast(
+                when (PhoneLink.link) {
+                    PhoneLink.Link.SYNCED -> if (es) "Sincronizado con ${PhoneLink.phoneName.ifEmpty { "el móvil" }}" else "Synced with the phone"
+                    PhoneLink.Link.NO_APP -> if (es) "El móvil no tiene PadelPulse: instálalo" else "PadelPulse is not on the phone: install it"
+                    PhoneLink.Link.WAITING -> if (es) "Móvil encontrado. Abre PadelPulse en el móvil" else "Phone found. Open PadelPulse on the phone"
+                    PhoneLink.Link.NO_PHONE -> if (es) "Sin enlace: revisa el Bluetooth y la app del reloj en el móvil" else "No link: check Bluetooth and the watch app on the phone"
+                }
+            )
+        }
+    }
+
+    /** Abre la ficha de PadelPulse en la Play Store del movil. */
+    fun openPlayOnPhone() {
+        val es = gameEngine?.lang != "en"
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$packageName"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        val future = runCatching {
+            androidx.wear.remote.interactions.RemoteActivityHelper(this).startRemoteActivity(intent)
+        }.getOrNull()
+        if (future == null) {
+            toast(if (es) "No se pudo abrir la Play Store del móvil" else "Couldn't open the phone's Play Store")
+            return
+        }
+        future.addListener({
+            val ok = runCatching { future.get() }.isSuccess
+            toast(
+                if (ok) (if (es) "Mira el móvil: instala PadelPulse" else "Check your phone: install PadelPulse")
+                else (if (es) "No se pudo abrir la Play Store del móvil" else "Couldn't open the phone's Play Store")
             )
         }, androidx.core.content.ContextCompat.getMainExecutor(this))
     }

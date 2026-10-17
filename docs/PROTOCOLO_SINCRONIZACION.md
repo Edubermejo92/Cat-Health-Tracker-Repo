@@ -172,12 +172,27 @@ la hoja de compartir desde segundo plano.
 { "v": 3, "action": "request", "code": "4821", "device": "Galaxy Watch6" }
 ```
 
-- `request`: lo manda el reloj con el código que ha tecleado. `code:"AUTO"` pide
-  vincular sin código.
-- `accept` / `reject`: respuesta del móvil. El móvil acepta si el código coincide con el
-  suyo, o si la petición es `AUTO` y tiene el auto-emparejado activo (por defecto sí).
-- El código lo genera y lo guarda **el móvil**, y es lo que se muestra en su pantalla de
-  ajustes. El reloj no genera códigos.
+- `request`: lo manda el reloj, siempre con `code:"AUTO"` desde 7.2.1. Ya no hay
+  códigos que teclear.
+- `accept`: respuesta del móvil. Desde 7.2.1 el móvil acepta siempre la petición
+  `AUTO`. El auto-emparejado ya no se puede desactivar.
+- **Vinculación implícita (7.2.1):** cualquier mensaje del otro lado que no sea
+  `hello` ni `pair` deja vinculados a los dos. Si el móvil recibe el marcador del
+  reloj sin haberlo vinculado, contesta con `accept`, sus ajustes, la cuenta y el
+  marcador. Si el reloj recibe del móvil el marcador, los ajustes o la cuenta, se da
+  por vinculado. Así una petición perdida no deja la sincronización parada.
+- **Por qué no hace falta código:** Wear OS solo entrega mensajes entre apps con el
+  mismo `applicationId` y la misma firma, en dispositivos emparejados entre sí en la
+  app Galaxy Wearable o Wear OS. Ese emparejamiento por Bluetooth lo hace el
+  sistema, no PadelPulse.
+- **Diagnóstico (7.2.1):** cada app distingue tres cosas:
+  1. enlace del sistema (`NodeClient.connectedNodes`);
+  2. PadelPulse instalado al otro lado (`CapabilityClient.getCapability`, con
+     `padelpulse_phone` o `padelpulse_watch`);
+  3. respuesta real (último mensaje recibido).
+
+  Si falta la app al otro lado, «Instalar en el móvil» o «Instalar en el reloj» abre
+  su ficha de Play en ese dispositivo con `RemoteActivityHelper`.
 
 ## `/padel/settings`
 

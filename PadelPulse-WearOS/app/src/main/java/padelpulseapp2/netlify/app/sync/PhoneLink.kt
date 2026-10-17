@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.android.gms.tasks.Tasks
@@ -22,9 +23,34 @@ object PhoneLink {
     const val CAPABILITY_PHONE = "padelpulse_phone"
     const val CAPABILITY_WATCH = "padelpulse_watch"
 
-    /** Hay un movil alcanzable ahora mismo. */
+    /**
+     * Hay enlace con el movil (Bluetooth o Wi-Fi). Ese enlace no lo crea
+     * PadelPulse: es el emparejamiento del sistema, el de la app Galaxy
+     * Wearable / Wear OS del movil. Aqui solo se mira si existe.
+     */
     var connected by mutableStateOf(false)
         private set
+
+    /**
+     * PadelPulse esta instalado en el movil (se ve su capacidad). null = aun
+     * no se sabe. Si el movil ya nos ha hablado, es que esta.
+     */
+    var appOnPhone by mutableStateOf<Boolean?>(null)
+
+    /** Cuando llego el ultimo mensaje del movil (0 = nunca en esta sesion). */
+    var lastHeardAt by mutableLongStateOf(0L)
+        private set
+
+    /** Lo que se ensena: de lo mas basico (enlace) a lo completo (sincronizado). */
+    enum class Link { NO_PHONE, NO_APP, WAITING, SYNCED }
+
+    val link: Link
+        get() = when {
+            paired && connected && lastHeardAt > 0 -> Link.SYNCED
+            !connected -> Link.NO_PHONE
+            appOnPhone == false -> Link.NO_APP
+            else -> Link.WAITING
+        }
 
     /** El movil ha aceptado el codigo: la sincronizacion esta activa. */
     var paired by mutableStateOf(false)
@@ -60,7 +86,11 @@ object PhoneLink {
             .apply()
     }
 
-    fun heardFromPhone() { unanswered = 0 }
+    fun heardFromPhone() {
+        unanswered = 0
+        lastHeardAt = System.currentTimeMillis()
+        appOnPhone = true
+    }
 
     fun countUnanswered() { unanswered += 1 }
 
@@ -113,6 +143,17 @@ object PhoneLink {
                 val nodes = Tasks.await(Wearable.getNodeClient(context).connectedNodes)
                 val near = nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull()
                 setConnected(near != null, near?.displayName ?: "")
+                // Con enlace, se mira si PadelPulse esta en ese movil. Sin
+                // esto, "no conecta" no distinguia entre Bluetooth y app.
+                if (near != null) {
+                    runCatching {
+                        val cap = Tasks.await(
+                            Wearable.getCapabilityClient(context)
+                                .getCapability(CAPABILITY_PHONE, CapabilityClient.FILTER_REACHABLE)
+                        )
+                        appOnPhone = cap.nodes.isNotEmpty() || lastHeardAt > 0
+                    }
+                }
             }.onFailure {
                 setConnected(false)
                 Log.w(TAG, "No hay nodos", it)

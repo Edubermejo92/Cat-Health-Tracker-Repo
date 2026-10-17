@@ -49,7 +49,6 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     // durante el Crossfade se componen dos pantallas a la vez y se peleaban
     // por el mismo estado.
     val langState = rememberScalingLazyListState()
-    val pairState = rememberScalingLazyListState()
     val scoreState = rememberScalingLazyListState()
     val historyState = rememberScalingLazyListState()
     val inviteState = rememberScalingLazyListState()
@@ -74,7 +73,6 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     val disclosureState = rememberScalingLazyListState()
     val activeState = if (activity.showHealthDisclosure) disclosureState else subActive ?: when (engine.currentScreen) {
         "lang" -> langState
-        "bt" -> pairState
         "score" -> scoreState
         "history" -> historyState
         "invite" -> inviteState
@@ -127,10 +125,11 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
                         "splash" -> SplashScreen(engine, activity, splashState)
                         "resume" -> ResumeScreen(engine, activity, resumeState)
                         "lang" -> LangScreen(engine, activity, langState)
-                        "bt" -> PairScreen(engine, activity, pairState)
+                        // Ya no hay vinculacion con codigo: Wear OS solo deja
+                        // hablar a las dos apps del mismo emparejamiento.
+                        "bt" -> LaunchedEffect(Unit) { engine.goToPage(3) }
                         "score" -> ScoreScreen(
                             engine, activity, scoreState, nameState,
-                            onPair = { engine.currentScreen = "bt" },
                             onInvite = { engine.currentScreen = "invite" },
                             onEnd = { engine.currentScreen = "end" },
                             onHistory = { engine.currentScreen = "history" },
@@ -158,24 +157,27 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
 /** Proporcion ancho/alto de res/drawable-nodpi/logo_wordmark (470 x 240). */
 const val LOGO_RATIO = 470f / 240f
 
+/**
+ * Estado del enlace en una palabra. Nada de rojo: jugar sin movil es normal y
+ * el marcador funciona igual. El detalle (que falla y como arreglarlo) esta
+ * en Sincronizacion.
+ */
 @Composable
 fun linkLabel(engine: GameEngine): String {
     val es = engine.lang == "es"
-    return when {
-        !PhoneLink.connected -> if (es) "SIN MOVIL" else "NO PHONE"
-        !PhoneLink.paired && PhoneLink.unanswered >= 2 -> if (es) "MOVIL NO RESPONDE" else "PHONE NOT ANSWERING"
-        // Ya no hay que pulsar nada: se vincula solo en cuanto el movil contesta
-        !PhoneLink.paired -> if (es) "VINCULANDO…" else "LINKING…"
-        else -> if (es) "CONECTADO" else "CONNECTED"
+    return when (PhoneLink.link) {
+        PhoneLink.Link.SYNCED -> if (es) "SINCRONIZADO" else "SYNCED"
+        PhoneLink.Link.WAITING -> if (es) "BUSCANDO PADELPULSE…" else "LOOKING FOR PADELPULSE…"
+        PhoneLink.Link.NO_APP -> if (es) "FALTA LA APP EN EL MÓVIL" else "APP MISSING ON PHONE"
+        PhoneLink.Link.NO_PHONE -> if (es) "SOLO RELOJ" else "WATCH ONLY"
     }
 }
 
 @Composable
-fun linkColor(engine: GameEngine): Color = when {
-    !PhoneLink.connected -> PP.Danger
-    !PhoneLink.paired && PhoneLink.unanswered >= 2 -> PP.Danger
-    !PhoneLink.paired -> PP.Warn
-    else -> ThemeUtils.getColor(engine.theme)
+fun linkColor(engine: GameEngine): Color = when (PhoneLink.link) {
+    PhoneLink.Link.SYNCED -> ThemeUtils.getColor(engine.theme)
+    PhoneLink.Link.NO_APP -> PP.Warn
+    else -> PP.TextMuted
 }
 
 @Composable
@@ -183,7 +185,7 @@ fun LinkPill(engine: GameEngine, modifier: Modifier = Modifier) {
     PPStatusPill(
         label = linkLabel(engine),
         color = linkColor(engine),
-        pulsing = PhoneLink.connected && PhoneLink.paired,
+        pulsing = PhoneLink.link == PhoneLink.Link.SYNCED,
         modifier = modifier
     )
 }
@@ -339,7 +341,7 @@ fun SplashScreen(
                     .padding(bottom = 4.dp)
             )
         }
-        item { LinkPill(engine, Modifier.padding(vertical = 4.dp)) }
+        if (PhoneLink.link == PhoneLink.Link.SYNCED) item { LinkPill(engine, Modifier.padding(vertical = 4.dp)) }
         // Por si alguien no quiere esperar el segundo del logo
         item {
             PPChip(
@@ -402,193 +404,6 @@ fun LangScreen(
                 modifier = Modifier.fillMaxWidth(0.84f).padding(top = 8.dp),
                 background = accent, content = PP.OnAccent,
                 fontSize = PP.Body, weight = FontWeight.Black, center = true
-            )
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Vinculacion con el movil
-// ─────────────────────────────────────────────────────────────────────
-
-@Composable
-fun PairScreen(
-    engine: GameEngine,
-    activity: MainActivity,
-    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
-) {
-    val accent = ThemeUtils.getColor(engine.theme)
-    val ui = Translations.ui[engine.lang] ?: Translations.ui["es"]!!
-    val es = engine.lang == "es"
-    var code by remember { mutableStateOf(listOf<Int>()) }
-    var sentFor by remember { mutableStateOf("") }
-    var autoTried by remember { mutableStateOf(false) }
-
-    // Cuando el movil acepta, entramos al marcador solos
-    LaunchedEffect(PhoneLink.paired) {
-        if (PhoneLink.paired) {
-            delay(1100)
-            activity.startTimer()
-            engine.currentScreen = "score"
-        }
-    }
-
-    // Zero-touch: en cuanto el reloj ve el movil, intenta emparejar solo, sin
-    // esperar a que nadie teclee nada. El movil acepta automaticamente si tiene
-    // "Vincular sin codigo" activado (lo esta por defecto). Si el movil lo tiene
-    // desactivado, esto no hace nada y queda el codigo manual como alternativa.
-    LaunchedEffect(PhoneLink.connected, PhoneLink.paired) {
-        if (PhoneLink.connected && !PhoneLink.paired && !autoTried) {
-            autoTried = true
-            activity.sendPairRequest("AUTO")
-        }
-    }
-
-    // El codigo se manda al completar los 4 digitos, una sola vez por combinacion
-    LaunchedEffect(code) {
-        if (code.size == 4) {
-            val text = code.joinToString("")
-            if (text != sentFor) {
-                sentFor = text
-                activity.sendPairRequest(text)
-            }
-        }
-    }
-
-    val statusText = when {
-        PhoneLink.paired -> if (es) "¡VINCULADO!" else "LINKED!"
-        PhoneLink.lastError == "codigo" -> if (es) "CODIGO INCORRECTO" else "WRONG CODE"
-        !PhoneLink.connected -> if (es) "ABRE LA APP DEL MOVIL" else "OPEN THE PHONE APP"
-        PhoneLink.unanswered >= 2 && code.isEmpty() ->
-            if (es) "EL MOVIL NO CONTESTA" else "PHONE NOT ANSWERING"
-        autoTried && code.isEmpty() -> if (es) "EMPAREJANDO…" else "PAIRING…"
-        code.size == 4 -> if (es) "ESPERANDO AL MOVIL…" else "WAITING FOR PHONE…"
-        else -> if (es) "CODIGO DEL MOVIL" else "CODE FROM PHONE"
-    }
-    val statusColor = when {
-        PhoneLink.paired -> accent
-        PhoneLink.lastError == "codigo" -> PP.Danger
-        !PhoneLink.connected -> PP.Warn
-        PhoneLink.unanswered >= 2 -> PP.Danger
-        else -> PP.TextDim
-    }
-
-    ScalingLazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = roundSafePadding(squareHorizontal = 6.dp, squareVertical = 24.dp)
-    ) {
-        item { BackRow(engine) { engine.goToPage(3) } }
-
-        item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                repeat(4) { idx ->
-                    val filled = idx < code.size
-                    val ch = if (filled) code[idx].toString() else "·"
-                    val c = if (filled) accent else PP.Line
-                    Box(
-                        modifier = Modifier
-                            .defaultMinSize(30.dp, 40.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(if (filled) accent.copy(alpha = 0.12f) else PP.Surface)
-                            .border(1.dp, c, RoundedCornerShape(9.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            ch,
-                            color = if (filled) accent else PP.TextMuted,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            PPLabel(statusText, color = statusColor, size = PP.Micro)
-            Spacer(Modifier.height(4.dp))
-        }
-
-        // Teclado numerico
-        item {
-            Column(modifier = Modifier.padding(bottom = 6.dp)) {
-                listOf(
-                    listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9), listOf(-1, 0, -2)
-                ).forEach { row ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    ) {
-                        row.forEach { digit ->
-                            val label = when (digit) {
-                                -1 -> "⌫"
-                                -2 -> "OK"
-                                else -> digit.toString()
-                            }
-                            val bg = when (digit) {
-                                -2 -> accent
-                                -1 -> PP.SurfaceHigh
-                                else -> PP.Surface
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .defaultMinSize(38.dp, 30.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(bg)
-                                    .clickable {
-                                        when (digit) {
-                                            -1 -> if (code.isNotEmpty()) {
-                                                code = code.dropLast(1); sentFor = ""
-                                            }
-                                            -2 -> if (code.size == 4) {
-                                                sentFor = ""
-                                                activity.sendPairRequest(code.joinToString(""))
-                                            }
-                                            else -> if (code.size < 4) code = code + digit
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    label,
-                                    color = if (digit == -2) PP.OnAccent else PP.TextBright,
-                                    fontSize = PP.Body,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Vincular sin codigo: el emparejado Bluetooth ya lo hizo el sistema,
-        // el codigo solo evita confundir dos moviles en la misma pista.
-        item {
-            PPChip(
-                if (es) "Vincular sin codigo" else "Link without code",
-                onClick = { activity.sendPairRequest("AUTO") },
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
-                content = accent
-            )
-        }
-
-        item {
-            PPChip(
-                ui.skip,
-                onClick = {
-                    // Jugar ya, sin esperar al movil. Si aparece mas tarde, se
-                    // vincula solo y el marcador se pone al dia.
-                    activity.startTimer()
-                    engine.currentScreen = "score"
-                },
-                modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 2.dp),
-                content = PP.TextDim
             )
         }
     }

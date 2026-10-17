@@ -293,6 +293,23 @@ fun SettingsPage(
     }
 }
 
+/** Una comprobacion: ✓ hecho, ✕ falla, … aun no se sabe. */
+@Composable
+private fun CheckLine(ok: Boolean?, text: String, accent: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            when (ok) { true -> "✓"; false -> "✕"; null -> "…" },
+            color = when (ok) { true -> accent; false -> PP.Warn; null -> PP.TextMuted },
+            fontSize = PP.Micro, fontWeight = FontWeight.Black,
+            modifier = Modifier.width(14.dp)
+        )
+        Text(text, color = if (ok == true) PP.TextBright else PP.TextDim, fontSize = PP.Micro)
+    }
+}
+
 /**
  * Pagina 4: todo lo que tiene que ver con el movil. Enlace, sincronizar a
  * mano, la cuenta (iniciar sesion se hace en el movil, a un toque desde aqui)
@@ -304,7 +321,6 @@ fun SyncPage(
     activity: MainActivity,
     accent: Color,
     listState: ScalingLazyListState,
-    onPair: () -> Unit,
     onHistory: () -> Unit
 ) {
     val es = engine.lang == "es"
@@ -317,21 +333,57 @@ fun SyncPage(
     ) {
         item { PPLabel(if (es) "SINCRONIZACIÓN" else "SYNC", color = accent, size = PP.Label) }
 
-        // ── Movil ──
+        // ── Movil: diagnostico en tres pasos ──
+        // 1) enlace del sistema (Bluetooth/Wi-Fi), 2) PadelPulse en el movil,
+        // 3) PadelPulse contesta. Cada uno dice que hacer si falla.
         item {
             PPCard(modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)) {
                 LinkPill(engine)
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    when {
-                        PhoneLink.paired && PhoneLink.phoneName.isNotEmpty() -> PhoneLink.phoneName
-                        PhoneLink.paired -> if (es) "Móvil vinculado" else "Phone linked"
-                        !PhoneLink.connected -> if (es) "Abre PadelPulse en el móvil" else "Open PadelPulse on the phone"
-                        else -> if (es) "Vinculando con el móvil…" else "Linking with the phone…"
+                Spacer(Modifier.height(4.dp))
+                val link = PhoneLink.connected
+                val app = PhoneLink.appOnPhone
+                val heard = PhoneLink.lastHeardAt > 0
+                CheckLine(
+                    link,
+                    if (link) (if (es) "Enlace con ${PhoneLink.phoneName.ifEmpty { "el móvil" }}" else "Linked to ${PhoneLink.phoneName.ifEmpty { "the phone" }}")
+                    else (if (es) "Sin enlace: activa el Bluetooth y abre la app Galaxy Wearable o Wear OS del móvil"
+                          else "No link: turn on Bluetooth and open the Galaxy Wearable or Wear OS app on the phone"),
+                    accent
+                )
+                if (link) CheckLine(
+                    app,
+                    when (app) {
+                        true -> if (es) "PadelPulse está en el móvil" else "PadelPulse is on the phone"
+                        false -> if (es) "Falta PadelPulse en el móvil" else "PadelPulse is missing on the phone"
+                        null -> if (es) "Comprobando PadelPulse en el móvil…" else "Checking PadelPulse on the phone…"
                     },
-                    color = PP.TextMuted, fontSize = PP.Micro, textAlign = TextAlign.Center
+                    accent
+                )
+                if (link && app != false) CheckLine(
+                    if (heard) true else null,
+                    if (heard) (if (es) "PadelPulse del móvil responde" else "Phone app is answering")
+                    else (if (es) "Abre PadelPulse en el móvil" else "Open PadelPulse on the phone"),
+                    accent
                 )
             }
+        }
+        item {
+            PPChip(
+                if (es) "BUSCAR MÓVIL" else "FIND PHONE",
+                onClick = { activity.findPhone() },
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                content = accent, icon = "📡", weight = FontWeight.Black
+            )
+        }
+        if (PhoneLink.connected && PhoneLink.appOnPhone == false) item {
+            PPChip(
+                if (es) "INSTALAR EN EL MÓVIL" else "INSTALL ON PHONE",
+                onClick = { activity.openPlayOnPhone() },
+                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                background = PP.Warn, content = PP.Bg,
+                secondary = if (es) "Abre la Play Store en el móvil" else "Opens the Play Store on the phone",
+                secondaryColor = PP.Bg, icon = "⬇", weight = FontWeight.Black
+            )
         }
         item {
             PPChip(
@@ -342,14 +394,6 @@ fun SyncPage(
                 secondary = if (es) "Marcador, idioma, nombres e historial" else "Score, language, names and history",
                 secondaryColor = PP.OnAccent.copy(alpha = 0.8f),
                 icon = "⇄", weight = FontWeight.Black
-            )
-        }
-        if (!PhoneLink.paired) item {
-            PPChip(
-                if (es) "Vincular con código" else "Link with a code",
-                onClick = onPair,
-                modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
-                content = accent, icon = "⌚"
             )
         }
 

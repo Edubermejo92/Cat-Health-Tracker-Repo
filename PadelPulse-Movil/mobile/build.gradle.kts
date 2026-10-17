@@ -25,8 +25,8 @@ android {
         targetSdk = 36
         // Serie propia del movil. Debe ser DISTINTO al del reloj, que va en la
         // misma serie x10: movil 518, reloj 5180.
-        versionCode = 720
-        versionName = "7.2.0"
+        versionCode = 721
+        versionName = "7.2.1"
     }
 
     signingConfigs {
@@ -74,6 +74,11 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("androidx.webkit:webkit:1.12.1")
+    // Abrir la Play Store en el reloj desde el movil ("Instalar en el reloj")
+    implementation("androidx.wear:wear-remote-interactions:1.0.0")
+    // Su startRemoteActivity devuelve un ListenableFuture: Guava entera, que el
+    // jar suelto "listenablefuture" se sustituye por uno vacio (ver el reloj).
+    implementation("com.google.guava:guava:33.3.1-android")
 }
 
 val copyLogos = tasks.register("copyLogos") {
