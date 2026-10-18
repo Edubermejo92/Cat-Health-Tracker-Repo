@@ -48,6 +48,12 @@ class GameEngine(context: Context? = null) {
         requestedPage = page
         currentScreen = "score"
     }
+    /**
+     * Partido recien empezado: el marcador pregunta primero quien saca. Solo
+     * navegacion, no se guarda (al reabrir la app ya no se pregunta).
+     */
+    var askServe by mutableStateOf(false)
+
     var theme by mutableStateOf("neon")
     var lang by mutableStateOf("es")
     var voiceEnabled by mutableStateOf(true)
@@ -135,6 +141,27 @@ class GameEngine(context: Context? = null) {
     var heartRate by mutableIntStateOf(0)
     var distanceKm by mutableStateOf(0.0)
 
+    // Pulso medio y maximo del partido, solo con lecturas reales del sensor
+    // mientras corre el cronometro. 0 = sin datos (se ensena "–", nunca un
+    // numero inventado). No se guardan: al reabrir la app empiezan de nuevo.
+    var hrMax by mutableIntStateOf(0)
+    var hrAvg by mutableIntStateOf(0)
+    private var hrSum = 0L
+    private var hrCount = 0
+
+    fun recordHeartRate(hr: Int) {
+        // Fuera de rango = lectura mala del sensor (reloj flojo, sin contacto)
+        if (hr !in 30..230) return
+        hrSum += hr
+        hrCount++
+        hrAvg = (hrSum / hrCount).toInt()
+        if (hr > hrMax) hrMax = hr
+    }
+
+    private fun resetHeartRateStats() {
+        hrSum = 0L; hrCount = 0; hrMax = 0; hrAvg = 0
+    }
+
     // New: Screen brightness (0-255)
     var brightness by mutableStateOf(150f)
 
@@ -180,6 +207,7 @@ class GameEngine(context: Context? = null) {
         serving = "A"; tbSrv = "A"; lastPointWinner = null
         goldenPointActive = false
         setScores = emptyList()
+        resetHeartRateStats()
         saveToDisk()
     }
 

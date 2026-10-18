@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.lifecycle.lifecycleScope
+import androidx.wear.ambient.AmbientLifecycleObserver
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.MessageClient
 import kotlinx.coroutines.Job
@@ -35,7 +36,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
 
     companion object {
         const val TAG = "PadelPulseWatch"
-        const val APP_VERSION = "7.2.2"
+        const val APP_VERSION = "7.2.3"
         var gameEngine: GameEngine? = null
         var instance: MainActivity? = null
         private const val KEY_HEALTH_DISCLOSURE = "health_disclosure_seen"
@@ -491,6 +492,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
             "serve" -> {
                 val quien = team ?: rcv
                 e.serving = quien; e.faultCount = 0
+                e.askServe = false
                 e.speakServe(quien); onLocalScoreAction("serve", quien)
             }
             "newMatch" -> startNewMatch()
@@ -505,6 +507,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         MatchOngoingService.stop(this)
         WorkoutGuard.stop(this)
         voice.stop()
+        // El tile deja de ensenar el pulso en vivo
+        ScoreTileService.refresh(this)
         finishAndRemoveTask()
     }
 
@@ -532,6 +536,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         if (matchTimeSeconds > 0) e.clockSeconds = matchTimeSeconds
         if (e.hasSavedMatch()) e.saveMatchToHistory()
         e.resetMatch()
+        // Lo primero del partido nuevo: quien saca (pantalla en el marcador)
+        e.askServe = true
         matchTimeSeconds = 0
         e.clockSeconds = 0
         startTimer()
@@ -543,6 +549,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
      * corre solo, asi que esto solo hace falta cuando cambia el tanteo.
      */
     fun refreshOngoingActivity() {
+        // El tile del marcador tambien: lo pinta el sistema y no se entera solo
+        ScoreTileService.refresh(this)
         val engine = gameEngine
         if (engine != null && engine.over) {
             // Partido acabado: ya no hay nada "en curso" que mostrar
@@ -597,7 +605,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         when (event.sensor.type) {
             Sensor.TYPE_HEART_RATE -> {
                 val hr = event.values.getOrNull(0)?.toInt() ?: 0
-                if (hr > 0) engine.heartRate = hr
+                if (hr > 0) {
+                    engine.heartRate = hr
+                    // Media y maximo solo del partido en juego
+                    if (timerRunning && !engine.over) engine.recordHeartRate(hr)
+                }
             }
             Sensor.TYPE_STEP_COUNTER -> {
                 val steps = event.values.getOrNull(0) ?: 0f
@@ -660,12 +672,49 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
 
+    // ── Modo ambiente ────────────────────────────────────────────────────
+    //
+    // Con la muñeca bajada (o la mano tapando la esfera) el reloj pasa a
+    // ambiente. Sin esto la app desaparecia y volvia la esfera; ahora el
+    // marcador sigue a la vista en una version de bajo consumo: sin rellenos,
+    // en gris y moviendose un poco cada minuto para no marcar la pantalla.
+
+    /** True mientras el reloj esta en ambiente. Lo lee PadelApp. */
+    var ambient by mutableStateOf(false)
+        private set
+
+    /** La pantalla pide no dejar pixeles fijos (OLED): hay que mover el contenido. */
+    var ambientBurnIn by mutableStateOf(false)
+        private set
+
+    /** Sube una vez por minuto en ambiente: mueve el contenido y refresca. */
+    var ambientTick by mutableIntStateOf(0)
+        private set
+
+    private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
+        override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
+            ambientBurnIn = ambientDetails.burnInProtectionRequired
+            ambient = true
+        }
+
+        override fun onUpdateAmbient() {
+            ambientTick++
+        }
+
+        override fun onExitAmbient() {
+            ambient = false
+        }
+    }
+
+    private val ambientObserver = AmbientLifecycleObserver(this, ambientCallback)
+
     // ── Ciclo de vida ────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instance = this
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        lifecycle.addObserver(ambientObserver)
 
         tts = TextToSpeech(this, this)
 

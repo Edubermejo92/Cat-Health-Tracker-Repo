@@ -27,8 +27,8 @@ android {
         // IMPORTANTE: reloj y movil comparten applicationId, asi que Google Play
         // exige versionCode DISTINTO en cada uno. El del reloj va en su propia
         // serie -el del movil x10- y siempre por encima: movil 518, reloj 5180.
-        versionCode = 7220
-        versionName = "7.2.2"
+        versionCode = 7230
+        versionName = "7.2.3"
     }
 
     signingConfigs {
@@ -90,6 +90,13 @@ dependencies {
     // Abrir la pantalla de inicio de sesion en el movil desde el reloj
     // (Sincronizacion > Iniciar sesion): la forma oficial de Wear OS
     implementation("androidx.wear:wear-remote-interactions:1.0.0")
+    // Tile del marcador (carrusel de tiles): el partido de un vistazo sin
+    // abrir la app. protolayout es con lo que se dibuja el tile.
+    implementation("androidx.wear.tiles:tiles:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+    // Modo ambiente: con la muñeca bajada el marcador sigue en pantalla en
+    // version de bajo consumo, en vez de volver a la esfera
+    implementation("androidx.wear:wear:1.3.0")
     // QR de "Invita a un amigo": solo el codificador, sin camara ni vistas
     implementation("com.google.zxing:core:3.5.3")
     // Entreno propio mientras se juega: evita la deteccion automatica del reloj

@@ -85,6 +85,21 @@
             android:exported="false"
             android:foregroundServiceType="health" />
 
+        <!-- Tile del marcador: el partido de un vistazo desde el carrusel de
+             tiles y un toque para abrir el marcador. -->
+        <service
+            android:name=".ScoreTileService"
+            android:exported="true"
+            android:label="@string/tile_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview" />
+        </service>
+
         <!-- Recibe los mensajes del movil tambien con la app cerrada.
              El pathPrefix tiene que coincidir con el del movil: /padel -->
         <service

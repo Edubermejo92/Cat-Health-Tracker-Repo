@@ -98,7 +98,8 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
         // Lexend en toda la app, como el movil
         typography = Typography(defaultFontFamily = Lexend)
     ) {
-        Scaffold(
+        // Muñeca bajada: marcador de bajo consumo en vez de volver a la esfera
+        if (activity.ambient) AmbientScreen(engine, activity) else Scaffold(
             timeText = { if (engine.currentScreen != "splash") TimeText() },
             // En el marcador no: oscureceria la banda de FALTA pegada al borde
             vignette = {
@@ -536,10 +537,29 @@ fun EndScreen(
                         textAlign = TextAlign.Center
                     )
                 }
-                PPLabel(
-                    "${activity.getTimerDisplay()} · ${engine.calories} KCAL",
-                    color = PP.TextMuted, size = PP.Micro
-                )
+            }
+        }
+        // Lo que ha costado: duracion, kcal y pulso. Solo datos reales; lo que
+        // no haya medido el reloj, no sale.
+        item {
+            val stats = buildList {
+                add("⏱ ${activity.getTimerDisplay()}")
+                if (engine.calories > 0) add("🔥 ${engine.calories} KCAL")
+                if (engine.hrMax > 0) add("♥ ${engine.hrAvg} · ${if (es) "MÁX" else "MAX"} ${engine.hrMax}")
+            }
+            if (isLargeFont()) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) { stats.forEach { EndStatPill(it) } }
+            } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                    modifier = Modifier.fillMaxWidth(0.94f).padding(top = 4.dp)
+                ) { stats.take(2).forEach { EndStatPill(it) } }
+                // El pulso, que es el mas largo, en su propia linea
+                if (stats.size > 2) Box(Modifier.padding(top = 3.dp)) { EndStatPill(stats[2]) }
             }
         }
         item {
@@ -555,6 +575,23 @@ fun EndScreen(
                 weight = FontWeight.Black, center = true
             )
         }
+    }
+}
+
+/** Pastilla de un dato del fin de partido (duracion, kcal, pulso). */
+@Composable
+private fun EndStatPill(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(PP.PillShape)
+            .background(PP.Surface)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text, color = PP.TextDim, fontSize = PP.Micro, fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

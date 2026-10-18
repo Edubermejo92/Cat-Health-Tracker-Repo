@@ -52,6 +52,10 @@ fun ScoreScreen(
     val confirmState = rememberScalingLazyListState()
     val languageState = rememberScalingLazyListState()
     val syncState = rememberScalingLazyListState()
+    val serveState = rememberScalingLazyListState()
+    // Quien saca, al empezar un partido nuevo. Si ya se ha jugado algun punto
+    // (por voz o desde el movil) la pregunta sobra y no sale.
+    val chooseServe = engine.askServe && !engine.hasSavedMatch()
 
     // Guarda el partido jugado en el historial y empieza otro (MainActivity)
     fun startNewMatch() = activity.startNewMatch()
@@ -68,13 +72,14 @@ fun ScoreScreen(
     // propia lista, y las paginas de Ajustes y Sincronizacion la suya. Hay que
     // decirle al indicador de desplazamiento cual es la visible de verdad: sin
     // esto Play rechaza la app por "falta la barra de desplazamiento".
-    LaunchedEffect(editingTeam, showPicker, confirmNew, showLanguage, pageList) {
+    LaunchedEffect(editingTeam, showPicker, confirmNew, showLanguage, pageList, chooseServe) {
         onActiveList(
             when {
                 editingTeam != null -> nameState
                 showPicker != null -> pickerState
                 confirmNew -> confirmState
                 showLanguage -> languageState
+                chooseServe -> serveState
                 else -> pageList
             }
         )
@@ -101,6 +106,10 @@ fun ScoreScreen(
     }
     if (showLanguage) {
         LanguagePickerScreen(engine, activity, languageState) { showLanguage = false }
+        return
+    }
+    if (chooseServe) {
+        ServeChooserScreen(engine, activity, serveState)
         return
     }
 
@@ -167,6 +176,68 @@ fun LanguagePickerScreen(
     }
 }
 
+/**
+ * ¿Quien saca? Sale al empezar un partido nuevo: el saque decide el cuadro y
+ * lo que canta la voz, y antes habia que acordarse de tocar el nombre de la
+ * pareja. Un toque y al marcador; "Mas tarde" deja el saque a la pareja A y
+ * se puede cambiar tocando su nombre como siempre.
+ */
+@Composable
+fun ServeChooserScreen(
+    engine: GameEngine,
+    activity: MainActivity,
+    listState: androidx.wear.compose.foundation.lazy.ScalingLazyListState
+) {
+    val accent = ThemeUtils.getColor(engine.theme)
+    val es = engine.lang == "es"
+
+    fun choose(team: String) {
+        engine.serving = team
+        engine.faultCount = 0
+        engine.askServe = false
+        engine.persist()
+        engine.speakServe(team)
+        activity.onLocalScoreAction("serve", team)
+    }
+
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = roundSafePadding()
+    ) {
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                PPLabel(if (es) "¿QUIÉN SACA?" else "WHO SERVES?", color = accent, size = PP.Label)
+                PPLabel(if (es) "PRIMER JUEGO" else "FIRST GAME", color = PP.TextMuted, size = PP.Micro)
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+        for (team in listOf("A", "B")) {
+            item {
+                val players = engine.players(team)
+                PPChip(
+                    engine.getName(team).uppercase(),
+                    onClick = { choose(team) },
+                    modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp),
+                    secondary = if (players.isNotEmpty()) players.joinToString(" · ") else null,
+                    icon = "🎾",
+                    fontSize = PP.Body,
+                    weight = FontWeight.Black
+                )
+            }
+        }
+        item {
+            PPChip(
+                if (es) "MÁS TARDE" else "LATER",
+                onClick = { engine.askServe = false },
+                modifier = Modifier.fillMaxWidth(0.7f).padding(top = 4.dp),
+                content = PP.TextDim, center = true
+            )
+        }
+    }
+}
+
 /** Confirmacion antes de borrar un partido a medias. */
 @Composable
 fun ConfirmNewMatchScreen(
@@ -185,13 +256,25 @@ fun ConfirmNewMatchScreen(
         contentPadding = roundSafePadding()
     ) {
         item { PPLabel(if (es) "¿NUEVO PARTIDO?" else "NEW MATCH?", color = PP.Danger, size = PP.Label) }
+        // El partido que se va a guardar, en la misma tarjeta que Continuar
         item {
-            Text(
-                "${engine.nameA} · ${engine.nameB}\n" +
+            PPCard(modifier = Modifier.fillMaxWidth(0.92f).padding(vertical = 4.dp)) {
+                Text(
+                    "${engine.nameA} · ${engine.nameB}",
+                    color = PP.TextDim, fontSize = PP.Micro,
+                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
                     "${engine.setsA}–${engine.setsB}  ·  ${engine.gamesA}–${engine.gamesB}",
-                color = PP.TextBright, fontSize = PP.Body, fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 4.dp)
-            )
+                    color = accent, fontSize = PP.Title, fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+                PPLabel(
+                    (if (es) "SETS · JUEGOS" else "SETS · GAMES"),
+                    color = PP.TextMuted, size = PP.Micro
+                )
+            }
         }
         item {
             Text(
@@ -349,6 +432,35 @@ fun ScorePicker(
     val maxGames = 7
     val maxSets = (engine.bestOf / 2 + 1).coerceAtLeast(1)
 
+    // Puntos del juego en curso, solo al corregir el marcador entero. En juego
+    // normal van de 0 a 4 (0, 15, 30, 40, AD); en tie-break, los puntos tal cual.
+    val tbNow = engine.isTb || engine.isSuperTbActive()
+    val showPoints = type == "all" && !engine.over
+    fun startPts(team: String): Int = when {
+        tbNow -> if (team == "A") engine.tbPtsA else engine.tbPtsB
+        engine.isDeuce -> if (engine.adv == team) 4 else 3
+        else -> (if (team == "A") engine.ptsA else engine.ptsB).coerceIn(0, 3)
+    }
+    val initA = remember { startPts("A") }
+    val initB = remember { startPts("B") }
+    var ptsA by remember { mutableIntStateOf(initA) }
+    var ptsB by remember { mutableIntStateOf(initB) }
+    val ptsLabels = listOf("0", "15", "30", "40", "AD")
+    // Ventaja solo con el otro en 40 y sin punto de oro; y solo una a la vez
+    fun maxPts(other: Int): Int = when {
+        tbNow -> 30
+        other == 3 && !engine.goldenPoint -> 4
+        else -> 3
+    }
+    fun setPtsA(v: Int) {
+        ptsA = v
+        if (!tbNow && ptsB == 4 && (v == 4 || v < 3)) ptsB = 3
+    }
+    fun setPtsB(v: Int) {
+        ptsB = v
+        if (!tbNow && ptsA == 4 && (v == 4 || v < 3)) ptsA = 3
+    }
+
     ScalingLazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().background(PP.Bg).rotaryScroll(listState),
@@ -364,6 +476,17 @@ fun ScorePicker(
                 },
                 color = accent, size = PP.Label
             )
+        }
+        if (showPoints) {
+            item {
+                PPLabel(
+                    if (tbNow) "TIE-BREAK" else (if (es) "PUNTOS" else "POINTS"),
+                    size = PP.Micro, modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            val show: (Int) -> String = { if (tbNow) "$it" else ptsLabels[it.coerceIn(0, 4)] }
+            item { ScoreStepper(engine.nameA, ptsA, maxPts(ptsB), accent, show) { setPtsA(it) } }
+            item { ScoreStepper(engine.nameB, ptsB, maxPts(ptsA), accent, show) { setPtsB(it) } }
         }
         if (showGames) {
             if (type == "all") item { PPLabel(ui.games, size = PP.Micro, modifier = Modifier.padding(top = 4.dp)) }
@@ -382,6 +505,30 @@ fun ScorePicker(
                     // Antes de tocar nada, como un punto: asi "deshacer" vuelve
                     // al marcador de antes de corregirlo
                     engine.saveState()
+                    if (showPoints && (ptsA != initA || ptsB != initB)) {
+                        engine.faultCount = 0
+                        when {
+                            tbNow -> {
+                                engine.tbPtsA = ptsA
+                                engine.tbPtsB = ptsB
+                                // El turno de saque del desempate se cuenta por
+                                // puntos jugados: que cuadre con el tanteo nuevo
+                                engine.tbN = ptsA + ptsB
+                            }
+                            ptsA == 4 || ptsB == 4 -> {
+                                engine.ptsA = 3; engine.ptsB = 3
+                                engine.isDeuce = true
+                                engine.adv = if (ptsA == 4) "A" else "B"
+                                engine.goldenPointActive = false
+                            }
+                            else -> {
+                                engine.ptsA = ptsA; engine.ptsB = ptsB
+                                engine.isDeuce = ptsA == 3 && ptsB == 3
+                                engine.adv = null
+                                engine.goldenPointActive = engine.isDeuce && engine.goldenPoint
+                            }
+                        }
+                    }
                     if (showGames) {
                         engine.gamesA = gamesA
                         engine.gamesB = gamesB
@@ -418,7 +565,14 @@ fun ScorePicker(
  * y la cifra en medio en grande. Crece con la letra del sistema.
  */
 @Composable
-private fun ScoreStepper(name: String, value: Int, max: Int, accent: Color, onChange: (Int) -> Unit) {
+private fun ScoreStepper(
+    name: String,
+    value: Int,
+    max: Int,
+    accent: Color,
+    display: (Int) -> String = { "$it" },
+    onChange: (Int) -> Unit
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)
@@ -430,7 +584,7 @@ private fun ScoreStepper(name: String, value: Int, max: Int, accent: Color, onCh
         Row(verticalAlignment = Alignment.CenterVertically) {
             StepButton("−", enabled = value > 0) { onChange((value - 1).coerceAtLeast(0)) }
             Text(
-                "$value", color = accent, fontSize = 26.sp, fontWeight = FontWeight.Black,
+                display(value), color = accent, fontSize = 26.sp, fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center, modifier = Modifier.widthIn(min = 44.dp)
             )
             StepButton("+", enabled = value < max) { onChange((value + 1).coerceAtMost(max)) }

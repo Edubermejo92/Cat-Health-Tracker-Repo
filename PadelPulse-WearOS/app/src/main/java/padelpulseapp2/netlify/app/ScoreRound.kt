@@ -675,6 +675,17 @@ private fun HealthDial(engine: GameEngine, activity: MainActivity, accent: Color
         At(w, -0.16f, 0.215f, 0.28f) { Stat("🔥 KCAL", PP.TextMuted, szT(0.038f), FontWeight.Bold) }
         At(w, 0.16f, 0.215f, 0.28f) { Stat("🏃 KM", PP.TextMuted, szT(0.038f), FontWeight.Bold) }
 
+        // Media y maximo del partido, si el sensor ha dado lecturas. A esa
+        // altura la esfera aun mide ~0.8 del ancho; FitText encoge si no cabe.
+        if (engine.hrMax > 0) {
+            At(w, 0f, 0.295f, 0.62f) {
+                Stat(
+                    if (es) "MED ${engine.hrAvg} · MÁX ${engine.hrMax}" else "AVG ${engine.hrAvg} · MAX ${engine.hrMax}",
+                    PP.TextDim, szT(0.04f), FontWeight.Bold
+                )
+            }
+        }
+
         // El bloqueo de la deteccion automatica ya no esta aqui: hay un solo
         // interruptor, el 🛡 de arriba del marcador.
     }
