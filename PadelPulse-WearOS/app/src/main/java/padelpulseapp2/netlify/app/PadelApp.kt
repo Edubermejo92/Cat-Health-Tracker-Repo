@@ -71,9 +71,12 @@ fun PadelApp(engine: GameEngine, activity: MainActivity) {
     // fuera.
     var subActive by remember { mutableStateOf<androidx.wear.compose.foundation.lazy.ScalingLazyListState?>(null) }
     val disclosureState = rememberScalingLazyListState()
+    // En el marcador lo dice ScoreScreen (subActive): la lista de Ajustes o de
+    // Sincronizacion si esa es la pagina visible, la de una subpantalla si hay
+    // una abierta, y ninguna en Marcador y Salud, que no tienen scroll.
     val activeState = if (activity.showHealthDisclosure) disclosureState else subActive ?: when (engine.currentScreen) {
         "lang" -> langState
-        "score" -> scoreState
+        "score" -> null
         "history" -> historyState
         "invite" -> inviteState
         "account" -> accountState

@@ -340,38 +340,14 @@ fun ScorePicker(
     // "games", "sets" o "all" (los dos, el que abre la franja del marcador)
     val showGames = type != "sets"
     val showSets = type != "games"
-    val gameOptions = 8
-    val setOptions = 4
-    val gamesA = rememberPickerState(initialNumberOfOptions = gameOptions)
-    val gamesB = rememberPickerState(initialNumberOfOptions = gameOptions)
-    val setsA = rememberPickerState(initialNumberOfOptions = setOptions)
-    val setsB = rememberPickerState(initialNumberOfOptions = setOptions)
-
-    LaunchedEffect(Unit) {
-        gamesA.scrollToOption(engine.gamesA.coerceIn(0, gameOptions - 1))
-        gamesB.scrollToOption(engine.gamesB.coerceIn(0, gameOptions - 1))
-        setsA.scrollToOption(engine.setsA.coerceIn(0, setOptions - 1))
-        setsB.scrollToOption(engine.setsB.coerceIn(0, setOptions - 1))
-    }
-
-    // Los rodillos se hacen mas altos con la letra: asi el numero elegido
-    // siempre se ve entero, lo ponga el usuario tan grande como lo ponga.
-    val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val pickerW = 52.dp * scale
-    val pickerH = 84.dp * scale
-
-    @Composable
-    fun PickerRow(a: PickerState, b: PickerState) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Picker(state = a, modifier = Modifier.size(pickerW, pickerH), contentDescription = engine.nameA) {
-                Text("$it", fontSize = 26.sp, color = if (it == a.selectedOption) accent else PP.TextMuted)
-            }
-            Text("–", color = PP.TextBright, fontSize = 20.sp)
-            Picker(state = b, modifier = Modifier.size(pickerW, pickerH), contentDescription = engine.nameB) {
-                Text("$it", fontSize = 26.sp, color = if (it == b.selectedOption) accent else PP.TextMuted)
-            }
-        }
-    }
+    // Botones − y + de 48 dp en vez de ruedas: con el dedo en plena pista se
+    // aciertan mucho mejor que una rueda pequeña.
+    var gamesA by remember { mutableIntStateOf(engine.gamesA) }
+    var gamesB by remember { mutableIntStateOf(engine.gamesB) }
+    var setsA by remember { mutableIntStateOf(engine.setsA) }
+    var setsB by remember { mutableIntStateOf(engine.setsB) }
+    val maxGames = 7
+    val maxSets = (engine.bestOf / 2 + 1).coerceAtLeast(1)
 
     ScalingLazyColumn(
         state = listState,
@@ -389,20 +365,15 @@ fun ScorePicker(
                 color = accent, size = PP.Label
             )
         }
-        item {
-            Text(
-                "${engine.nameA}  ·  ${engine.nameB}",
-                color = PP.TextDim, fontSize = PP.Micro, fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
         if (showGames) {
-            if (type == "all") item { PPLabel(ui.games, size = PP.Micro) }
-            item { PickerRow(gamesA, gamesB) }
+            if (type == "all") item { PPLabel(ui.games, size = PP.Micro, modifier = Modifier.padding(top = 4.dp)) }
+            item { ScoreStepper(engine.nameA, gamesA, maxGames, accent) { gamesA = it } }
+            item { ScoreStepper(engine.nameB, gamesB, maxGames, accent) { gamesB = it } }
         }
         if (showSets) {
-            if (type == "all") item { PPLabel(ui.sets, size = PP.Micro) }
-            item { PickerRow(setsA, setsB) }
+            if (type == "all") item { PPLabel(ui.sets, size = PP.Micro, modifier = Modifier.padding(top = 4.dp)) }
+            item { ScoreStepper(engine.nameA, setsA, maxSets, accent) { setsA = it } }
+            item { ScoreStepper(engine.nameB, setsB, maxSets, accent) { setsB = it } }
         }
         item {
             PPChip(
@@ -412,12 +383,12 @@ fun ScorePicker(
                     // al marcador de antes de corregirlo
                     engine.saveState()
                     if (showGames) {
-                        engine.gamesA = gamesA.selectedOption
-                        engine.gamesB = gamesB.selectedOption
+                        engine.gamesA = gamesA
+                        engine.gamesB = gamesB
                     }
                     if (showSets) {
-                        engine.setsA = setsA.selectedOption
-                        engine.setsB = setsB.selectedOption
+                        engine.setsA = setsA
+                        engine.setsB = setsB
                         // Sets puestos a mano: sus resultados ya no se saben
                         if (engine.setScores.size != engine.setsA + engine.setsB) engine.setScores = emptyList()
                     }
@@ -427,7 +398,7 @@ fun ScorePicker(
                     activity.onLocalScoreAction("edit")
                     onClose()
                 },
-                modifier = Modifier.fillMaxWidth(0.6f).padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth(0.7f).padding(top = 6.dp),
                 background = accent, content = PP.OnAccent,
                 weight = FontWeight.Black, center = true
             )
@@ -435,9 +406,51 @@ fun ScorePicker(
         item {
             PPChip(
                 if (es) "CANCELAR" else "CANCEL", onClick = onClose,
-                modifier = Modifier.fillMaxWidth(0.6f).padding(top = 2.dp),
+                modifier = Modifier.fillMaxWidth(0.7f).padding(top = 2.dp),
                 content = PP.TextDim, center = true
             )
         }
+    }
+}
+
+/**
+ * Una cifra del marcador con − y + de 48 dp. El nombre de la pareja encima,
+ * y la cifra en medio en grande. Crece con la letra del sistema.
+ */
+@Composable
+private fun ScoreStepper(name: String, value: Int, max: Int, accent: Color, onChange: (Int) -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth(0.94f).padding(vertical = 2.dp)
+    ) {
+        Text(
+            name.uppercase(), color = PP.TextDim, fontSize = PP.Micro,
+            fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StepButton("−", enabled = value > 0) { onChange((value - 1).coerceAtLeast(0)) }
+            Text(
+                "$value", color = accent, fontSize = 26.sp, fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center, modifier = Modifier.widthIn(min = 44.dp)
+            )
+            StepButton("+", enabled = value < max) { onChange((value + 1).coerceAtMost(max)) }
+        }
+    }
+}
+
+@Composable
+private fun StepButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(if (enabled) PP.SurfaceHigh else PP.Surface)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            glyph, color = if (enabled) PP.TextBright else PP.TextMuted,
+            fontSize = iconSp(22.dp), fontWeight = FontWeight.Black
+        )
     }
 }

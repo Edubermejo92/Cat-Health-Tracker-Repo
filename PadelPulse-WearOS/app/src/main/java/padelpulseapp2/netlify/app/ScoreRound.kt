@@ -73,7 +73,7 @@ import kotlin.math.sin
  *   0  marcador   lo unico que hace falta en pista: tocar una mitad suma punto;
  *                 tocar el nombre de una pareja hace que saque ella; debajo del
  *                 tanteo, "−" de cada pareja y la franja de juegos y sets
- *                 (tocar para corregirlos); el logo lleva a Ajustes
+ *                 (tocar para corregirlos); arriba, voz, altavoz y 🛡
  *   1  salud      pulso, calorias y distancia
  *   2  ajustes    partido, equipos, color, sets, juegos, voz e idioma
  *   3  sincronizacion  movil, cuenta e historial
@@ -130,7 +130,6 @@ fun ScorePager(
         initialPage = engine.requestedPage.coerceIn(0, PAGES - 1),
         pageCount = { PAGES }
     )
-    val scope = rememberCoroutineScope()
 
     // Volver al marcador en una pagina concreta (p. ej. desde el Historial,
     // a Sincronizacion)
@@ -156,11 +155,7 @@ fun ScorePager(
         val w = minOf(maxWidth, maxHeight)
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> ScoreDial(
-                    engine, activity, ui, accent, w,
-                    onOpenSettings = { scope.launch { pager.animateScrollToPage(2) } },
-                    onEditScore = { onPicker("all") }
-                )
+                0 -> ScoreDial(engine, activity, ui, accent, w, onEditScore = { onPicker("all") })
                 1 -> HealthDial(engine, activity, accent, w)
                 2 -> SettingsPage(engine, activity, accent, settingsState, onNewMatch, onEditName, onPicker, onLanguage, onInvite)
                 else -> SyncPage(engine, activity, accent, syncState, onHistory)
@@ -189,7 +184,6 @@ private fun ScoreDial(
     ui: UIStrings,
     accent: Color,
     w: Dp,
-    onOpenSettings: () -> Unit,
     onEditScore: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -295,11 +289,11 @@ private fun ScoreDial(
         }
         for (team in listOf("A", "B")) {
             val serves = engine.serving == team
-            At(w, if (team == "A") -0.22f else 0.22f, -0.235f, 0.36f) {
+            At(w, if (team == "A") -0.22f else 0.22f, -0.205f, 0.36f) {
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = w * 0.16f)
+                        .heightIn(min = w * 0.14f)
                         .clip(PP.PillShape)
                         .clickable(onClickLabel = if (es) "Saca esta pareja" else "This team serves") { chooseServe(team) },
                     contentAlignment = Alignment.Center
@@ -307,26 +301,25 @@ private fun ScoreDial(
             }
         }
 
-        // Logo arriba, como la cabecera del movil, con un punto que dice si el
-        // movil esta enlazado. Cabe entre la hora y los nombres: a -0.34 la
-        // esfera mide 0.74 de ancho y el logo solo 0.22.
-        // A los lados del logo, dos botones: a la izquierda el arbitro por voz
-        // (cantas "punto para Edu" y se suma), a la derecha silenciar la voz
-        // que canta los puntos. Cada uno tiene su propia zona para tocar, mas
-        // grande que el circulo que se ve.
+        // Fila de arriba, entre la hora y los nombres: arbitro por voz, voz que
+        // canta los puntos y bloqueo de la deteccion automatica. Cada boton
+        // tiene 48 dp de toque (pauta de calidad de Wear OS) aunque el circulo
+        // que se ve sea menor. Sin logo: no cabia con botones de ese tamaño, y
+        // Ajustes esta a un deslizamiento.
         val voice = activity.voice
         val micOn = voice.on
         val muted = !engine.voiceEnabled
         val micPulse by animateFloatAsState(
             if (voice.state == VoiceReferee.State.PROCESSING) 0.45f else 1f, tween(250), label = "mic"
         )
+        val topTouch = maxOf(48.dp, w * 0.2f)
         @Composable
-        fun TopButton(glyph: String, active: Boolean, activeColor: Color, pulse: Float, onClick: () -> Unit) {
+        fun TopButton(glyph: String, active: Boolean, activeColor: Color, pulse: Float, description: String, onClick: () -> Unit) {
             Box(
                 Modifier
-                    .size(w * 0.12f, w * 0.11f)
+                    .size(topTouch)
                     .clip(CircleShape)
-                    .clickable {
+                    .clickable(onClickLabel = description) {
                         onClick()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
@@ -334,47 +327,29 @@ private fun ScoreDial(
             ) {
                 Box(
                     Modifier
-                        .size(w * 0.065f)
+                        .size(w * 0.125f)
                         .clip(CircleShape)
                         .background(if (active) activeColor.copy(alpha = 0.25f * pulse + 0.1f) else PP.SurfaceHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        glyph, fontSize = sz(0.034f),
+                        glyph, fontSize = sz(0.05f),
                         color = if (active) activeColor else PP.TextMuted,
                         modifier = Modifier.alpha(if (active) pulse else 0.7f)
                     )
                 }
             }
         }
-        At(w, 0f, -0.34f, 0.72f) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TopButton("🎙", micOn, PP.Danger, micPulse) { voice.toggle() }
-                // El logo lleva a Ajustes (tambien se llega deslizando).
-                // 48 dp de alto para el dedo.
-                Row(
-                    Modifier
-                        .heightIn(min = 48.dp)
-                        .clip(PP.PillShape)
-                        .clickable {
-                            onOpenSettings()
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
-                        .padding(horizontal = w * 0.01f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.logo_wordmark),
-                        contentDescription = if (es) "Ajustes" else "Settings",
-                        modifier = Modifier.width(w * 0.22f).aspectRatio(LOGO_RATIO)
-                    )
-                    Spacer(Modifier.width(w * 0.01f))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(w * 0.02f).clip(CircleShape).background(linkColor(engine)))
-                        Text("≡", fontSize = sz(0.04f), color = PP.TextMuted, fontWeight = FontWeight.Bold)
-                    }
-                }
-                TopButton(if (muted) "🔇" else "🔊", muted, PP.Danger, 1f) {
+        // Centros a ±0.22 y -0.335: el borde de cada circulo queda a ~0.04 del
+        // ancho del bisel (unos 9 dp) y por debajo de la hora.
+        At(w, 0f, -0.335f, 0.66f) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TopButton("🎙", micOn, PP.Danger, micPulse, if (es) "Árbitro por voz" else "Voice referee") { voice.toggle() }
+                TopButton(if (muted) "🔇" else "🔊", muted, PP.Danger, 1f, if (es) "Voz del marcador" else "Scoreboard voice") {
                     engine.voiceEnabled = !engine.voiceEnabled
                     engine.persist()
                     // Al silenciar se corta tambien la frase que estuviera sonando
@@ -388,7 +363,10 @@ private fun ScoreDial(
                 val guardOn = WorkoutGuard.enabled
                 val guardFails = WorkoutGuard.state == WorkoutGuard.State.UNSUPPORTED ||
                     WorkoutGuard.state == WorkoutGuard.State.FAILED
-                TopButton(if (guardOn && guardFails) "⚠" else "🛡", guardOn, if (guardFails) PP.Warn else accent, 1f) {
+                TopButton(
+                    if (guardOn && guardFails) "⚠" else "🛡", guardOn, if (guardFails) PP.Warn else accent, 1f,
+                    if (es) "Bloquear detección automática" else "Block auto detection"
+                ) {
                     val on = !WorkoutGuard.enabled
                     WorkoutGuard.setEnabled(activity, on, activity.timerRunning)
                     android.widget.Toast.makeText(
@@ -401,7 +379,6 @@ private fun ScoreDial(
             }
         }
 
-
         // Estado especial del juego, en una pastilla entre nombres y tanteo
         val tbActive = engine.isTb || engine.isSuperTbActive()
         val pill: Pair<String, Color>? = when {
@@ -413,7 +390,7 @@ private fun ScoreDial(
             engine.isTb -> "TIE-BREAK" to PP.Warn
             else -> null
         }
-        if (pill != null) At(w, 0f, -0.16f, 0.5f) { Pill(pill.first, pill.second, szT(0.034f), w) }
+        if (pill != null) At(w, 0f, -0.15f, 0.4f) { Pill(pill.first, pill.second, szT(0.034f), w) }
 
         val strA = engine.getScoreStr("A")
         val strB = engine.getScoreStr("B")
@@ -494,7 +471,7 @@ private fun ScoreDial(
 
         // Por debajo de la fila de control. A esa altura el bisel deja ~0.84
         // del ancho, y FitText encoge la linea si no cabe.
-        At(w, 0f, 0.268f, 0.78f) {
+        At(w, 0f, 0.255f, 0.8f) {
             // Los sets ya jugados (6-4 · 3-6) dicen mas que "SET 2/3"
             val sets = engine.setScores.takeLast(3)
             val phase = when {
@@ -518,6 +495,8 @@ private fun ScoreDial(
                 // El estado del movil no va aqui: lo dice el punto junto al
                 // logo (verde = sincronizado) y el detalle esta en Sincronizacion
                 val status = buildAnnotatedString {
+                    // Punto de sincronizacion: verde = con el movil, gris = solo reloj
+                    withStyle(SpanStyle(color = linkColor(engine))) { append("● ") }
                     append("$phase · " + activity.getTimerDisplay())
                     if (engine.heartRate > 0) withStyle(SpanStyle(color = accent)) { append(" · ♥ ${engine.heartRate}") }
                 }
@@ -530,8 +509,9 @@ private fun ScoreDial(
         // en cuadrado es una franja. El texto va siempre dentro de la zona
         // segura.
         val second = engine.faultCount == 1
-        EdgeBand(
+        SafeBottomButton(
             w = w,
+            touch = maxOf(48.dp, w * 0.2f),
             label = if (second) (if (es) "2º SAQUE" else "2ND SERVE") else ui.fault.uppercase(),
             labelColor = if (second) PP.Warn else PP.TextBright,
             background = if (second) PP.Warn.copy(alpha = 0.20f) else PP.SurfaceHigh,
@@ -720,10 +700,16 @@ private fun BoxScope.At(w: Dp, cx: Float, cy: Float, width: Float, content: @Com
     )
 }
 
-/** Boton a todo lo ancho pegado al borde de abajo. */
+/**
+ * Boton de abajo (FALTA). Centrado y dentro de la zona segura del circulo, sin
+ * tocar el borde: a 0.355 del centro la esfera mide ~0.7 del ancho y la
+ * pastilla solo 0.46, asi que sus extremos redondos no se recortan nunca.
+ * El toque mide [touch] (48 dp como minimo) aunque la pastilla sea mas baja.
+ */
 @Composable
-private fun BoxScope.EdgeBand(
+private fun BoxScope.SafeBottomButton(
     w: Dp,
+    touch: Dp,
     label: String,
     labelColor: Color,
     background: Color,
@@ -731,20 +717,28 @@ private fun BoxScope.EdgeBand(
     labelSize: TextUnit,
     onClick: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .height(w * (1f - BAND_TOP))
-            .background(background)
-            .clickable { onClick() },
-        horizontalAlignment = Alignment.CenterHorizontally
+            .align(Alignment.Center)
+            .offset(y = w * 0.355f)
+            .width(w * 0.46f)
+            .heightIn(min = touch)
+            .clip(PP.PillShape)
+            .clickable(onClickLabel = label) { onClick() },
+        contentAlignment = Alignment.Center
     ) {
-        Box(Modifier.fillMaxWidth().height(1.5.dp).background(line))
-        Spacer(Modifier.height(w * 0.035f))
-        // A esa altura el bisel deja ~0.68 del ancho: el texto se encoge para
-        // caber ahi dentro, sea cual sea la letra del sistema
-        FitText(label, labelColor, labelSize, FontWeight.Black, modifier = Modifier.width(w * 0.62f))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = w * 0.13f)
+                .clip(PP.PillShape)
+                .background(background)
+                .border(1.5.dp, line, PP.PillShape)
+                .padding(horizontal = w * 0.03f),
+            contentAlignment = Alignment.Center
+        ) {
+            FitText(label, labelColor, labelSize, FontWeight.Black, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
