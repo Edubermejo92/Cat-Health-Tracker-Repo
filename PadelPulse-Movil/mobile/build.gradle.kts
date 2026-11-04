@@ -25,8 +25,8 @@ android {
         targetSdk = 36
         // Serie propia del movil. Debe ser DISTINTO al del reloj, que va en la
         // misma serie x10: movil 518, reloj 5180.
-        versionCode = 724
-        versionName = "7.2.4"
+        versionCode = 725
+        versionName = "7.2.5"
     }
 
     signingConfigs {

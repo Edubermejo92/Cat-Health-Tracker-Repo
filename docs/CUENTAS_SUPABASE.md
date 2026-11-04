@@ -443,8 +443,8 @@ Probada el 4-11-2026 con un usuario de prueba creado para ello
 no queda ni el usuario ni sus filas ni sus sesiones, y el mismo token después
 → 401. Para la prueba se instaló `pg_net` y se desinstaló al terminar.
 
-En la app: Sincronización › Cuenta (debajo de «Mis datos») y Ajustes › Más,
-solo con sesión. Pide escribir la palabra de confirmación del idioma
+En la app: tarjeta Cuenta de Ajustes (7.2.5; en la 7.2.4 estaba en
+Sincronización › Cuenta y Ajustes › Más), solo con sesión. Pide escribir la palabra de confirmación del idioma
 (ELIMINAR, DELETE…). Si el servidor dice que sí: avisa al reloj, borra del
 móvil los partidos de esa cuenta, la agenda y el perfil, y cierra sesión. Si
 falla (sin red, sesión caducada, error del servidor), no toca nada y la sesión
