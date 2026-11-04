@@ -6727,20 +6727,28 @@ const HomeView=()=>{
                     <div id="score-A" class="dk-score-num font-black leading-none tracking-tighter"
                     style="font-size:clamp(5rem,22vw,10rem);color:${S.serving==='A'?tc.sa():tc.si()};text-shadow:${S.serving==='A'?'0 0 40px '+tc.glow():'none'}">
                     ${sc.scoreA}</div>
-                    <div class="flex items-center gap-1 mt-1">
-                        ${S.serving==='A'?'<div class="w-2 h-2 rounded-full bg-primary animate-pulse-slow"></div>':''}
-                        <span class="dk-score-name text-[9px] sm:text-xs md:text-xl lg:text-3xl font-bold text-on-surface-variant uppercase tracking-wider truncate max-w-[90px] sm:max-w-[120px] md:max-w-xs">${S.teamA.name}</span>
-                    </div>
+                    <!-- Tocar el nombre elige quien saca, como en el reloj: la pareja
+                         que saca va en verde (el color del tema) con su punto -->
+                    <button onclick="event.stopPropagation();setSaque('A')" class="flex items-center gap-1.5 mt-1 px-3 rounded-full scale-press"
+                        style="min-height:40px;background:${S.serving==='A'?tc.primary()+'1f':'transparent'};border:1px solid ${S.serving==='A'?tc.primary()+'55':'rgba(255,255,255,0.08)'}"
+                        title="${i2('Toca para que saque','Tap to serve')}">
+                        <span class="w-dot" style="margin:0;background:${S.serving==='A'?tc.primary():'#3A3A3A'}"></span>
+                        <span class="dk-score-name text-[9px] sm:text-xs md:text-xl lg:text-3xl font-bold uppercase tracking-wider truncate max-w-[100px] sm:max-w-[130px] md:max-w-xs" style="color:${S.serving==='A'?tc.primary():tc.muted()}">${S.teamA.name}</span>
+                    </button>
                 </div>
                 <div class="dk-score-sep font-thin text-primary/20" style="font-size:clamp(2.5rem,10vw,5rem)">-</div>
                 <div class="flex flex-col items-center" onclick="addPoint('B')" style="cursor:pointer">
                     <div id="score-B" class="dk-score-num font-black leading-none tracking-tighter"
                     style="font-size:clamp(5rem,22vw,10rem);color:${S.serving==='B'?tc.sa():tc.si()};text-shadow:${S.serving==='B'?'0 0 40px '+tc.glow():'none'}">
                     ${sc.scoreB}</div>
-                    <div class="flex items-center gap-1 mt-1">
-                        ${S.serving==='B'?'<div class="w-2 h-2 rounded-full bg-primary animate-pulse-slow"></div>':''}
-                        <span class="dk-score-name text-[9px] sm:text-xs md:text-xl lg:text-3xl font-bold text-on-surface-variant uppercase tracking-wider truncate max-w-[90px] sm:max-w-[120px] md:max-w-xs">${S.teamB.name}</span>
-                    </div>
+                    <!-- Tocar el nombre elige quien saca, como en el reloj: la pareja
+                         que saca va en verde (el color del tema) con su punto -->
+                    <button onclick="event.stopPropagation();setSaque('B')" class="flex items-center gap-1.5 mt-1 px-3 rounded-full scale-press"
+                        style="min-height:40px;background:${S.serving==='B'?tc.primary()+'1f':'transparent'};border:1px solid ${S.serving==='B'?tc.primary()+'55':'rgba(255,255,255,0.08)'}"
+                        title="${i2('Toca para que saque','Tap to serve')}">
+                        <span class="w-dot" style="margin:0;background:${S.serving==='B'?tc.primary():'#3A3A3A'}"></span>
+                        <span class="dk-score-name text-[9px] sm:text-xs md:text-xl lg:text-3xl font-bold uppercase tracking-wider truncate max-w-[100px] sm:max-w-[130px] md:max-w-xs" style="color:${S.serving==='B'?tc.primary():tc.muted()}">${S.teamB.name}</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -6766,34 +6774,34 @@ const HomeView=()=>{
             </div>
             <div class="grid grid-cols-2 gap-2 md:gap-4 lg:gap-4 mb-1.5 md:mb-4 lg:mb-4">
                 <button onclick="removePoint('A')" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-xl md:rounded-2xl flex items-center justify-center gap-1 md:gap-3 scale-press border"
-                    style="background:${tc.surf()};border-color:${tc.error()}40;color:${tc.error()}">
+                    style="min-height:44px;background:${tc.surf()};border-color:${tc.error()}40;color:${tc.error()}">
                     <span class="material-symbols-outlined text-[13px] md:text-[24px]">do_not_disturb_on</span>
                     <span class="text-[8px] md:text-xs lg:text-base font-black uppercase">− ${S.teamA.name}</span>
                 </button>
                 <button onclick="removePoint('B')" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-xl md:rounded-2xl flex items-center justify-center gap-1 md:gap-3 scale-press border"
-                    style="background:${tc.surf()};border-color:${tc.error()}40;color:${tc.error()}">
+                    style="min-height:44px;background:${tc.surf()};border-color:${tc.error()}40;color:${tc.error()}">
                     <span class="material-symbols-outlined text-[13px] md:text-[24px]">do_not_disturb_on</span>
                     <span class="text-[8px] md:text-xs lg:text-base font-black uppercase">− ${S.teamB.name}</span>
                 </button>
             </div>
             <div class="grid grid-cols-5 gap-1.5 md:gap-4 lg:gap-4">
-                <button onclick="undoPoint()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
-                    style="background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
+                <button onclick="undoPoint()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center justify-center gap-0.5 md:gap-1.5 border"
+                    style="min-height:48px;background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
                     <span class="material-symbols-outlined text-[14px] md:text-[20px]">undo</span>${i('undo')}
                 </button>
-                <button onclick="showScoreEditor()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
-                    style="background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
+                <button onclick="showScoreEditor()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center justify-center gap-0.5 md:gap-1.5 border"
+                    style="min-height:48px;background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
                     <span class="material-symbols-outlined text-[14px] md:text-[20px]">edit</span>${i2('Corregir','Fix')}
                 </button>
-                <button onclick="S.currentView='faults';render();" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
-                    style="background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
+                <button onclick="S.currentView='faults';render();" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center justify-center gap-0.5 md:gap-1.5 border"
+                    style="min-height:48px;background:${tc.surf()};border-color:${tc.border()};color:${tc.muted()}">
                     <span class="material-symbols-outlined text-[14px] md:text-[20px]">warning</span>${i('faults')}
                 </button>
-                <button onclick="newMatch()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5 border"
-                    style="background:${tc.surf()};border-color:${tc.primary()}40;color:${tc.primary()}">
+                <button onclick="newMatch()" class="py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center justify-center gap-0.5 md:gap-1.5 border"
+                    style="min-height:48px;background:${tc.surf()};border-color:${tc.primary()}40;color:${tc.primary()}">
                     <span class="material-symbols-outlined text-[14px] md:text-[20px]">add</span>${i('newMatch')}
                 </button>
-                <button onclick="endMatch()" class="bg-error/8 border border-error/20 text-error py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center gap-0.5 md:gap-1.5">
+                <button onclick="endMatch()" class="bg-error/8 border border-error/20 text-error py-1.5 sm:py-2 md:py-4 lg:py-2 xl:py-3 rounded-lg sm:rounded-xl md:rounded-2xl text-[8px] sm:text-[9px] md:text-xs lg:text-sm font-bold uppercase scale-press flex flex-col items-center justify-center gap-0.5 md:gap-1.5" style="min-height:48px">
                     <span class="material-symbols-outlined text-[14px] md:text-[20px]">flag</span>${i('end')}
                 </button>
             </div>
@@ -7303,7 +7311,7 @@ const SettingsView=()=>`
         <div class="flex items-center justify-between pt-2">
             <div><div class="text-sm font-bold text-on-surface">${i('whoServes')}</div><div class="text-[9px] text-on-surface-variant truncate max-w-[120px]">${S.serving==='A'?S.teamA.name:S.teamB.name}</div></div>
             <div class="flex gap-2">
-                ${['A','B'].map(t=>`<button onclick="S.serving='${t}';saveState();PPSync.onLocalAction('serve','${t}');render();" class="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase scale-press truncate max-w-[92px] ${S.serving===t?'bg-primary-container text-on-primary':'bg-surface-container-high text-on-surface-variant'}" title="${S['team'+t].name}">${S['team'+t].name}</button>`).join('')}
+                ${['A','B'].map(t=>`<button onclick="setSaque('${t}')" class="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase scale-press truncate max-w-[92px] ${S.serving===t?'bg-primary-container text-on-primary':'bg-surface-container-high text-on-surface-variant'}" title="${S['team'+t].name}">${S['team'+t].name}</button>`).join('')}
             </div>
         </div>
     </div>
@@ -7416,6 +7424,9 @@ const SettingsView=()=>`
 </div>
 
 ${BottomNav('settings')}`;
+
+/** Quien saca, desde el marcador o desde Ajustes: se guarda y se avisa al reloj. */
+function setSaque(t){ S.serving = t; saveState(); PPSync.onLocalAction('serve', t); render(); }
 
 /** Escapa texto para meterlo en HTML (atributos incluidos). */
 function wEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
