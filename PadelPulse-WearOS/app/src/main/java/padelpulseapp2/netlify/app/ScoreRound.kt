@@ -522,6 +522,46 @@ private fun ScoreDial(
             activity.onLocalScoreAction("fault", engine.serving)
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
+
+        // Aviso de saque: cada vez que cambia quien saca -juego ganado,
+        // tie-break, cambio a mano o cambio que llega del movil- sale un
+        // momento arriba "🎾 SACA" con la pareja, y el reloj vibra. En pista
+        // no siempre se mira el color de los nombres; esto no se pasa por alto.
+        // Va encima de la fila de botones, dentro de la zona segura, y un
+        // toque lo quita antes de tiempo.
+        var lastServe by remember { mutableStateOf(engine.serving) }
+        var serveNotice by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(engine.serving) {
+            if (engine.serving == lastServe) return@LaunchedEffect
+            lastServe = engine.serving
+            serveNotice = engine.serving
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            kotlinx.coroutines.delay(2500)
+            serveNotice = null
+        }
+        val noticeAlpha by animateFloatAsState(if (serveNotice != null) 1f else 0f, tween(220), label = "saque")
+        val noticeTeam = serveNotice ?: lastServe
+        if (noticeAlpha > 0.01f) {
+            At(w, 0f, -0.3f, 0.7f) {
+                Row(
+                    Modifier
+                        .alpha(noticeAlpha)
+                        .fillMaxWidth()
+                        .heightIn(min = maxOf(48.dp, w * 0.17f))
+                        .clip(PP.PillShape)
+                        .background(accent)
+                        .clickable(onClickLabel = if (es) "Cerrar aviso" else "Dismiss") { serveNotice = null }
+                        .padding(horizontal = w * 0.04f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FitText(
+                        "🎾 ${v.serves.uppercase()} · ${engine.getName(noticeTeam).uppercase()}",
+                        PP.OnAccent, szT(0.05f), FontWeight.Black
+                    )
+                }
+            }
+        }
     }
 }
 

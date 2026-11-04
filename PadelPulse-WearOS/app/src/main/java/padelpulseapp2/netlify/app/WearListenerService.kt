@@ -58,6 +58,12 @@ class WearListenerService : WearableListenerService() {
         if (path == SyncProtocol.PATH_ACCOUNT) {
             WatchAccount.applyFromPhone(applicationContext, obj)
             MainActivity.instance?.onAccountChanged()
+            // Cuenta eliminada desde el movil: el signout ya cerro la sesion y
+            // borro el historial sincronizado; solo falta decirlo.
+            if (obj.optString("action") == "signout" && obj.optString("reason") == "deleted") {
+                val es = (MainActivity.gameEngine?.lang ?: "es") == "es"
+                MainActivity.instance?.toast(if (es) "Cuenta eliminada" else "Account deleted")
+            }
             return
         }
         // El historial igual: se guarda aunque la app este cerrada
@@ -109,7 +115,13 @@ class WearListenerService : WearableListenerService() {
         // que el nuestro. Asi puntua quien quiera desde donde quiera.
         val remoteRev = if (state.has(SyncProtocol.FIELD_REV))
             state.optInt(SyncProtocol.FIELD_REV) else null
-        if (!engine.acceptRemoteRev(remoteRev)) return
+        if (!engine.acceptRemoteRev(remoteRev)) {
+            // El del movil es mas viejo que el nuestro: le contestamos con el
+            // nuestro para que se ponga al dia. Sin esto, el movil se quedaba
+            // con un marcador antiguo hasta el siguiente punto del reloj.
+            MainActivity.instance?.pushStateToPhone()
+            return
+        }
 
         PhoneLink.applyingRemote = true
         try {

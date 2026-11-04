@@ -412,3 +412,40 @@ Con el correo integrado de Supabase estos correos salen con remitente de
 Supabase y **con el límite de envíos por hora**. Al conectar un SMTP propio
 (Authentication › Emails › SMTP Settings) puedes poner tu propio remitente,
 que es lo que hace que el correo no parezca de un tercero.
+
+## Eliminar la cuenta (Edge Function `delete-account`)
+
+Google Play exige que quien crea una cuenta en la app pueda borrarla desde la
+propia app. El cliente no puede borrar de `auth.users` con la clave
+publicable, así que lo hace la Edge Function `delete-account`
+(`supabase/functions/delete-account/index.ts`), desplegada en el proyecto
+PadelPulse Live con `verify_jwt = false`: la comprobación automática de la
+plataforma no sirve con las claves nuevas `sb_publishable_`/`sb_secret_`, así
+que el token se verifica en el propio código.
+
+- Petición: `POST /functions/v1/delete-account` con
+  `Authorization: Bearer <access_token>`, `apikey: <publicable>` y
+  `{"confirm": true}`.
+- Verifica el token con `auth.getUser(token)` (firma, caducidad y que el
+  usuario exista).
+- Con la clave secreta (solo en el entorno de la función) borra las filas del
+  usuario en `matches`, `players`, `settings` y `profiles`, y después el
+  usuario con `auth.admin.deleteUser`. Las cuatro tablas tienen además
+  `ON DELETE CASCADE` hacia `auth.users`; las tablas internas de Auth
+  (sesiones, identidades…) también caen en cascada. No hay ficheros en Storage.
+- Respuestas: `200 {ok:true, deleted:{matches,players,settings,profiles}}`;
+  `401 no_token | invalid_token`; `400 no_confirm`; `405`; `500 config |
+  db_error | auth_error`.
+
+Probada el 4-11-2026 con un usuario de prueba creado para ello
+(`borrado-prueba-…@padelpulse.test`), nunca con cuentas reales: sin token →
+401, token falso → 401, sin confirmar → 400 sin borrar nada, borrado → 200 y
+no queda ni el usuario ni sus filas ni sus sesiones, y el mismo token después
+→ 401. Para la prueba se instaló `pg_net` y se desinstaló al terminar.
+
+En la app: Sincronización › Cuenta (debajo de «Mis datos») y Ajustes › Más,
+solo con sesión. Pide escribir la palabra de confirmación del idioma
+(ELIMINAR, DELETE…). Si el servidor dice que sí: avisa al reloj, borra del
+móvil los partidos de esa cuenta, la agenda y el perfil, y cierra sesión. Si
+falla (sin red, sesión caducada, error del servidor), no toca nada y la sesión
+sigue abierta.

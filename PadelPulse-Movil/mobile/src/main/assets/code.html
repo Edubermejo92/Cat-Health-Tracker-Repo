@@ -812,7 +812,9 @@ const PPSync = {
                 if(this.protoMismatch){
                     showToast('⚠️ Actualiza la app del reloj: protocolo v'+this.watchProto+' vs v'+PP_PROTO, 4000, true);
                 }
-                if(this.paired) this.sendSettings();
+                // Reloj que acaba de abrir PadelPulse: ajustes y marcador en el
+                // acto, sin esperar al siguiente punto
+                if(this.paired){ this.sendSettings(); this.pushNow(); }
                 render();
                 break;
 
@@ -828,6 +830,11 @@ const PPSync = {
                 // aunque el marcador que acompañe sea viejo.
                 if(st.health) this.applyHealth(st.health);
                 if(this.acceptRemoteRev(st.rev)) this.applyState(st);
+                // Si el del reloj es mas viejo que el nuestro, le contestamos
+                // con el nuestro: si no, el reloj se quedaba atras hasta el
+                // siguiente punto del movil (o para siempre, si su revision
+                // era menor tras reabrir la app).
+                else if(this.paired) this.pushNow();
                 break;
             }
 
@@ -2483,6 +2490,9 @@ function newMatch(){
             if(typeof Auth!=='undefined') Auth.backupMatch();
         }
         const ns=defaultState();
+        // La revision nunca vuelve atras: con 0 el reloj ignoraba la partida
+        // nueva (y todos los puntos siguientes) porque la suya era mayor
+        ns.syncRev = (S.syncRev|0) + 1;
         // Preservar configuración del partido
         ns.lang=S.lang||'es';
         ns.theme=S.theme||'neon';
@@ -2510,6 +2520,7 @@ function newMatch(){
 function resetMatch(){
     showConfirmModal(i('resetQ'),i('resetSub'),i('reset'),()=>{
         const ns=defaultState();
+        ns.syncRev = (S.syncRev|0) + 1;
         ns.lang=S.lang||'es'; ns.theme=S.theme||'neon';
         ['teamA','teamB'].forEach(t=>{ ns[t].name=S[t].name||i('team'+t); ns[t].playerA=S[t].playerA||''; ns[t].playerB=S[t].playerB||''; });
         ns.soundEnabled=S.soundEnabled; ns.voiceMuted=!!S.voiceMuted; ns.brightness=S.brightness; ns.goldenPoint=S.goldenPoint; ns.bestOf=S.bestOf||3;
@@ -6482,7 +6493,9 @@ function startNewMatch(){
     // vez con los mismos, y volver a teclear cuatro nombres cada vez sobra.
     const eqA={name:S.teamA.name, playerA:S.teamA.playerA, playerB:S.teamA.playerB};
     const eqB={name:S.teamB.name, playerA:S.teamB.playerA, playerB:S.teamB.playerB};
+    const rev=(S.syncRev|0)+1;
     S=defaultState();
+    S.syncRev=rev;
     S.lang=lang; S.theme=theme; S.bestOf=bo;
     Object.assign(S.teamA, eqA);
     Object.assign(S.teamB, eqB);
@@ -7270,6 +7283,7 @@ ${wHeader(i('settings'))}
     ${wSec(i2('Más','More'))}
     ${wRow({icon:'share', title:i2('Invita a un amigo','Invite a friend'), sub:i2('Enlace de la ficha de Play, con el logo','Play listing link, with the logo'), onclick:'inviteFriends()'})}
     ${wRow({icon:'lock', title:i2('Política de privacidad','Privacy policy'), sub:i2('Qué datos usa la app (pulso del reloj incluido)','What data the app uses (watch heart rate included)'), onclick:'openPrivacyPolicy()'})}
+    ${filaEliminarCuenta()}
     ${wRow({icon:'delete_sweep', title:i2('Limpiar estado','Clear state'), sub:i2('Solo si el marcador se queda bloqueado','Only if the scoreboard gets stuck'), danger:true,
         onclick:"if(confirm('"+i2('¿Limpiar TODO el estado guardado? Útil si el marcador está bloqueado.','Clear ALL saved state? Useful if the scoreboard is stuck.')+"')){localStorage.removeItem('pp_state_v4');localStorage.removeItem('pp_state_v3');location.reload();}"})}
 
@@ -7336,7 +7350,8 @@ const SyncView=()=>{
         </div>
         ${wRow({icon:'favorite', title:Contacts.partner()?Contacts.partner().name:i2('Elegir mi pareja de pádel','Choose my padel partner'),
                 sub:Contacts.partner()?i2('Tu pareja · toca para cambiarla','Your partner · tap to change'):null,
-                onclick:"S.currentView='history';setHistTab('friends');"})}` : `
+                onclick:"S.currentView='history';setHistTab('friends');"})}
+        ${filaEliminarCuenta()}` : `
         <div class="w-card w-s" style="margin:0;font-size:12px">
             ${i2('Estás jugando sin cuenta. Con una cuenta el historial se guarda en la nube, lo recuperas en cualquier móvil y el reloj lo recibe solo.',
                  'You are playing without an account. With one, your history is saved in the cloud, follows you to any phone and reaches the watch by itself.')}
@@ -7364,6 +7379,210 @@ ${wHeader(i2('Sincronización','Sync'))}
 </div>
 ${BottomNav('sync')}`;
 };
+
+// ═══════════════════════════════════════════
+// ELIMINAR CUENTA
+// Lo exige Google Play: quien crea una cuenta en la app tiene que poder
+// borrarla desde la propia app. El borrado lo hace la Edge Function
+// delete-account (supabase/functions/delete-account): el movil solo manda
+// su token de sesion; la clave que puede borrar usuarios vive en el
+// servidor y la app nunca la ve.
+// ═══════════════════════════════════════════
+var BORRAR_TXT = {
+    es:{ word:'ELIMINAR', btn:'Eliminar cuenta', sub:'Borra tu cuenta y todos tus datos de la nube', title:'¿Eliminar tu cuenta?',
+         body:'Se borrarán tu cuenta y todos tus datos en la nube: historial de partidos, datos de salud, ajustes, perfil y agenda. Esta acción no se puede deshacer.',
+         watch:'El reloj también cerrará la sesión y borrará el historial sincronizado.', type:'Escribe {w} para confirmar',
+         cancel:'Cancelar', ok:'Eliminar', working:'Eliminando…', done:'Cuenta eliminada',
+         errNet:'Sin conexión. Tu cuenta no se ha borrado: inténtalo de nuevo con internet.',
+         errSession:'Tu sesión ha caducado. Vuelve a entrar e inténtalo de nuevo.',
+         errServer:'No se ha podido borrar la cuenta. Tu sesión sigue abierta: inténtalo más tarde.' },
+    en:{ word:'DELETE', btn:'Delete account', sub:'Deletes your account and all your cloud data', title:'Delete your account?',
+         body:'Your account and all your data in the cloud will be deleted: match history, health data, settings, profile and contacts. This cannot be undone.',
+         watch:'Your watch will also sign out and delete the synced history.', type:'Type {w} to confirm',
+         cancel:'Cancel', ok:'Delete', working:'Deleting…', done:'Account deleted',
+         errNet:'No connection. Your account was not deleted: try again when you are online.',
+         errSession:'Your session has expired. Sign in again and retry.',
+         errServer:'The account could not be deleted. You are still signed in: try again later.' },
+    it:{ word:'ELIMINA', btn:'Elimina account', sub:'Elimina il tuo account e tutti i tuoi dati nel cloud', title:'Eliminare il tuo account?',
+         body:'Verranno eliminati il tuo account e tutti i tuoi dati nel cloud: cronologia delle partite, dati sulla salute, impostazioni, profilo e rubrica. Questa azione non può essere annullata.',
+         watch:'Anche l’orologio chiuderà la sessione ed eliminerà la cronologia sincronizzata.', type:'Scrivi {w} per confermare',
+         cancel:'Annulla', ok:'Elimina', working:'Eliminazione…', done:'Account eliminato',
+         errNet:'Nessuna connessione. Il tuo account non è stato eliminato: riprova con internet.',
+         errSession:'La sessione è scaduta. Accedi di nuovo e riprova.',
+         errServer:'Impossibile eliminare l’account. Sei ancora connesso: riprova più tardi.' },
+    fr:{ word:'SUPPRIMER', btn:'Supprimer le compte', sub:'Supprime ton compte et toutes tes données dans le cloud', title:'Supprimer ton compte ?',
+         body:'Ton compte et toutes tes données dans le cloud seront supprimés : historique des matchs, données de santé, réglages, profil et carnet de joueurs. Cette action est irréversible.',
+         watch:'La montre fermera aussi la session et supprimera l’historique synchronisé.', type:'Écris {w} pour confirmer',
+         cancel:'Annuler', ok:'Supprimer', working:'Suppression…', done:'Compte supprimé',
+         errNet:'Pas de connexion. Ton compte n’a pas été supprimé : réessaie avec internet.',
+         errSession:'Ta session a expiré. Reconnecte-toi et réessaie.',
+         errServer:'Impossible de supprimer le compte. Tu es toujours connecté : réessaie plus tard.' },
+    de:{ word:'LÖSCHEN', btn:'Konto löschen', sub:'Löscht dein Konto und alle deine Cloud-Daten', title:'Konto löschen?',
+         body:'Dein Konto und alle deine Daten in der Cloud werden gelöscht: Spielverlauf, Gesundheitsdaten, Einstellungen, Profil und Kontakte. Das kann nicht rückgängig gemacht werden.',
+         watch:'Auch die Uhr meldet sich ab und löscht den synchronisierten Verlauf.', type:'Gib {w} ein, um zu bestätigen',
+         cancel:'Abbrechen', ok:'Löschen', working:'Wird gelöscht…', done:'Konto gelöscht',
+         errNet:'Keine Verbindung. Dein Konto wurde nicht gelöscht: versuche es mit Internet erneut.',
+         errSession:'Deine Sitzung ist abgelaufen. Melde dich erneut an und versuche es noch einmal.',
+         errServer:'Das Konto konnte nicht gelöscht werden. Du bist weiterhin angemeldet: versuche es später erneut.' },
+    fi:{ word:'POISTA', btn:'Poista tili', sub:'Poistaa tilisi ja kaikki pilvitietosi', title:'Poistetaanko tilisi?',
+         body:'Tilisi ja kaikki tietosi pilvessä poistetaan: otteluhistoria, terveystiedot, asetukset, profiili ja pelaajaluettelo. Toimintoa ei voi perua.',
+         watch:'Myös kello kirjautuu ulos ja poistaa synkronoidun historian.', type:'Vahvista kirjoittamalla {w}',
+         cancel:'Peruuta', ok:'Poista', working:'Poistetaan…', done:'Tili poistettu',
+         errNet:'Ei yhteyttä. Tiliäsi ei poistettu: yritä uudelleen, kun olet verkossa.',
+         errSession:'Istuntosi on vanhentunut. Kirjaudu uudelleen ja yritä uudestaan.',
+         errServer:'Tiliä ei voitu poistaa. Olet yhä kirjautuneena: yritä myöhemmin uudelleen.' },
+    zh:{ word:'删除', btn:'删除账户', sub:'删除你的账户及云端所有数据', title:'删除你的账户？',
+         body:'你的账户及云端所有数据都将被删除：比赛记录、健康数据、设置、个人资料和球友名单。此操作无法撤销。',
+         watch:'手表也会退出登录并删除已同步的记录。', type:'输入 {w} 以确认',
+         cancel:'取消', ok:'删除', working:'正在删除…', done:'账户已删除',
+         errNet:'没有网络连接。账户未被删除，请联网后重试。',
+         errSession:'登录已过期。请重新登录后再试。',
+         errServer:'无法删除账户。你仍处于登录状态，请稍后再试。' },
+    ja:{ word:'削除', btn:'アカウントを削除', sub:'アカウントとクラウド上のすべてのデータを削除します', title:'アカウントを削除しますか？',
+         body:'アカウントとクラウド上のすべてのデータ（試合履歴、健康データ、設定、プロフィール、プレーヤー名簿）が削除されます。この操作は元に戻せません。',
+         watch:'ウォッチもサインアウトし、同期された履歴を削除します。', type:'確認のため {w} と入力してください',
+         cancel:'キャンセル', ok:'削除', working:'削除中…', done:'アカウントを削除しました',
+         errNet:'接続がありません。アカウントは削除されていません。オンラインで再試行してください。',
+         errSession:'セッションの有効期限が切れました。もう一度ログインしてやり直してください。',
+         errServer:'アカウントを削除できませんでした。ログインしたままです。後でもう一度お試しください。' },
+    ar:{ word:'حذف', btn:'حذف الحساب', sub:'يحذف حسابك وجميع بياناتك في السحابة', title:'هل تريد حذف حسابك؟',
+         body:'سيتم حذف حسابك وجميع بياناتك في السحابة: سجل المباريات وبيانات الصحة والإعدادات والملف الشخصي وقائمة اللاعبين. لا يمكن التراجع عن هذا الإجراء.',
+         watch:'ستسجّل الساعة الخروج أيضًا وتحذف السجل المتزامن.', type:'اكتب {w} للتأكيد',
+         cancel:'إلغاء', ok:'حذف', working:'جارٍ الحذف…', done:'تم حذف الحساب',
+         errNet:'لا يوجد اتصال. لم يتم حذف حسابك: حاول مرة أخرى عند الاتصال بالإنترنت.',
+         errSession:'انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى وأعد المحاولة.',
+         errServer:'تعذّر حذف الحساب. ما زلت مسجّل الدخول: حاول لاحقًا.' },
+    nl:{ word:'VERWIJDEREN', btn:'Account verwijderen', sub:'Verwijdert je account en al je cloudgegevens', title:'Je account verwijderen?',
+         body:'Je account en al je gegevens in de cloud worden verwijderd: wedstrijdgeschiedenis, gezondheidsgegevens, instellingen, profiel en spelerslijst. Dit kan niet ongedaan worden gemaakt.',
+         watch:'Ook het horloge meldt zich af en verwijdert de gesynchroniseerde geschiedenis.', type:'Typ {w} om te bevestigen',
+         cancel:'Annuleren', ok:'Verwijderen', working:'Bezig met verwijderen…', done:'Account verwijderd',
+         errNet:'Geen verbinding. Je account is niet verwijderd: probeer het opnieuw met internet.',
+         errSession:'Je sessie is verlopen. Log opnieuw in en probeer het nog eens.',
+         errServer:'Het account kon niet worden verwijderd. Je bent nog ingelogd: probeer het later opnieuw.' },
+    sv:{ word:'RADERA', btn:'Radera konto', sub:'Raderar ditt konto och all din data i molnet', title:'Radera ditt konto?',
+         body:'Ditt konto och all din data i molnet raderas: matchhistorik, hälsodata, inställningar, profil och spelarlista. Det går inte att ångra.',
+         watch:'Klockan loggar också ut och raderar den synkade historiken.', type:'Skriv {w} för att bekräfta',
+         cancel:'Avbryt', ok:'Radera', working:'Raderar…', done:'Kontot har raderats',
+         errNet:'Ingen anslutning. Ditt konto raderades inte: försök igen med internet.',
+         errSession:'Din session har gått ut. Logga in igen och försök på nytt.',
+         errServer:'Kontot kunde inte raderas. Du är fortfarande inloggad: försök igen senare.' },
+    ru:{ word:'УДАЛИТЬ', btn:'Удалить аккаунт', sub:'Удаляет аккаунт и все ваши данные в облаке', title:'Удалить аккаунт?',
+         body:'Будут удалены ваш аккаунт и все данные в облаке: история матчей, данные о здоровье, настройки, профиль и список игроков. Это действие нельзя отменить.',
+         watch:'Часы тоже выйдут из аккаунта и удалят синхронизированную историю.', type:'Введите {w} для подтверждения',
+         cancel:'Отмена', ok:'Удалить', working:'Удаление…', done:'Аккаунт удалён',
+         errNet:'Нет подключения. Аккаунт не удалён: повторите попытку, когда будет интернет.',
+         errSession:'Сеанс истёк. Войдите снова и повторите попытку.',
+         errServer:'Не удалось удалить аккаунт. Вы по-прежнему в системе: повторите позже.' }
+};
+function bt(k){ const t = BORRAR_TXT[S.lang] || BORRAR_TXT.en; return t[k] || BORRAR_TXT.en[k]; }
+
+/** La fila roja de "Eliminar cuenta". Solo con sesion iniciada. */
+function filaEliminarCuenta(){
+    if(typeof Auth==='undefined' || !Auth.isIn) return '';
+    return wRow({icon:'delete', title:bt('btn'), sub:bt('sub'), danger:true, onclick:'showDeleteAccount()'});
+}
+
+/** Lo que se teclea para confirmar: sin espacios y sin distinguir mayusculas. */
+function palabraConfirma(v){
+    const norm = (s) => String(s||'').trim().replace(/\s+/g,'').toLocaleUpperCase();
+    return norm(v) === norm(bt('word'));
+}
+
+function showDeleteAccount(){
+    const old = document.getElementById('delete-account');
+    if(old) old.remove();
+    const err = tc.error();
+    const el = document.createElement('div');
+    el.id = 'delete-account';
+    el.style.cssText = 'position:fixed;inset:0;z-index:220;display:flex;align-items:flex-end;background:rgba(0,0,0,0.75);';
+    el.onclick = (e) => { if(e.target===el && !_borrando) el.remove(); };
+    el.innerHTML = `
+        <div class="slide-up w-full max-w-md mx-auto" role="dialog" aria-modal="true" aria-labelledby="del-title"
+             style="background:${tc.surf2()};border-radius:28px 28px 0 0;padding:22px 18px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+                <span class="w-ico" style="color:${err};background:${err}22"><span class="material-symbols-outlined">delete</span></span>
+                <span id="del-title" class="w-t" style="font-size:17px;white-space:normal">${bt('title')}</span>
+            </div>
+            <div class="w-s" style="font-size:13px;color:${tc.text()}">${bt('body')}</div>
+            <div class="w-s" style="font-size:12px">${bt('watch')}</div>
+            <div class="w-s" style="font-size:12px;font-weight:800;margin-top:4px">${bt('type').replace('{w}', '<b style="color:'+err+'">'+bt('word')+'</b>')}</div>
+            <input id="del-word" class="w-input" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                   aria-label="${wEsc(bt('type').replace('{w}', bt('word')))}"
+                   oninput="document.getElementById('del-ok').disabled=!palabraConfirma(this.value);document.getElementById('del-ok').style.opacity=palabraConfirma(this.value)?1:.4">
+            <div id="del-msg" class="w-s" role="alert" style="display:none;font-size:12px;color:${err};font-weight:700"></div>
+            <div class="w-grid2" style="margin-top:4px">
+                <button id="del-cancel" onclick="if(!_borrando) document.getElementById('delete-account').remove()" class="w-btn ghost">${bt('cancel')}</button>
+                <button id="del-ok" disabled onclick="confirmarBorrado()" class="w-btn" style="background:${err};color:#fff;opacity:.4">${bt('ok')}</button>
+            </div>
+        </div>`;
+    document.body.appendChild(el);
+    setTimeout(()=>{ const i = document.getElementById('del-word'); if(i) i.focus(); }, 100);
+}
+
+var _borrando = false;
+
+async function confirmarBorrado(){
+    const w = document.getElementById('del-word');
+    if(_borrando || !w || !palabraConfirma(w.value)) return;
+    const ok = document.getElementById('del-ok'), cancel = document.getElementById('del-cancel'), msg = document.getElementById('del-msg');
+    const enseña = (texto) => { msg.textContent = texto; msg.style.display = 'block'; };
+    _borrando = true;
+    ok.disabled = true; cancel.disabled = true; ok.textContent = bt('working'); msg.style.display = 'none';
+    try{
+        await borrarCuenta();
+        _borrando = false;
+        const d = document.getElementById('delete-account'); if(d) d.remove();
+        showToast(bt('done'), 3000);
+    }catch(e){
+        _borrando = false;
+        const code = (e && e.code) || '';
+        enseña(code==='network' ? bt('errNet') : (code==='invalid_token' || code==='no_token') ? bt('errSession') : bt('errServer'));
+        ok.textContent = bt('ok'); ok.disabled = false; cancel.disabled = false;
+    }
+}
+
+/**
+ * Pide al servidor que borre la cuenta y, solo si dice que si, limpia el
+ * movil y avisa al reloj. Si algo falla lanza un error con .code y la sesion
+ * sigue abierta: nada local se toca hasta tener la confirmacion.
+ */
+async function borrarCuenta(){
+    const fallo = (code) => { const e = new Error(code); e.code = code; return e; };
+    if(typeof Auth==='undefined' || !Auth.isIn || !Auth.session) throw fallo('no_token');
+    if(typeof navigator!=='undefined' && navigator.onLine === false) throw fallo('network');
+    await Auth.refreshIfNeeded();
+    if(!Auth.session) throw fallo('invalid_token');
+
+    let res, data = null;
+    try{
+        res = await fetch(SUPA_URL + '/functions/v1/delete-account', {
+            method:'POST',
+            headers:{ 'apikey':SUPA_KEY, 'Authorization':'Bearer ' + Auth.session.access_token, 'Content-Type':'application/json' },
+            body: JSON.stringify({ confirm:true })
+        });
+    }catch(e){ throw fallo('network'); }
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok || !data || data.ok !== true) throw fallo((data && data.error) || ('http_' + res.status));
+
+    // Borrado en el servidor: ahora el movil y el reloj.
+    const uid = Auth.user && Auth.user.id;
+    // El reloj cierra la sesion y borra el historial sincronizado. "signout"
+    // lo entienden tambien los relojes con versiones anteriores; "reason"
+    // solo sirve para que el 7.2.4 diga que la cuenta se elimino.
+    try{ if(PPSync.paired) PPSync.send(PP_PATH.account, { action:'signout', reason:'deleted' }); }catch(e){}
+    // Los partidos de esta cuenta, subidos o no: la cuenta ya no existe
+    try{ if(uid) setAllMatchRecords(getAllMatchRecords().filter(m => m.owner !== uid)); }catch(e){}
+    try{
+        if(typeof Contacts!=='undefined'){
+            Contacts.list = [];
+            Contacts.me = { name:'', phone:'', club:'' };
+            Contacts.persist();
+        }
+    }catch(e){}
+    try{ localStorage.removeItem('pp_settings_synced'); }catch(e){}
+    Auth.signOut(true);
+    return data;
+}
 
 // ═══════════════════════════════════════════
 // RENDER

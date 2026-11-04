@@ -92,8 +92,11 @@ dependencies {
     implementation("androidx.wear:wear-remote-interactions:1.0.0")
     // Tile del marcador (carrusel de tiles): el partido de un vistazo sin
     // abrir la app. protolayout es con lo que se dibuja el tile.
-    implementation("androidx.wear.tiles:tiles:1.4.1")
-    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+    // tiles 1.5.0+ arregla la SecurityException al pedir que se refresque el
+    // tile con targetSdk > 34; 1.6.2 y protolayout 1.4.2 son la pareja estable
+    // que publica Google junta (piden compileSdk 35+ y minSdk 23+).
+    implementation("androidx.wear.tiles:tiles:1.6.2")
+    implementation("androidx.wear.protolayout:protolayout:1.4.2")
     // Modo ambiente: con la muñeca bajada el marcador sigue en pantalla en
     // version de bajo consumo, en vez de volver a la esfera
     implementation("androidx.wear:wear:1.3.0")

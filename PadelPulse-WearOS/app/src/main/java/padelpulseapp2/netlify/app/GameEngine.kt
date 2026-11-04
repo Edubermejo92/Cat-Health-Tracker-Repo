@@ -114,6 +114,15 @@ class GameEngine(context: Context? = null) {
     var over by mutableStateOf(false)
     var serving by mutableStateOf("A")
 
+    /**
+     * Revision del marcador. Sube en cada cambio hecho aqui y viaja con el
+     * estado: si el movil y el reloj puntuan casi a la vez, gana el que traiga
+     * la revision mas alta. Va antes del init: se lee al cargar el partido
+     * guardado, y una propiedad declarada despues aun no existiria.
+     */
+    var syncRev by mutableIntStateOf(0)
+        private set
+
     var tbSrv by mutableStateOf("A")
     var tbN by mutableIntStateOf(0)
     var winner by mutableStateOf<String?>(null)
@@ -639,14 +648,6 @@ class GameEngine(context: Context? = null) {
     }
 
 
-    /**
-     * Revision del marcador. Sube en cada cambio hecho aqui y viaja con el
-     * estado: si el movil y el reloj puntuan casi a la vez, gana el que traiga
-     * la revision mas alta.
-     */
-    var syncRev by mutableIntStateOf(0)
-        private set
-
     fun bumpRev() { syncRev += 1 }
 
     /**
@@ -897,6 +898,9 @@ class GameEngine(context: Context? = null) {
 
     private fun toJSON(): String {
         val obj = JSONObject()
+        // La revision va con el partido: si volviera a 0 al reabrir la app,
+        // el movil (con la suya mas alta) ignoraria los puntos del reloj
+        obj.put("syncRev", syncRev)
         obj.put("ptsA", ptsA)
         obj.put("ptsB", ptsB)
         obj.put("gamesA", gamesA)
@@ -933,6 +937,7 @@ class GameEngine(context: Context? = null) {
     private fun fromJSON(json: String) {
         try {
             val obj = JSONObject(json)
+            syncRev = maxOf(syncRev, obj.optInt("syncRev", 0))
             ptsA = obj.optInt("ptsA", 0)
             ptsB = obj.optInt("ptsB", 0)
             gamesA = obj.optInt("gamesA", 0)

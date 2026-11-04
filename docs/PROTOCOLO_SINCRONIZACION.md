@@ -55,6 +55,22 @@ dos marcadores quedarían diferentes para siempre.
 Tras aplicar un estado remoto, el aparato **adopta la revisión recibida**, de
 forma que los dos siguen contando desde el mismo número.
 
+**La revisión nunca vuelve atrás** (desde la 7.2.4):
+
+- En el móvil, *Nueva partida*, *Reiniciar* y el arranque de partida conservan
+  la revisión y le suman 1. Antes volvía a 0: el reloj ignoraba la partida
+  nueva y todos los puntos siguientes, y el móvil acababa volviendo a la
+  partida vieja cuando el reloj mandaba su estado.
+- En el reloj, la revisión se guarda con el partido (`syncRev` en
+  `padel_prefs`) y sobrevive a cerrar la app.
+
+**Quien recibe un estado más viejo contesta con el suyo** (desde la 7.2.4): en
+vez de callarse, manda su estado entero. Así un aparato atrasado se pone al día
+en el acto. No hay bucle: el que recibe el más nuevo lo acepta y no contesta.
+
+**Al recibir `hello` del reloj, el móvil le manda su estado** (desde la 7.2.4):
+un reloj recién abierto se pone al día sin esperar al siguiente punto.
+
 ### Por qué se manda el estado entero
 
 Se difunde el marcador completo y no la acción suelta. Por Bluetooth se
@@ -264,6 +280,17 @@ Al cerrar sesión en el móvil (el reloj borra también el historial de la cuent
 ```json
 { "v": 3, "src": "phone", "seq": 43, "action": "signout" }
 ```
+
+Al **eliminar la cuenta** desde el móvil (7.2.4) va el mismo `signout` con
+`reason`. Un reloj antiguo lo trata como un cierre de sesión normal (cierra y
+borra el historial de la cuenta); el 7.2.4 además enseña «Cuenta eliminada»:
+
+```json
+{ "v": 3, "src": "phone", "seq": 44, "action": "signout", "reason": "deleted" }
+```
+
+Si el reloj no está conectado en ese momento, se entera al volver: al
+conectarse, el móvil (ya sin sesión) le manda `signout`.
 
 Junto con `/padel/history`, es la única ruta que el reloj procesa **aunque
 su app esté cerrada**: el servicio guarda la sesión igual, para que ya esté
