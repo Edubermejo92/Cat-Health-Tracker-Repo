@@ -29,11 +29,14 @@ object WearLink {
      * dice si al otro lado hay con quien hablar.
      */
     @Volatile var appOnWatch: Boolean? = null
+        private set
 
     /** Se avisa a la capa JS cuando se sabe si la app esta en el reloj. */
     var onWatchApp: ((Boolean?) -> Unit)? = null
 
-    fun setAppOnWatch(value: Boolean?) {
+    // No puede llamarse setAppOnWatch: chocaria con el setter que Kotlin genera
+    // para la propiedad (misma firma en la JVM) y el modulo no compila.
+    fun updateAppOnWatch(value: Boolean?) {
         if (value == appOnWatch) return
         appOnWatch = value
         onWatchApp?.invoke(value)
@@ -91,7 +94,7 @@ object WearLink {
                             Wearable.getCapabilityClient(context)
                                 .getCapability(CAPABILITY_WATCH, CapabilityClient.FILTER_REACHABLE)
                         )
-                        setAppOnWatch(cap.nodes.isNotEmpty() || appOnWatch == true)
+                        updateAppOnWatch(cap.nodes.isNotEmpty() || appOnWatch == true)
                     }
                 }
             }.onFailure {

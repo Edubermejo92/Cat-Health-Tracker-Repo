@@ -84,14 +84,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     // El contenido lo procesa PhoneWearableListenerService; aqui solo presencia.
     private val messageListener = MessageClient.OnMessageReceivedListener {
         WearLink.setConnected(true)
-        WearLink.setAppOnWatch(true)
+        WearLink.updateAppOnWatch(true)
     }
 
     // La capacidad dice si PadelPulse esta en el reloj, no si hay enlace (eso
     // lo da el sistema): antes se mezclaban y salia "sin reloj" con el
     // Bluetooth bien.
     private val capabilityListener = CapabilityClient.OnCapabilityChangedListener { info ->
-        WearLink.setAppOnWatch(info.nodes.isNotEmpty() || WearLink.appOnWatch == true)
+        WearLink.updateAppOnWatch(info.nodes.isNotEmpty() || WearLink.appOnWatch == true)
         WearLink.refreshConnection(this)
     }
 
