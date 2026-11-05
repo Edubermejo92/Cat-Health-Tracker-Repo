@@ -284,6 +284,10 @@ private fun ScoreDial(
                 engine.faultCount = 0
                 engine.speakServe(team)
                 activity.onLocalScoreAction("serve", team)
+            } else if (engine.players(team).size == 2) {
+                // Ya saca esta pareja: tocar otra vez cambia cual de los dos saca
+                engine.toggleServerPlayer()
+                activity.onLocalScoreAction("serve", team)
             }
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
@@ -529,18 +533,20 @@ private fun ScoreDial(
         // no siempre se mira el color de los nombres; esto no se pasa por alto.
         // Va encima de la fila de botones, dentro de la zona segura, y un
         // toque lo quita antes de tiempo.
-        var lastServe by remember { mutableStateOf(engine.serving) }
+        // Quien saca de los cuatro: cambia cada juego (y en el tie-break cada
+        // dos puntos), asi que el aviso va por jugador, no solo por pareja.
+        val serveKey = engine.serving + engine.serverIndex()
+        var lastServe by remember { mutableStateOf(serveKey) }
         var serveNotice by remember { mutableStateOf<String?>(null) }
-        LaunchedEffect(engine.serving) {
-            if (engine.serving == lastServe) return@LaunchedEffect
-            lastServe = engine.serving
-            serveNotice = engine.serving
+        LaunchedEffect(serveKey) {
+            if (serveKey == lastServe) return@LaunchedEffect
+            lastServe = serveKey
+            serveNotice = serveKey
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             kotlinx.coroutines.delay(2500)
             serveNotice = null
         }
         val noticeAlpha by animateFloatAsState(if (serveNotice != null) 1f else 0f, tween(220), label = "saque")
-        val noticeTeam = serveNotice ?: lastServe
         if (noticeAlpha > 0.01f) {
             At(w, 0f, -0.3f, 0.7f) {
                 Row(
@@ -555,8 +561,9 @@ private fun ScoreDial(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val side = engine.serveSideLabel(es)
                     FitText(
-                        "🎾 ${v.serves.uppercase()} · ${engine.getName(noticeTeam).uppercase()}",
+                        "🎾 ${v.serves.uppercase()} ${engine.serverName().uppercase()}" + (if (side.isNotEmpty()) " · $side" else ""),
                         PP.OnAccent, szT(0.05f), FontWeight.Black
                     )
                 }
@@ -575,16 +582,28 @@ private fun SideNames(engine: GameEngine, team: String, serving: Boolean, accent
     val players = engine.players(team)
     val color = if (serving) accent else PP.TextDim
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (serving) {
+        // Con los dos jugadores puestos, la pelota va junto al que saca; si
+        // no, delante del nombre de la pareja
+        if (serving && players.size != 2) {
             Box(Modifier.size(w * 0.022f).clip(CircleShape).background(BALL))
             Spacer(Modifier.width(w * 0.012f))
         }
         // Nombres largos: la letra baja hasta que caben, no se cortan
         if (players.size == 2) {
             val size = sz(0.041f)
+            val who = if (serving) engine.serverIndex() else -1
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                players.forEach { p ->
-                    FitText(p.uppercase(), color, size, style = TextStyle(lineHeight = size * 1.05f))
+                players.forEachIndexed { i, p ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (i == who) {
+                            Box(Modifier.size(w * 0.02f).clip(CircleShape).background(BALL))
+                            Spacer(Modifier.width(w * 0.01f))
+                        }
+                        FitText(
+                            p.uppercase(), if (i == who || !serving) color else color.copy(alpha = 0.55f), size,
+                            style = TextStyle(lineHeight = size * 1.05f)
+                        )
+                    }
                 }
             }
         } else {

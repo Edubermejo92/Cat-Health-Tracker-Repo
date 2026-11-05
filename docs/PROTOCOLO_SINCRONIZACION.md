@@ -119,6 +119,7 @@ espera no se quede colgada. Al recibirlo, se ignora.
   "flags": {
     "deuce": false, "adv": null, "tiebreak": false, "superTiebreak": false,
     "goldenPointActive": false, "serving": "A", "faults": 0,
+    "srvPlayer": { "A": 0, "B": 1 },
     "over": false, "winner": null
   },
   "tb":     { "A": 0, "B": 0, "serving": "A", "n": 0 },
@@ -138,6 +139,15 @@ Detalles que importan (aquí es donde fallaba la v2):
   `flags.superTiebreak` dicen cuál está activo.
 - `teams.X.sets` son sets ganados, no el historial. El historial es local de cada app.
 - `clock` es el cronómetro del partido en segundos.
+- `flags.srvPlayer` (7.2.5) dice qué jugador de cada pareja saca en su próximo
+  juego de saque: `0` = jugador 1, `1` = jugador 2. Cada pareja lo cambia al
+  terminar un juego de saque, así que los saques rotan A1, B1, A2, B2. Quién
+  saca *ahora* y desde qué lado no viaja: cada app lo calcula igual con
+  `serving`, `srvPlayer`, los puntos y el tie-break (en el tie-break el turno
+  `k = (puntos + 1) / 2 mod 4` dice si saca el primero de la pareja, k 0-1, o su
+  compañero, k 2-3; el lado es derecha en el primer punto de cada juego y se
+  alterna; con punto de oro elige quien resta). Un estado sin `srvPlayer`
+  (versiones anteriores) deja el valor que hubiera.
 
 ### `setsDetail` (desde 7.0.0)
 

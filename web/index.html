@@ -268,6 +268,9 @@ const defaultState = () => ({
     teamB:{ name:'', points:0, games:0, sets:0, playerA:'', playerB:'' },
     setsHistory:[], currentSet:1,
     serving:'A', deuce:false, advantage:null,
+    // Que jugador de cada pareja saca en su proximo juego de saque (0 = el
+    // jugador 1, 1 = el 2): los saques rotan A1, B1, A2, B2...
+    srv:{A:0,B:0},
     goldenPoint:false, superTiebreak:false, bestOf:3, playingExtraSet:false,
     tiebreak:false, tiebreakPoints:{A:0,B:0}, tiebreakServing:'A', tiebreakServCount:0,
     matchOver:false, matchWinner:null,
@@ -507,6 +510,9 @@ const PPSync = {
                 superTiebreak:!!S.superTiebreak,
                 goldenPointActive:!!(S.deuce && S.goldenPoint),
                 serving:S.serving||'A',
+                // Que jugador de cada pareja saca en su proximo juego (0/1).
+                // Las versiones anteriores lo ignoran.
+                srvPlayer:{ A:((S.srv&&S.srv.A)|0)?1:0, B:((S.srv&&S.srv.B)|0)?1:0 },
                 faults:S.firstServeFault?1:0,
                 over:!!S.matchOver,
                 winner:S.matchWinner||''
@@ -548,6 +554,10 @@ const PPSync = {
             S.tiebreak = !!f.tiebreak;
             S.superTiebreak = !!f.superTiebreak;
             if(f.serving) S.serving = f.serving;
+            // Jugador que saca en cada pareja; un reloj antiguo no lo manda
+            if(f.srvPlayer && typeof f.srvPlayer==='object'){
+                S.srv = { A:(f.srvPlayer.A|0)?1:0, B:(f.srvPlayer.B|0)?1:0 };
+            }
             S.firstServeFault = (f.faults|0) > 0;
 
             S.tiebreakPoints = { A:tb.A|0, B:tb.B|0 };
@@ -2025,6 +2035,7 @@ function snapshot(){
         advantage:S.advantage, tiebreak:S.tiebreak, superTiebreak:S.superTiebreak,
         tiebreakPoints:{...S.tiebreakPoints},
         tiebreakServing:S.tiebreakServing, tiebreakServCount:S.tiebreakServCount,
+        srv:{...(S.srv||{A:0,B:0})},
         matchOver:S.matchOver, matchWinner:S.matchWinner,
         faults:JSON.parse(JSON.stringify(S.faults)),
         goldenPoint:S.goldenPoint, bestOf:S.bestOf,
@@ -2133,6 +2144,8 @@ function winGame(team){
     S['team'+team].games++;
     S.teamA.points=0; S.teamB.points=0;
     S.deuce=false; S.advantage=null;
+    // La pareja que acaba de sacar cambia de jugador para su proximo saque
+    cambiarJugadorDe(S.serving);
     S.serving=S.serving==='A'?'B':'A';
     logActivity('game',team);
     if(!S.healthFromWatch) S.calories=Math.round(S.gameTime/60*7.5); // estimacion solo sin reloj
@@ -2439,6 +2452,7 @@ function removePoint(team){
         else if(t.games>0){
             t.games--; t.points=0; S['team'+(team==='A'?'B':'A')].points=0;
             S.serving=S.serving==='A'?'B':'A';
+            cambiarJugadorDe(S.serving);
             showToast('↩ '+t.name);
         } else { showToast('No hay puntos que quitar'); S.history.pop(); return; }
     }
@@ -6751,6 +6765,14 @@ const HomeView=()=>{
                     </button>
                 </div>
             </div>
+            ${!S.matchOver?`
+            <!-- Quien saca de los cuatro y desde que lado. Tocar cambia de jugador -->
+            <button onclick="${jugadoresDe(S.serving).length===2?'cambiarJugadorSaque()':''}" class="mx-auto flex items-center gap-1.5 px-3 rounded-full scale-press"
+                style="min-height:36px;color:${tc.primary()};background:none;border:none"
+                title="${jugadoresDe(S.serving).length===2?i2('Toca para cambiar quién saca de la pareja','Tap to switch the server in the pair'):''}">
+                <span style="font-size:14px">🎾</span>
+                <span class="text-[11px] md:text-base lg:text-xl font-black uppercase tracking-wider truncate" style="max-width:70vw">${i2('Saca','Serves')} ${wEsc(nombreSacador())}${textoLado()?' · '+textoLado():''}</span>
+            </button>`:''}
         </div>
         </div> <!-- End of LEFT PANEL -->
 
@@ -7425,8 +7447,66 @@ const SettingsView=()=>`
 
 ${BottomNav('settings')}`;
 
-/** Quien saca, desde el marcador o desde Ajustes: se guarda y se avisa al reloj. */
-function setSaque(t){ S.serving = t; saveState(); PPSync.onLocalAction('serve', t); render(); }
+/** Quien saca, desde el marcador o desde Ajustes: se guarda y se avisa al reloj.
+ *  Tocar la pareja que ya saca cambia cual de sus dos jugadores saca. */
+function setSaque(t){
+    if(S.serving === t && jugadoresDe(t).length === 2){ cambiarJugadorSaque(); return; }
+    S.serving = t; saveState(); PPSync.onLocalAction('serve', t); render();
+}
+
+// ═══════════════════════════════════════════
+// QUIEN SACA DE LOS CUATRO Y DESDE QUE LADO
+// Las mismas reglas que el reloj (GameEngine.serverIndex / serveSideLabel):
+// cada pareja alterna a sus dos jugadores en sus juegos de saque (A1, B1,
+// A2, B2...); en el tie-break el saque va 1 punto, luego 2 y 2. El primer
+// punto de cada juego se saca desde la derecha y se alterna en cada punto;
+// con punto de oro elige el lado quien resta.
+// ═══════════════════════════════════════════
+function jugadoresDe(t){
+    const e = S['team'+t] || {};
+    return [e.playerA, e.playerB].map(x=>(x||'').trim()).filter(Boolean);
+}
+function cambiarJugadorDe(t){
+    S.srv = Object.assign({A:0,B:0}, S.srv||{});
+    S.srv[t] = S.srv[t] ? 0 : 1;
+}
+/** 0 o 1: cual de los dos jugadores de la pareja que saca esta sacando ahora. */
+function indiceSacador(){
+    const base = ((S.srv||{})[S.serving]|0) ? 1 : 0;
+    if(!(S.tiebreak || S.superTiebreak)) return base;
+    const n = ((S.tiebreakPoints&&S.tiebreakPoints.A)|0) + ((S.tiebreakPoints&&S.tiebreakPoints.B)|0);
+    const k = Math.floor((n+1)/2) % 4;
+    return k < 2 ? base : 1 - base;
+}
+/** Nombre del jugador que saca; si no hay jugadores puestos, el de la pareja. */
+function nombreSacador(){
+    const e = S['team'+S.serving] || {};
+    const n = ((indiceSacador() ? e.playerB : e.playerA) || '').trim();
+    return n || e.name || S.serving;
+}
+/** 'R' (derecha), 'L' (izquierda), 'oro' (elige quien resta) o '' (acabado). */
+function ladoSaque(){
+    if(S.matchOver) return '';
+    if(S.tiebreak || S.superTiebreak){
+        const n = ((S.tiebreakPoints&&S.tiebreakPoints.A)|0) + ((S.tiebreakPoints&&S.tiebreakPoints.B)|0);
+        return n % 2 === 0 ? 'R' : 'L';
+    }
+    if(S.deuce){
+        if(S.goldenPoint) return 'oro';
+        return S.advantage ? 'L' : 'R';
+    }
+    return (((S.teamA.points|0) + (S.teamB.points|0)) % 2 === 0) ? 'R' : 'L';
+}
+function textoLado(){
+    const l = ladoSaque();
+    return l==='R' ? i2('derecha','right') : l==='L' ? i2('izquierda','left') : l==='oro' ? i2('elige el resto','receiver chooses') : '';
+}
+/** Cambia a mano cual de los dos jugadores de la pareja que saca esta sacando. */
+function cambiarJugadorSaque(){
+    snapshot();
+    cambiarJugadorDe(S.serving);
+    saveState(); PPSync.onLocalAction('serve', S.serving); render();
+}
 
 /** Escapa texto para meterlo en HTML (atributos incluidos). */
 function wEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }

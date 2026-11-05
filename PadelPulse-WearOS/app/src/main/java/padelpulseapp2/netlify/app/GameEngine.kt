@@ -123,6 +123,15 @@ class GameEngine(context: Context? = null) {
     var syncRev by mutableIntStateOf(0)
         private set
 
+    /**
+     * Que jugador de cada pareja saca en su proximo juego de saque: 0 = el
+     * jugador 1, 1 = el jugador 2. Cada vez que una pareja termina un juego de
+     * saque le toca al otro, asi que los saques rotan A1, B1, A2, B2... Van
+     * antes del init por lo mismo que syncRev.
+     */
+    var srvA by mutableIntStateOf(0)
+    var srvB by mutableIntStateOf(0)
+
     var tbSrv by mutableStateOf("A")
     var tbN by mutableIntStateOf(0)
     var winner by mutableStateOf<String?>(null)
@@ -184,7 +193,8 @@ class GameEngine(context: Context? = null) {
         val isTb: Boolean, val tbPtsA: Int, val tbPtsB: Int, val over: Boolean,
         val serving: String, val tbSrv: String, val tbN: Int, val faultCount: Int, 
         val winner: String?, val lastPointWinner: String?, val goldenPointActive: Boolean,
-        val setScores: List<SetResult> = emptyList()
+        val setScores: List<SetResult> = emptyList(),
+        val srvA: Int = 0, val srvB: Int = 0
     )
 
     init {
@@ -196,7 +206,7 @@ class GameEngine(context: Context? = null) {
             StateSnapshot(
                 ptsA, ptsB, gamesA, gamesB, setsA, setsB, isDeuce, adv,
                 isTb, tbPtsA, tbPtsB, over, serving, tbSrv, tbN, faultCount, winner, lastPointWinner, goldenPointActive,
-                setScores
+                setScores, srvA, srvB
             )
         )
         saveToDisk()
@@ -214,6 +224,7 @@ class GameEngine(context: Context? = null) {
         isDeuce = false; adv = null; isTb = false; tbPtsA = 0; tbPtsB = 0
         over = false; faultCount = 0; tbN = 0; winner = null
         serving = "A"; tbSrv = "A"; lastPointWinner = null
+        srvA = 0; srvB = 0
         goldenPointActive = false
         setScores = emptyList()
         resetHeartRateStats()
@@ -237,6 +248,7 @@ class GameEngine(context: Context? = null) {
             tbN = last.tbN; faultCount = last.faultCount; winner = last.winner
             lastPointWinner = last.lastPointWinner; goldenPointActive = last.goldenPointActive
             setScores = last.setScores
+            srvA = last.srvA; srvB = last.srvB
             saveToDisk()
         }
     }
@@ -403,6 +415,8 @@ class GameEngine(context: Context? = null) {
         if (t == "A") gamesA++ else gamesB++
         ptsA = 0; ptsB = 0
         isDeuce = false; adv = null; goldenPointActive = false
+        // La pareja que acaba de sacar cambia de jugador para su proximo saque
+        if (serving == "A") srvA = 1 - srvA else srvB = 1 - srvB
         serving = if (serving == "A") "B" else "A"
 
         if (gamesA == 6 && gamesB == 6) {
@@ -599,6 +613,40 @@ class GameEngine(context: Context? = null) {
         return arrayOf("0", "15", "30", "40")[p.coerceAtMost(3)]
     }
 
+    /**
+     * Cual de los dos jugadores de la pareja que saca esta sacando: 0 o 1.
+     * En juego normal, el que le toca a esa pareja. En tie-break el saque va
+     * 1 punto, luego 2 y 2, rotando A1, B1, A2, B2: el turno k = (n+1)/2 dice
+     * si saca el primero de la pareja (k 0-1) o su compañero (k 2-3).
+     */
+    fun serverIndex(): Int {
+        val base = if (serving == "A") srvA else srvB
+        if (!(isTb || isSuperTbActive())) return base
+        val k = ((tbPtsA + tbPtsB + 1) / 2) % 4
+        return if (k < 2) base else 1 - base
+    }
+
+    /** Nombre del jugador que saca; si no hay jugadores puestos, el de la pareja. */
+    fun serverName(): String {
+        val raw = if (serving == "A") listOf(playerA1, playerA2) else listOf(playerB1, playerB2)
+        return raw[serverIndex()].trim().ifEmpty { getName(serving) }
+    }
+
+    /** Desde donde se saca este punto. Con punto de oro elige el lado quien resta. */
+    fun serveSideLabel(es: Boolean): String = when {
+        over -> ""
+        goldenPointActive -> if (es) "ELIGE RESTO" else "RECEIVER CHOOSES"
+        getServeSide() == "R" -> if (es) "DERECHA" else "RIGHT"
+        else -> if (es) "IZQUIERDA" else "LEFT"
+    }
+
+    /** Cambia a mano quien de la pareja que saca esta sacando (se puede deshacer). */
+    fun toggleServerPlayer() {
+        saveState()
+        if (serving == "A") srvA = 1 - srvA else srvB = 1 - srvB
+        saveToDisk()
+    }
+
     fun getServeSide(): String {
         if (over) return ""
         return if (isTb || isSuperTbActive()) {
@@ -698,6 +746,9 @@ class GameEngine(context: Context? = null) {
                 .put("superTiebreak", tbActive && !isTb)
                 .put("goldenPointActive", goldenPointActive)
                 .put("serving", serving)
+                // Que jugador de cada pareja saca en su proximo juego (0/1).
+                // Las versiones anteriores lo ignoran.
+                .put("srvPlayer", JSONObject().put("A", srvA).put("B", srvB))
                 .put("faults", faultCount)
                 .put("over", over)
                 .put("winner", winner ?: ""))
@@ -753,6 +804,11 @@ class GameEngine(context: Context? = null) {
             isTb = f.optBoolean("tiebreak", isTb)
             goldenPointActive = f.optBoolean("goldenPointActive", goldenPointActive)
             serving = f.optString("serving", serving).ifEmpty { serving }
+            // Jugador que saca en cada pareja; un movil antiguo no lo manda
+            f.optJSONObject("srvPlayer")?.let {
+                srvA = it.optInt("A", srvA).coerceIn(0, 1)
+                srvB = it.optInt("B", srvB).coerceIn(0, 1)
+            }
             faultCount = f.optInt("faults", faultCount)
             over = f.optBoolean("over", over)
             winner = SyncProtocol.optNullableString(f, "winner")
@@ -901,6 +957,8 @@ class GameEngine(context: Context? = null) {
         // La revision va con el partido: si volviera a 0 al reabrir la app,
         // el movil (con la suya mas alta) ignoraria los puntos del reloj
         obj.put("syncRev", syncRev)
+        obj.put("srvA", srvA)
+        obj.put("srvB", srvB)
         obj.put("ptsA", ptsA)
         obj.put("ptsB", ptsB)
         obj.put("gamesA", gamesA)
@@ -938,6 +996,8 @@ class GameEngine(context: Context? = null) {
         try {
             val obj = JSONObject(json)
             syncRev = maxOf(syncRev, obj.optInt("syncRev", 0))
+            srvA = obj.optInt("srvA", 0).coerceIn(0, 1)
+            srvB = obj.optInt("srvB", 0).coerceIn(0, 1)
             ptsA = obj.optInt("ptsA", 0)
             ptsB = obj.optInt("ptsB", 0)
             gamesA = obj.optInt("gamesA", 0)
